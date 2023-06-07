@@ -1,0 +1,38 @@
+package:
+  name: sciline
+
+  version: {{ GIT_DESCRIBE_TAG }}
+
+source:
+  path: ..
+
+requirements:
+  build:
+    - setuptools
+    - setuptools_scm
+  run:
+    - python>=3.8
+
+test:
+  imports:
+    - sciline
+  requires:
+    - pytest
+  source_files:
+    - pyproject.toml
+    - tests/
+  commands:
+    - python -m pytest tests
+
+build:
+  noarch: python
+  script:
+    - pip install .
+
+about:
+  home: https://github.com/scipp/sciline
+  license: BSD-3-Clause
+  summary: Build scientific pipelines for your data
+  description: Build scientific pipelines for your data
+  dev_url: https://github.com/scipp/sciline
+  doc_url: https://scipp.github.io/sciline

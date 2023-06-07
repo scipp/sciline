@@ -1,0 +1,7 @@
+# Changes here will be overwritten by Copier; NEVER EDIT MANUALLY
+_commit: 236b884
+_src_path: gh:scipp/copier_template
+description: Build scientific pipelines for your data
+min_python: '3.8'
+projectname: sciline
+year: 2023
