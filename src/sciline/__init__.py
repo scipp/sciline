@@ -9,4 +9,4 @@ try:
 except importlib.metadata.PackageNotFoundError:
     __version__ = "0.0.0"
 
-from .container import Container, make_container
+from .container import Container, UnsatisfiedRequirement, make_container

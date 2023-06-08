@@ -8,12 +8,19 @@ import injector
 T = TypeVar('T')
 
 
+class UnsatisfiedRequirement(Exception):
+    pass
+
+
 class Container:
     def __init__(self, inj: injector.Injector, /) -> None:
         self._injector = inj
 
     def get(self, tp: Type[T], /) -> T:
-        return self._injector.get(tp)
+        try:
+            return self._injector.get(tp)
+        except injector.UnsatisfiedRequirement as e:
+            raise UnsatisfiedRequirement(e) from e
 
 
 def _injectable(func: Callable) -> Callable:
@@ -38,4 +45,8 @@ def make_container(funcs: List[Callable], /) -> Container:
     funcs:
         List of functions to be injected. Must be annotated with type hints.
     """
-    return Container(injector.Injector([_injectable(func) for func in funcs]))
+    # Note that we disable auto_bind, to ensure we do not accidentally bind to
+    # some default values. Everything must be explicit.
+    return Container(
+        injector.Injector([_injectable(func) for func in funcs], auto_bind=False)
+    )
