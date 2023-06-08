@@ -1,18 +1,47 @@
 [build-system]
 requires = [
-  "setuptools>=42",
-  "setuptools_scm[toml]>=6.2",
+  "setuptools>=67",
+  "setuptools_scm[toml]>=7.0",
 ]
 build-backend = "setuptools.build_meta"
+
+[project]
+name = "sciline"
+description = "Build scientific pipelines for your data"
+authors= [{name="Scipp contributors"}]
+license = { "file" = "LICENSE" }
+readme = "README.md"
+classifiers = [
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: BSD License",
+    "Natural Language :: English",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Scientific/Engineering",
+    "Typing :: Typed",
+]
+requires-python = ">=3.8"
+dependencies = [
+]
+dynamic = ["version"]
+
+[project.urls]
+"Bug Tracker" = "https://github.com/scipp/sciline/issues"
+"Source" = "https://github.com/scipp/sciline"
 
 [tool.setuptools_scm]
 
 [tool.pytest.ini_options]
+minversion = "7.0"
 addopts = "-ra -v"
 testpaths = "tests"
 filterwarnings = [
   "error",
-  "ignore::UserWarning",
 ]
 
 [tool.bandit]
