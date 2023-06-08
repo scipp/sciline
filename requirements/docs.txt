@@ -149,7 +149,7 @@ ptyprocess==0.7.0
     # via pexpect
 pure-eval==0.2.2
     # via stack-data
-pydantic==1.10.8
+pydantic==1.10.9
     # via autodoc-pydantic
 pydata-sphinx-theme==0.13.3
     # via -r docs.in
@@ -231,11 +231,6 @@ traitlets==5.9.0
     #   nbconvert
     #   nbformat
     #   nbsphinx
-typing-extensions==4.6.3
-    # via
-    #   ipython
-    #   pydantic
-    #   pydata-sphinx-theme
 urllib3==2.0.3
     # via requests
 wcwidth==0.2.6

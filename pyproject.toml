@@ -27,6 +27,7 @@ classifiers = [
 ]
 requires-python = ">=3.8"
 dependencies = [
+  "injector",
 ]
 dynamic = ["version"]
 
