@@ -8,7 +8,19 @@ import injector
 T = TypeVar('T')
 
 
-def injectable(func: Callable):
+class Container:
+    def __init__(self, inj: injector.Injector, /) -> None:
+        self._injector = inj
+
+    def get(self, tp: Type[T], /) -> T:
+        return self._injector.get(tp)
+
+
+def _injectable(func: Callable) -> Callable:
+    """
+    Wrap a regular function so it can be registered in an injector and have its
+    parameters injected.
+    """
     tps = typing.get_type_hints(func)
 
     def bind(binder: injector.Binder):
@@ -17,15 +29,7 @@ def injectable(func: Callable):
     return bind
 
 
-class Container:
-    def __init__(self, inj: injector.Injector) -> None:
-        self._injector = inj
-
-    def get(self, tp: Type[T]) -> T:
-        return self._injector.get(tp)
-
-
-def make_container(*, funcs: List[Callable]) -> Container:
+def make_container(funcs: List[Callable], /) -> Container:
     """
     Create a :py:class:`Container` from a list of functions.
 
@@ -34,4 +38,4 @@ def make_container(*, funcs: List[Callable]) -> Container:
     funcs:
         List of functions to be injected. Must be annotated with type hints.
     """
-    return Container(injector.Injector([injectable(func) for func in funcs]))
+    return Container(injector.Injector([_injectable(func) for func in funcs]))
