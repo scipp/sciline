@@ -2,9 +2,10 @@
 # Copyright (c) 2023 Scipp contributors (https://github.com/scipp)
 import typing
 from functools import wraps
-from typing import Callable, List, Type, TypeVar
+from typing import Callable, List, Type, TypeVar, Union
 
 import injector
+from dask.delayed import Delayed
 
 T = TypeVar('T')
 
@@ -18,9 +19,14 @@ class Container:
         self._injector = inj
         self._lazy = lazy
 
-    def get(self, tp: Type[T], /) -> T:
+    def get(self, tp: Type[T], /) -> Union[T, Delayed]:
         try:
-            task = self._injector.get(tp)
+            # We are slightly abusing Python's type system here, by using the
+            # injector to get T, but actually it returns a Delayed that can
+            # compute T. self._injector does not know this due to how we setup the
+            # bindings. We'd like to use Delayed[T], but that is not supported yet:
+            # https://github.com/dask/dask/pull/9256
+            task: Delayed = self._injector.get(tp)  # type: ignore
         except injector.UnsatisfiedRequirement as e:
             raise UnsatisfiedRequirement(e) from e
         return task if self._lazy else task.compute()
