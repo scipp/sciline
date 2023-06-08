@@ -25,5 +25,13 @@ class Container:
         return self._injector.get(tp)
 
 
-def make_container(funcs: List[Callable]) -> Container:
+def make_container(*, funcs: List[Callable]) -> Container:
+    """
+    Create a :py:class:`Container` from a list of functions.
+
+    Parameters
+    ----------
+    funcs:
+        List of functions to be injected. Must be annotated with type hints.
+    """
     return Container(injector.Injector([injectable(func) for func in funcs]))
