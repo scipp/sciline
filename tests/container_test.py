@@ -15,7 +15,7 @@ def g() -> int:
 
 
 def h(x: int, y: float) -> str:
-    return f"{x} {y}"
+    return f"{x};{y}"
 
 
 def test_make_container_sets_up_working_container():
@@ -28,6 +28,19 @@ def test_make_container_does_not_autobind():
     container = sl.make_container([f])
     with pytest.raises(sl.UnsatisfiedRequirement):
         container.get(float)
+
+
+def test_intermediate_computed_once_when_not_lazy():
+    ncall = 0
+
+    def provide_int() -> int:
+        nonlocal ncall
+        ncall += 1
+        return 3
+
+    container = sl.make_container([f, provide_int, h], lazy=False)
+    assert container.get(str) == "3;1.5"
+    assert ncall == 1
 
 
 def test_make_container_lazy_returns_task_that_computes_result():
@@ -48,5 +61,5 @@ def test_lazy_with_multiple_outputs_computes_intermediates_once():
     container = sl.make_container([f, provide_int, h], lazy=True)
     task1 = container.get(float)
     task2 = container.get(str)
-    assert dask.compute(task1, task2) == (1.5, '3 1.5')
+    assert dask.compute(task1, task2) == (1.5, '3;1.5')
     assert ncall == 1

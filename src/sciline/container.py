@@ -14,14 +14,16 @@ class UnsatisfiedRequirement(Exception):
 
 
 class Container:
-    def __init__(self, inj: injector.Injector, /) -> None:
+    def __init__(self, inj: injector.Injector, /, *, lazy: bool) -> None:
         self._injector = inj
+        self._lazy = lazy
 
     def get(self, tp: Type[T], /) -> T:
         try:
-            return self._injector.get(tp)
+            task = self._injector.get(tp)
         except injector.UnsatisfiedRequirement as e:
             raise UnsatisfiedRequirement(e) from e
+        return task if self._lazy else task.compute()
 
 
 def _delayed(func: Callable) -> Callable:
@@ -40,23 +42,25 @@ def _delayed(func: Callable) -> Callable:
     return wrapper
 
 
-def _injectable(func: Callable, *, lazy: bool) -> Callable:
+def _injectable(func: Callable) -> Callable:
     """
     Wrap a regular function so it can be registered in an injector and have its
     parameters injected.
     """
+    # When building a workflow, there are two common problems:
+    #
+    # 1. Intermediate results are used more than once.
+    # 2. Intermediate results are large, so we generally do not want to keep them
+    #    in memory longer than necessary.
+    #
+    # To address these problems, we can internally build a graph of tasks, instead of
+    # directly creating dependencies between functions. Currently we use Dask for this.
+    # The Container instance will automatically compute the task, unless it is marked
+    # as lazy. We therefore use singleton-scope (to ensure Dask will recognize the
+    # task as the same object) and also wrap the function in dask.delayed.
+    scope = injector.singleton
+    func = _delayed(func)
     tps = typing.get_type_hints(func)
-    # When lazy, we want to create a dask task graph without duplicate computation.
-    # This means we need to use a singleton scope, so that the function is only
-    # called once.
-    # When not lazy, we have to avoid memory consumption from injector holding on
-    # to large intermediate results. We therefore do not use a singleton scope.
-    # This is however problematic as multiple functions may rely on a result
-    # from a previous function. Maybe we need more manual control? Or maybe we can
-    # always use dask, but compute() automatically when not lazy?
-    scope = injector.singleton if lazy else None
-    if lazy:
-        func = _delayed(func)
 
     def bind(binder: injector.Binder):
         binder.bind(tps['return'], injector.inject(func), scope=scope)
@@ -79,7 +83,6 @@ def make_container(funcs: List[Callable], /, *, lazy: bool = False) -> Container
     # Note that we disable auto_bind, to ensure we do not accidentally bind to
     # some default values. Everything must be explicit.
     return Container(
-        injector.Injector(
-            [_injectable(func, lazy=lazy) for func in funcs], auto_bind=False
-        )
+        injector.Injector([_injectable(f) for f in funcs], auto_bind=False),
+        lazy=lazy,
     )
