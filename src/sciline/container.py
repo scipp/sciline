@@ -1,5 +1,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright (c) 2023 Scipp contributors (https://github.com/scipp)
+from __future__ import annotations
+
 import typing
 from functools import wraps
 from typing import Callable, List, Type, TypeVar, Union
@@ -30,6 +32,31 @@ class Container:
         except injector.UnsatisfiedRequirement as e:
             raise UnsatisfiedRequirement(e) from e
         return task if self._lazy else task.compute()
+
+    def make_child_container(self, funcs: List[Callable], /) -> Container:
+        """
+        Create a child container from a list of functions.
+
+        The child container inherits all bindings from the parent container, but
+        can override them with new bindings.
+
+        Warning
+        -------
+
+        Note that it is not possible to override transitive dependencies, i.e., if the
+        parent container provides A, and A depends on B, then the child container
+        cannot override the B that is used by A. It can only override the B that is
+        used by the child container.
+
+        Parameters
+        ----------
+        funcs:
+            List of functions to be injected. Must be annotated with type hints.
+        """
+        return Container(
+            self._injector.create_child_injector([_injectable(f) for f in funcs]),
+            lazy=self._lazy,
+        )
 
 
 def _delayed(func: Callable) -> Callable:
