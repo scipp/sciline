@@ -5,8 +5,7 @@ import pytest
 
 import sciline as sl
 
-# The injector library uses a lock, but as this implementation detail may change
-# we use dask with a single thread, to ensure that call counting below is correct.
+# We use dask with a single thread, to ensure that call counting below is correct.
 dask.config.set(scheduler='synchronous')
 
 
