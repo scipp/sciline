@@ -5,6 +5,10 @@ import pytest
 
 import sciline as sl
 
+# The injector library uses a lock, but as this implementation detail may change
+# we use dask with a single thread, to ensure that call counting below is correct.
+dask.config.set(scheduler='synchronous')
+
 
 def f(x: int) -> float:
     return 0.5 * x
