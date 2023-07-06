@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import typing
 from functools import wraps
-from typing import Callable, Generic, List, Type, TypeVar, Union
+from typing import Callable, List, Type, TypeVar, Union
 
 import injector
 from dask.delayed import Delayed
@@ -119,20 +119,3 @@ def make_container(funcs: List[Callable], /, *, lazy: bool = False) -> Container
         injector.Injector([_injectable(f) for f in funcs], auto_bind=False),
         lazy=lazy,
     )
-
-
-def specialize(func: Callable, T: Type) -> Callable:
-    """
-    Given a function
-    f(a: A, b: B, c: C, ...) -> R
-    return a new function
-    f(a: A[T], b: B[T], c: C[T], ...) -> R[T]
-    where T is a type variable that is bound to the type of the return value of f.
-    """
-    tps = typing.get_type_hints(func)
-
-    def wrapper(*args, **kwargs):
-        return func(*args, **kwargs)
-
-    wrapper.__annotations__ = {k: tp[T] for k, tp in tps.items()}
-    return wrapper
