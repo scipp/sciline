@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright (c) 2023 Scipp contributors (https://github.com/scipp)
-from typing import NewType
+from typing import Generic, NewType, TypeVar
 
 import dask
 import pytest
@@ -220,3 +220,95 @@ def test_make_container_with_multiple_children_does_not_repeat_calls():
     container._injector.binder.bind(Str2, get_str2)
     assert container.get(str).compute() == "3;1.5;3;2.5"
     assert ncall == 1
+
+
+def test_specialize():
+    import typing
+    from typing import Any, List
+
+    def f(x: List[Any]) -> List:
+        return x
+
+    # specialized = sl.container.specialize(f, int)
+    # assert typing.get_type_hints(specialized) == {'return': List[int], 'x': List[int]}
+    print(typing.get_type_hints(f))
+    assert False
+
+
+T = TypeVar('T')
+
+
+class A(Generic[T]):
+    def __init__(self, x: T) -> None:
+        self.x = x
+
+
+import typing
+from typing import Dict, List
+
+
+def newtypes(name: str, base: type, ts: List[type]) -> Dict[type, type]:
+    return {t: typing.NewType(f'{name}_{t.__name__}', base) for t in ts}
+
+
+def test_newtypes():
+    Str = newtypes('Str', str, [int, float])
+    s = Str[int]('3')
+    assert s == '3'
+
+    def str_int() -> Str[int]:
+        return Str[int]('abc')
+
+    container = sl.make_container([str_int])
+    assert container.get(Str[int]) == 'abc'
+
+
+from typing import Any, Callable
+
+
+def test_templated_injector():
+    providers = {}
+    provider_templates = {}
+    providers[int] = lambda: 3
+    providers[float] = lambda: 3.5
+    # Str = newtypes('Str', str, [int, float])
+    # dict is not hashable, it we would not pass mypy...
+    Str = typing.NewType('Str', str)
+    provider_templates[Str] = lambda t: lambda: str(t())
+
+    def call(func: Callable) -> Any:
+        types = typing.get_type_hints(func)
+        args = {name: providers[tp]() for name, tp in types.items() if name != 'return'}
+        return func(**args)
+
+    def f(x: int) -> str:
+        return str(x)
+
+    assert call(f) == '3'
+
+
+Str = sl.parametrized_domain_type('Str', str)
+
+
+def templated(tp: type) -> List[Callable]:
+    # Could also provide option for a list of types
+    # How can a user extend this? Just make there own wrapper function?
+    def f(x: tp) -> Str[tp]:
+        return Str[tp](x)
+
+    return [f]
+
+
+def test_container_from_templated():
+    def make_float() -> float:
+        return 1.5
+
+    def combine(x: Str[int], y: Str[float]) -> str:
+        return f"{x};{y}"
+
+    container = sl.make_container(
+        [make_int, make_float, combine] + templated(int) + templated(float)
+    )
+    assert container.get(Str[int]) == '3'
+    assert container.get(Str[float]) == '1.5'
+    assert container.get(str) == '3;1.5'
