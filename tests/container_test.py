@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright (c) 2023 Scipp contributors (https://github.com/scipp)
-from typing import Callable, List, NewType, Tuple
+from typing import Callable, List, NewType
 
 import dask
 import pytest
@@ -116,20 +116,10 @@ Str = sl.parametrized_domain_type('Str', str)
 
 
 def subworkflow(tp: type) -> List[Callable]:
-    # Could also provide option for a list of types
-    # How can a user extend this? Just make there own wrapper function?
     def f(x: tp) -> Str[tp]:
         return Str[tp](x)
 
     return [f]
-
-
-def from_templates(
-    template: Callable[[type], List[Callable]], tps: Tuple[type, ...]
-) -> List[Callable]:
-    import itertools
-
-    return list(itertools.chain.from_iterable(template(tp) for tp in tps))
 
 
 def test_container_from_templated():
@@ -140,7 +130,7 @@ def test_container_from_templated():
         return f"{x};{y}"
 
     container = sl.make_container(
-        [make_int, make_float, combine] + from_templates(subworkflow, (int, float))
+        [make_int, make_float, combine] + subworkflow(int) + subworkflow(float)
     )
     assert container.get(Str[int]) == '3'
     assert container.get(Str[float]) == '1.5'
