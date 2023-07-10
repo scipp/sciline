@@ -117,7 +117,7 @@ Str = sl.parametrized_domain_type('Str', str)
 
 def subworkflow(tp: type) -> List[Callable]:
     def f(x: tp) -> Str[tp]:
-        return Str[tp](x)
+        return Str[tp](f'{x}')
 
     return [f]
 
