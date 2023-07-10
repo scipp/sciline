@@ -6,6 +6,6 @@ myst-parser
 nbsphinx
 pydata-sphinx-theme>=0.13
 sphinx
-sphinx-autodoc-typehints
+sphinx-autodoc-typehints==1.23.0  # Higher versions require sphinx-7, which is not supported by sphinx-design yet
 sphinx-copybutton
 sphinx-design
