@@ -26,7 +26,7 @@ def _delayed(func: Callable) -> Callable:
     Decorator to make a function return a delayed object.
 
     In contrast to dask.delayed, this uses functools.wraps, to preserve the
-    type hints, which is a prerequisite for injector to work.
+    type hints, which is a prerequisite for injecting args based on their type hints.
     """
     import dask
 
@@ -119,9 +119,8 @@ class Container:
 
     def get(self, tp: Type[T], /) -> Union[T, Delayed]:
         # We are slightly abusing Python's type system here, by using the
-        # injector to get T, but actually it returns a Delayed that can
-        # compute T. self._injector does not know this due to how we setup the
-        # bindings. We'd like to use Delayed[T], but that is not supported yet:
+        # self._get to get T, but actually it returns a Delayed that can
+        # compute T. We'd like to use Delayed[T], but that is not supported yet:
         # https://github.com/dask/dask/pull/9256
         task: Delayed = self._get(tp)  # type: ignore
         return task if self._lazy else task.compute()
