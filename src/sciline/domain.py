@@ -6,5 +6,5 @@ T = TypeVar("T")
 
 
 class Scope(Generic[T]):
-    def __new__(cls, x):
+    def __new__(cls, x):  # type: ignore
         return x

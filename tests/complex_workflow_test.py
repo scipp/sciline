@@ -86,13 +86,11 @@ reduction = [incident_monitor, transmission_monitor, mask_detector, transmission
 
 
 def raw_sample() -> Raw[SampleRun]:
-    return Raw[SampleRun](RawData(data=np.ones(4), monitor1=1.0, monitor2=2.0))
+    return Raw(RawData(data=np.ones(4), monitor1=1.0, monitor2=2.0))
 
 
 def raw_background() -> Raw[BackgroundRun]:
-    return Raw[BackgroundRun](
-        RawData(data=np.ones(4) * 1.5, monitor1=1.0, monitor2=4.0)
-    )
+    return Raw(RawData(data=np.ones(4) * 1.5, monitor1=1.0, monitor2=4.0))
 
 
 def detector_mask() -> DetectorMask:

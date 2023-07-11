@@ -11,3 +11,5 @@ except importlib.metadata.PackageNotFoundError:
 
 from .container import Container, UnsatisfiedRequirement
 from .domain import Scope
+
+__all__ = ["Container", "Scope", "UnsatisfiedRequirement"]

@@ -112,7 +112,7 @@ class Container:
             raise UnsatisfiedRequirement("No provider found for type", tp)
         if (cached := self._cache.get(key)) is not None:
             return cached
-        provider = self._providers.get(key)
+        provider = self._providers[key]
         result = self.call(provider, bound)
         self._cache[tp] = result
         return result
