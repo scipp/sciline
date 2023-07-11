@@ -63,7 +63,7 @@ class Container:
         for func in funcs:
             self.insert(func)
 
-    def insert(self, provider: Callable[..., Any]):
+    def insert(self, provider: Callable[..., Any]) -> None:
         key = get_type_hints(provider)['return']
         if (origin := get_origin(key)) is not None:
             args = get_args(key)
@@ -77,17 +77,19 @@ class Container:
     Return = typing.TypeVar("Return")
 
     def call(self, func: Callable[..., Return], bound: Optional[Any] = None) -> Return:
-        print('call', func, bound)
         tps = get_type_hints(func)
         del tps['return']
         args: Dict[str, Any] = {}
         for name, tp in tps.items():
-            args[name] = self._get(tp, bound=bound)
+            if isinstance(tp, TypeVar):
+                tp = tp if bound is None else bound
+            elif (origin := get_origin(tp)) is not None:
+                if isinstance(get_args(tp)[0], TypeVar):
+                    tp = origin[bound]
+            args[name] = self._get(tp)
         return func(**args)
 
-    def _get(self, tp, bound: Optional[type] = None):
-        if (cached := self._cache.get(tp)) is not None:
-            return cached
+    def _get(self, tp: Type[T], /) -> Delayed:
         # When building a workflow, there are two common problems:
         #
         # 1. Intermediate results are used more than once.
@@ -100,30 +102,20 @@ class Container:
         # unless it is marked as lazy. We therefore use singleton-scope (to ensure Dask
         # will recognize the task as the same object) and also wrap the function in
         # dask.delayed.
-        if (provider := self._providers.get(tp)) is not None:
-            result = self.call(provider, bound)
-            self._cache[tp] = result
-            return result
-        elif (origin := get_origin(tp)) is None:
-            if (provider := self._providers.get(bound)) is not None:
-                result = self.call(provider)
-                self._cache[bound] = result
-                return result
+        if tp in self._providers:
+            key = tp
+            bound = None
+        elif (origin := get_origin(tp)) in self._providers:
+            key = origin
+            bound = get_args(tp)[0]
         else:
-            if (provider := self._providers.get(origin)) is not None:
-                # TODO We would really need to support multiple bound params properly
-                param = get_args(tp)[0]
-                result = self.call(
-                    provider, bound if isinstance(param, TypeVar) else param
-                )
-                self._cache[tp] = result
-                return result
-            else:
-                provider = self._providers[origin[bound]]
-                result = self.call(provider, bound)
-                self._cache[origin[bound]] = result
-                return result
-        raise UnsatisfiedRequirement("No provider found for type", tp)
+            raise UnsatisfiedRequirement("No provider found for type", tp)
+        if (cached := self._cache.get(key)) is not None:
+            return cached
+        provider = self._providers.get(key)
+        result = self.call(provider, bound)
+        self._cache[tp] = result
+        return result
 
     def get(self, tp: Type[T], /) -> Union[T, Delayed]:
         # We are slightly abusing Python's type system here, by using the
