@@ -57,17 +57,17 @@ class Container:
             If True, the functions are wrapped in :py:func:`dask.delayed` before
             being injected. This allows to build a dask graph from the container.
         """
-        self._providers: Dict[type, Callable[..., Any]] = {}
+        self._providers: Dict[type, Callable] = {}
         self._lazy: bool = lazy
         self._cache: Dict[type, Any] = {}
         for func in funcs:
             self.insert(func)
 
-    def insert(self, provider: Callable[..., Any]) -> None:
+    def insert(self, provider: Callable) -> None:
         key = get_type_hints(provider)['return']
         if (origin := get_origin(key)) is not None:
             args = get_args(key)
-            if len(args) != 1:
+            if len(args) != 1 and any(isinstance(arg, TypeVar) for arg in args):
                 raise ValueError(f'Cannot handle {key} with more than 1 argument')
             key = origin if isinstance(args[0], TypeVar) else key
         if key in self._providers:
