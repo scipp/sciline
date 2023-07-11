@@ -1,8 +1,15 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright (c) 2023 Scipp contributors (https://github.com/scipp)
-from typing import Dict, NewType, Any, Generic, TypeVar
-import typing
 import functools
+import typing
+from typing import Any, Dict, Generic, NewType, TypeVar
+
+T = TypeVar("T")
+
+
+class Scope(Generic[T]):
+    def __new__(cls, x):
+        return x
 
 
 class DomainTypeFactory:
@@ -25,9 +32,6 @@ class DomainTypeFactory:
         t = NewType(key, self._base)
         self._subtypes[key] = t
         return t
-
-
-T = TypeVar("T")
 
 
 class SingleParameterStr(str, Generic[T]):

@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright (c) 2023 Scipp contributors (https://github.com/scipp)
 from dataclasses import dataclass
-from typing import Callable, List, NewType
+from typing import NewType, TypeVar
 
 import dask
 import numpy as np
@@ -24,39 +24,65 @@ BackgroundRun = NewType('BackgroundRun', int)
 DetectorMask = NewType('DetectorMask', np.ndarray)
 DirectBeam = NewType('DirectBeam', np.ndarray)
 SolidAngle = NewType('SolidAngle', np.ndarray)
-Raw = sl.parametrized_domain_type('Raw', RawData)
-Masked = sl.parametrized_domain_type('Masked', np.ndarray)
-IncidentMonitor = sl.parametrized_domain_type('IncidentMonitor', float)
-TransmissionMonitor = sl.parametrized_domain_type('TransmissionMonitor', float)
-TransmissionFraction = sl.parametrized_domain_type('TransmissionFraction', float)
-IofQ = sl.parametrized_domain_type('IofQ', np.ndarray)
+
+Run = TypeVar('Run')
+
+
+class Raw(sl.Scope[Run], RawData):
+    ...
+
+
+class Masked(sl.Scope[Run], np.ndarray):
+    ...
+
+
+class IncidentMonitor(sl.Scope[Run], float):
+    ...
+
+
+class TransmissionMonitor(sl.Scope[Run], float):
+    ...
+
+
+class TransmissionFraction(sl.Scope[Run], float):
+    ...
+
+
+class IofQ(sl.Scope[Run], np.ndarray):
+    ...
+
+
 BackgroundSubtractedIofQ = NewType('BackgroundSubtractedIofQ', np.ndarray)
 
 
-def reduction_factory(tp: type) -> List[Callable]:
-    def incident_monitor(x: Raw[tp]) -> IncidentMonitor[tp]:
-        return IncidentMonitor[tp](x.monitor1)
+def incident_monitor(x: Raw[Run]) -> IncidentMonitor[Run]:
+    return IncidentMonitor(x.monitor1)
 
-    def transmission_monitor(x: Raw[tp]) -> TransmissionMonitor[tp]:
-        return TransmissionMonitor[tp](x.monitor2)
 
-    def mask_detector(x: Raw[tp], mask: DetectorMask) -> Masked[tp]:
-        return Masked[tp](x.data * mask)
+def transmission_monitor(x: Raw[Run]) -> TransmissionMonitor[Run]:
+    return TransmissionMonitor(x.monitor2)
 
-    def transmission(
-        incident: IncidentMonitor[tp], transmission: TransmissionMonitor[tp]
-    ) -> TransmissionFraction[tp]:
-        return TransmissionFraction[tp](incident / transmission)
 
-    def iofq(
-        x: Masked[tp],
-        solid_angle: SolidAngle,
-        direct_beam: DirectBeam,
-        transmission: TransmissionFraction[tp],
-    ) -> IofQ[tp]:
-        return IofQ[tp](x / (solid_angle * direct_beam * transmission))
+def mask_detector(x: Raw[Run], mask: DetectorMask) -> Masked[Run]:
+    return Masked(x.data * mask)
 
-    return [incident_monitor, transmission_monitor, mask_detector, transmission, iofq]
+
+def transmission(
+    incident: IncidentMonitor[Run], transmission: TransmissionMonitor[Run]
+) -> TransmissionFraction[Run]:
+    return TransmissionFraction(incident / transmission)
+
+
+def iofq(
+    x: Masked[Run],
+    solid_angle: SolidAngle,
+    direct_beam: DirectBeam,
+    transmission: TransmissionFraction[Run],
+) -> IofQ[Run]:
+    return IofQ(x / (solid_angle * direct_beam * transmission))
+
+
+reduction = [incident_monitor, transmission_monitor, mask_detector, transmission, iofq]
 
 
 def raw_sample() -> Raw[SampleRun]:
@@ -88,18 +114,20 @@ def subtract_background(
 
 
 def test_reduction_workflow():
-    container = sl.make_container(
-        [
-            raw_sample,
-            raw_background,
-            detector_mask,
-            solid_angle,
-            direct_beam,
-            subtract_background,
-        ]
-        + reduction_factory(SampleRun)
-        + reduction_factory(BackgroundRun)
-    )
+    providers = [
+        raw_sample,
+        raw_background,
+        detector_mask,
+        solid_angle,
+        direct_beam,
+        subtract_background,
+    ] + reduction
+    container = sl.Container2()
+    for p in providers:
+        container.insert(p)
+
+    print(container._providers.keys())
+
     assert np.array_equal(container.get(IofQ[SampleRun]), [3, 6, 0, 24])
     assert np.array_equal(container.get(IofQ[BackgroundRun]), [9, 18, 0, 72])
     assert np.array_equal(container.get(BackgroundSubtractedIofQ), [-6, -12, 0, -48])

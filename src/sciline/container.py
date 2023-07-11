@@ -4,7 +4,19 @@ from __future__ import annotations
 
 import typing
 from functools import wraps
-from typing import Callable, List, Type, TypeVar, Union
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    List,
+    Optional,
+    Type,
+    TypeVar,
+    Union,
+    get_args,
+    get_origin,
+    get_type_hints,
+)
 
 import injector
 from dask.delayed import Delayed
@@ -14,6 +26,56 @@ T = TypeVar('T')
 
 class UnsatisfiedRequirement(Exception):
     pass
+
+
+class Container2:
+    def __init__(self):
+        self._providers: Dict[type, Callable[..., Any]] = {}
+
+    def insert(self, provider: Callable[..., Any]):
+        key = get_type_hints(provider)['return']
+        if (origin := get_origin(key)) is not None:
+            args = get_args(key)
+            if len(args) != 1:
+                raise ValueError(f'Cannot handle {key} with more than 1 argument')
+            key = origin if isinstance(args[0], TypeVar) else key
+        if key in self._providers:
+            raise ValueError(f'Provider for {key} already exists')
+        self._providers[key] = provider
+
+    Return = typing.TypeVar("Return")
+
+    def call(self, func: Callable[..., Return], bound: Optional[Any] = None) -> Return:
+        print('call', func, bound)
+        tps = get_type_hints(func)
+        del tps['return']
+        args: Dict[str, Any] = {}
+        for name, tp in tps.items():
+            args[name] = self._get(tp, bound=bound)
+        return func(**args)
+
+    def _get(self, tp, bound: Optional[type] = None):
+        print('_get', tp, bound)
+        if (provider := self._providers.get(tp)) is not None:
+            return self.call(provider, bound)
+        elif (origin := get_origin(tp)) is not None:
+            if (provider := self._providers.get(origin)) is not None:
+                return self.call(provider, get_args(tp)[0] if bound is None else bound)
+            else:
+                provider = self._providers[origin[bound]]
+                return self.call(provider, bound)
+
+    def get(self, tp: Type[T], /) -> Union[T, Delayed]:
+        try:
+            # We are slightly abusing Python's type system here, by using the
+            # injector to get T, but actually it returns a Delayed that can
+            # compute T. self._injector does not know this due to how we setup the
+            # bindings. We'd like to use Delayed[T], but that is not supported yet:
+            # https://github.com/dask/dask/pull/9256
+            task: Delayed = self._get(tp)  # type: ignore
+        except injector.UnsatisfiedRequirement as e:
+            raise UnsatisfiedRequirement(e) from e
+        return task  # if self._lazy else task.compute()
 
 
 class Container:

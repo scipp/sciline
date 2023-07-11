@@ -1,9 +1,12 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright (c) 2023 Scipp contributors (https://github.com/scipp)
 from __future__ import annotations
+
 import typing
-import sciline as sl
+
 import numpy as np
+
+import sciline as sl
 
 
 def factory() -> typing.Callable:
@@ -114,29 +117,29 @@ def test_wrapping():
 
 
 from typing import (
+    Any,
+    Callable,
+    Dict,
+    Generic,
+    Optional,
+    TypeVar,
     get_args,
     get_origin,
     get_type_hints,
-    Dict,
-    Any,
-    Callable,
-    Optional,
-    Generic,
-    TypeVar,
 )
 
 
-class SingleParameterGeneric(np.ndarray, Generic[T]):
+class SingleParameterGeneric(Generic[T]):
     def __new__(cls, x: np.ndarray):
         assert isinstance(x, np.ndarray)
         return x
 
 
-class DomainType(SingleParameterGeneric[T]):
+class DomainType(SingleParameterGeneric[T], np.ndarray):
     ...
 
 
-class AnotherDomainType(SingleParameterGeneric[T]):
+class AnotherDomainType(SingleParameterGeneric[T], np.ndarray):
     ...
 
 
@@ -157,7 +160,7 @@ def test_foo() -> None:
 
 
 def func(x: AnotherDomainType[int]) -> int:
-    return x[1]
+    return np.sum(x)
 
 
 def make_int() -> DomainType[int]:
@@ -188,4 +191,4 @@ def test_injection() -> None:
                     args[name] = call(provider, bound)
         return func(**args)
 
-    assert call(func) == 3
+    assert call(func) == 9
