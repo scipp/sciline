@@ -2,7 +2,6 @@
 # Copyright (c) 2023 Scipp contributors (https://github.com/scipp)
 from __future__ import annotations
 
-import typing
 from functools import wraps
 from typing import (
     Any,
@@ -17,21 +16,21 @@ from typing import (
     get_type_hints,
 )
 
-from dask.delayed import Delayed
+from dask.delayed import Delayed, delayed
 
 
-def _delayed(func: Callable) -> Callable:
+def _delayed(func: Callable[..., Any]) -> Callable[..., Delayed]:
     """
     Decorator to make a function return a delayed object.
 
     In contrast to dask.delayed, this uses functools.wraps, to preserve the
     type hints, which is a prerequisite for injecting args based on their type hints.
     """
-    import dask
 
     @wraps(func)
-    def wrapper(*args, **kwargs):
-        return dask.delayed(func)(*args, **kwargs)
+    def wrapper(*args: Any, **kwargs: Any) -> Delayed:
+        task: Delayed = delayed(func)(*args, **kwargs)
+        return task
 
     return wrapper
 
@@ -44,7 +43,7 @@ class UnsatisfiedRequirement(Exception):
 
 
 class Container:
-    def __init__(self, funcs: List[Callable], /):
+    def __init__(self, funcs: List[Callable[..., Any]], /):
         """
         Create a :py:class:`Container` from a list of functions.
 
@@ -53,12 +52,12 @@ class Container:
         funcs:
             List of functions to be injected. Must be annotated with type hints.
         """
-        self._providers: Dict[type, Callable] = {}
-        self._cache: Dict[type, Any] = {}
+        self._providers: Dict[type, Callable[..., Any]] = {}
+        self._cache: Dict[type, Delayed] = {}
         for func in funcs:
             self.insert(func)
 
-    def insert(self, provider: Callable) -> None:
+    def insert(self, provider: Callable[..., Any]) -> None:
         key = get_type_hints(provider)['return']
         if (origin := get_origin(key)) is not None:
             args = get_args(key)
@@ -69,9 +68,9 @@ class Container:
             raise ValueError(f'Provider for {key} already exists')
         self._providers[key] = _delayed(provider)
 
-    Return = typing.TypeVar("Return")
-
-    def call(self, func: Callable[..., Return], bound: Optional[Any] = None) -> Return:
+    def _call(
+        self, func: Callable[..., Delayed], bound: Optional[Any] = None
+    ) -> Delayed:
         tps = get_type_hints(func)
         del tps['return']
         args: Dict[str, Any] = {}
@@ -106,7 +105,7 @@ class Container:
         if (cached := self._cache.get(key)) is not None:
             return cached
         provider = self._providers[key]
-        result = self.call(provider, bound)
+        result = self._call(provider, bound)
         self._cache[tp] = result
         return result
 
@@ -115,8 +114,9 @@ class Container:
         # self._get to get T, but actually it returns a Delayed that can
         # compute T. We'd like to use Delayed[T], but that is not supported yet:
         # https://github.com/dask/dask/pull/9256
-        task: Delayed = self._get(tp)  # type: ignore
-        return task
+        return self._get(tp)
 
     def compute(self, tp: Type[T], /) -> T:
-        return self.get(tp).compute()
+        task = self.get(tp)
+        result: T = task.compute()  # type: ignore
+        return result
