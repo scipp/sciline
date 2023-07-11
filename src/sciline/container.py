@@ -12,7 +12,6 @@ from typing import (
     Optional,
     Type,
     TypeVar,
-    Union,
     get_args,
     get_origin,
     get_type_hints,
@@ -45,7 +44,7 @@ class UnsatisfiedRequirement(Exception):
 
 
 class Container:
-    def __init__(self, funcs: List[Callable], /, *, lazy: bool = False):
+    def __init__(self, funcs: List[Callable], /):
         """
         Create a :py:class:`Container` from a list of functions.
 
@@ -53,12 +52,8 @@ class Container:
         ----------
         funcs:
             List of functions to be injected. Must be annotated with type hints.
-        lazy:
-            If True, the functions are wrapped in :py:func:`dask.delayed` before
-            being injected. This allows to build a dask graph from the container.
         """
         self._providers: Dict[type, Callable] = {}
-        self._lazy: bool = lazy
         self._cache: Dict[type, Any] = {}
         for func in funcs:
             self.insert(func)
@@ -97,11 +92,9 @@ class Container:
         #    in memory longer than necessary.
         #
         # To address these problems, we can internally build a graph of tasks, instead
-        # of # directly creating dependencies between functions. Currently we use Dask
-        # for this.  # The Container instance will automatically compute the task,
-        # unless it is marked as lazy. We therefore use singleton-scope (to ensure Dask
-        # will recognize the task as the same object) and also wrap the function in
-        # dask.delayed.
+        # of directly creating dependencies between functions. Currently we use Dask
+        # for this. We cache call results to ensure Dask will recognize the task
+        # as the same object) and also wrap the function in dask.delayed.
         if tp in self._providers:
             key = tp
             bound = None
@@ -117,10 +110,13 @@ class Container:
         self._cache[tp] = result
         return result
 
-    def get(self, tp: Type[T], /) -> Union[T, Delayed]:
+    def get(self, tp: Type[T], /) -> Delayed:
         # We are slightly abusing Python's type system here, by using the
         # self._get to get T, but actually it returns a Delayed that can
         # compute T. We'd like to use Delayed[T], but that is not supported yet:
         # https://github.com/dask/dask/pull/9256
         task: Delayed = self._get(tp)  # type: ignore
-        return task if self._lazy else task.compute()
+        return task
+
+    def compute(self, tp: Type[T], /) -> T:
+        return self.get(tp).compute()

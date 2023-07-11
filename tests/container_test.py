@@ -25,17 +25,17 @@ def int_float_to_str(x: int, y: float) -> str:
 
 def test_make_container_sets_up_working_container():
     container = sl.Container([int_to_float, make_int])
-    assert container.get(float) == 1.5
-    assert container.get(int) == 3
+    assert container.compute(float) == 1.5
+    assert container.compute(int) == 3
 
 
 def test_make_container_does_not_autobind():
     container = sl.Container([int_to_float])
     with pytest.raises(sl.UnsatisfiedRequirement):
-        container.get(float)
+        container.compute(float)
 
 
-def test_intermediate_computed_once_when_not_lazy():
+def test_intermediate_computed_once():
     ncall = 0
 
     def provide_int() -> int:
@@ -43,19 +43,19 @@ def test_intermediate_computed_once_when_not_lazy():
         ncall += 1
         return 3
 
-    container = sl.Container([int_to_float, provide_int, int_float_to_str], lazy=False)
-    assert container.get(str) == "3;1.5"
+    container = sl.Container([int_to_float, provide_int, int_float_to_str])
+    assert container.compute(str) == "3;1.5"
     assert ncall == 1
 
 
-def test_make_container_lazy_returns_task_that_computes_result():
-    container = sl.Container([int_to_float, make_int], lazy=True)
+def test_get_returns_task_that_computes_result():
+    container = sl.Container([int_to_float, make_int])
     task = container.get(float)
     assert hasattr(task, 'compute')
     assert task.compute() == 1.5
 
 
-def test_lazy_with_multiple_outputs_computes_intermediates_once():
+def test_multiple_get_calls_can_be_computed_without_repeated_calls():
     ncall = 0
 
     def provide_int() -> int:
@@ -63,7 +63,7 @@ def test_lazy_with_multiple_outputs_computes_intermediates_once():
         ncall += 1
         return 3
 
-    container = sl.Container([int_to_float, provide_int, int_float_to_str], lazy=True)
+    container = sl.Container([int_to_float, provide_int, int_float_to_str])
     task1 = container.get(float)
     task2 = container.get(str)
     assert dask.compute(task1, task2) == (1.5, '3;1.5')
@@ -104,7 +104,6 @@ def test_make_container_with_subgraph_template():
 
     container = sl.Container(
         [provide_int, float1, float2, use_strings, int_float_to_str],
-        lazy=True,
     )
     assert container.get(Result).compute() == "3;1.5;3;2.5"
     assert ncall == 1
@@ -129,6 +128,6 @@ def test_container_from_templated():
         return f"{x};{y}"
 
     container = sl.Container([make_int, make_float, combine, f])
-    assert container.get(Str[int]) == '3'
-    assert container.get(Str[float]) == '1.5'
-    assert container.get(str) == '3;1.5'
+    assert container.compute(Str[int]) == '3'
+    assert container.compute(Str[float]) == '1.5'
+    assert container.compute(str) == '3;1.5'
