@@ -10,4 +10,4 @@ except importlib.metadata.PackageNotFoundError:
     __version__ = "0.0.0"
 
 from .container import Container, UnsatisfiedRequirement
-from .domain import DomainTypeFactory, Scope, parametrized_domain_type
+from .domain import Scope
