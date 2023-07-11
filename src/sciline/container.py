@@ -21,6 +21,23 @@ from typing import (
 import injector
 from dask.delayed import Delayed
 
+
+def _delayed(func: Callable) -> Callable:
+    """
+    Decorator to make a function return a delayed object.
+
+    In contrast to dask.delayed, this uses functools.wraps, to preserve the
+    type hints, which is a prerequisite for injector to work.
+    """
+    import dask
+
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        return dask.delayed(func)(*args, **kwargs)
+
+    return wrapper
+
+
 T = TypeVar('T')
 
 
@@ -31,6 +48,7 @@ class UnsatisfiedRequirement(Exception):
 class Container2:
     def __init__(self):
         self._providers: Dict[type, Callable[..., Any]] = {}
+        self._lazy: bool = False
 
     def insert(self, provider: Callable[..., Any]):
         key = get_type_hints(provider)['return']
@@ -41,7 +59,7 @@ class Container2:
             key = origin if isinstance(args[0], TypeVar) else key
         if key in self._providers:
             raise ValueError(f'Provider for {key} already exists')
-        self._providers[key] = provider
+        self._providers[key] = _delayed(provider)
 
     Return = typing.TypeVar("Return")
 
@@ -55,15 +73,19 @@ class Container2:
         return func(**args)
 
     def _get(self, tp, bound: Optional[type] = None):
-        print('_get', tp, bound)
         if (provider := self._providers.get(tp)) is not None:
             return self.call(provider, bound)
         elif (origin := get_origin(tp)) is not None:
             if (provider := self._providers.get(origin)) is not None:
-                return self.call(provider, get_args(tp)[0] if bound is None else bound)
+                # TODO We would really need to support multiple bound params properly
+                param = get_args(tp)[0]
+                return self.call(
+                    provider, bound if isinstance(param, TypeVar) else param
+                )
             else:
                 provider = self._providers[origin[bound]]
                 return self.call(provider, bound)
+        raise UnsatisfiedRequirement("No provider found for type", tp)
 
     def get(self, tp: Type[T], /) -> Union[T, Delayed]:
         try:
@@ -75,7 +97,7 @@ class Container2:
             task: Delayed = self._get(tp)  # type: ignore
         except injector.UnsatisfiedRequirement as e:
             raise UnsatisfiedRequirement(e) from e
-        return task  # if self._lazy else task.compute()
+        return task if self._lazy else task.compute()
 
 
 class Container:
@@ -94,22 +116,6 @@ class Container:
         except injector.UnsatisfiedRequirement as e:
             raise UnsatisfiedRequirement(e) from e
         return task if self._lazy else task.compute()
-
-
-def _delayed(func: Callable) -> Callable:
-    """
-    Decorator to make a function return a delayed object.
-
-    In contrast to dask.delayed, this uses functools.wraps, to preserve the
-    type hints, which is a prerequisite for injector to work.
-    """
-    import dask
-
-    @wraps(func)
-    def wrapper(*args, **kwargs):
-        return dask.delayed(func)(*args, **kwargs)
-
-    return wrapper
 
 
 def _injectable(func: Callable) -> Callable:
