@@ -59,6 +59,7 @@ class Container:
         """
         self._providers: Dict[type, Callable[..., Any]] = {}
         self._lazy: bool = lazy
+        self._cache: Dict[type, Any] = {}
         for func in funcs:
             self.insert(func)
 
@@ -85,6 +86,8 @@ class Container:
         return func(**args)
 
     def _get(self, tp, bound: Optional[type] = None):
+        if (cached := self._cache.get(tp)) is not None:
+            return cached
         # When building a workflow, there are two common problems:
         #
         # 1. Intermediate results are used more than once.
@@ -97,19 +100,29 @@ class Container:
         # unless it is marked as lazy. We therefore use singleton-scope (to ensure Dask
         # will recognize the task as the same object) and also wrap the function in
         # dask.delayed.
-        # TODO Add caching mechanism!
         if (provider := self._providers.get(tp)) is not None:
-            return self.call(provider, bound)
-        elif (origin := get_origin(tp)) is not None:
+            result = self.call(provider, bound)
+            self._cache[tp] = result
+            return result
+        elif (origin := get_origin(tp)) is None:
+            if (provider := self._providers.get(bound)) is not None:
+                result = self.call(provider)
+                self._cache[bound] = result
+                return result
+        else:
             if (provider := self._providers.get(origin)) is not None:
                 # TODO We would really need to support multiple bound params properly
                 param = get_args(tp)[0]
-                return self.call(
+                result = self.call(
                     provider, bound if isinstance(param, TypeVar) else param
                 )
+                self._cache[tp] = result
+                return result
             else:
                 provider = self._providers[origin[bound]]
-                return self.call(provider, bound)
+                result = self.call(provider, bound)
+                self._cache[origin[bound]] = result
+                return result
         raise UnsatisfiedRequirement("No provider found for type", tp)
 
     def get(self, tp: Type[T], /) -> Union[T, Delayed]:

@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright (c) 2023 Scipp contributors (https://github.com/scipp)
-from typing import Callable, List, NewType
+from typing import NewType, TypeVar
 
 import dask
 import pytest
@@ -24,13 +24,13 @@ def int_float_to_str(x: int, y: float) -> str:
 
 
 def test_make_container_sets_up_working_container():
-    container = sl.make_container([int_to_float, make_int])
+    container = sl.Container([int_to_float, make_int])
     assert container.get(float) == 1.5
     assert container.get(int) == 3
 
 
 def test_make_container_does_not_autobind():
-    container = sl.make_container([int_to_float])
+    container = sl.Container([int_to_float])
     with pytest.raises(sl.UnsatisfiedRequirement):
         container.get(float)
 
@@ -43,15 +43,13 @@ def test_intermediate_computed_once_when_not_lazy():
         ncall += 1
         return 3
 
-    container = sl.make_container(
-        [int_to_float, provide_int, int_float_to_str], lazy=False
-    )
+    container = sl.Container([int_to_float, provide_int, int_float_to_str], lazy=False)
     assert container.get(str) == "3;1.5"
     assert ncall == 1
 
 
 def test_make_container_lazy_returns_task_that_computes_result():
-    container = sl.make_container([int_to_float, make_int], lazy=True)
+    container = sl.Container([int_to_float, make_int], lazy=True)
     task = container.get(float)
     assert hasattr(task, 'compute')
     assert task.compute() == 1.5
@@ -65,9 +63,7 @@ def test_lazy_with_multiple_outputs_computes_intermediates_once():
         ncall += 1
         return 3
 
-    container = sl.make_container(
-        [int_to_float, provide_int, int_float_to_str], lazy=True
-    )
+    container = sl.Container([int_to_float, provide_int, int_float_to_str], lazy=True)
     task1 = container.get(float)
     task2 = container.get(str)
     assert dask.compute(task1, task2) == (1.5, '3;1.5')
@@ -82,14 +78,16 @@ def test_make_container_with_subgraph_template():
         ncall += 1
         return 3
 
-    Float = sl.parametrized_domain_type('Float', float)
-    Str = sl.parametrized_domain_type('Str', str)
+    Param = TypeVar('Param')
 
-    def child(tp: type) -> List[Callable]:
-        def int_float_to_str(x: int, y: Float[tp]) -> Str[tp]:
-            return Str[tp](f"{x};{y}")
+    class Float(sl.Scope[Param], float):
+        ...
 
-        return [int_float_to_str]
+    class Str(sl.Scope[Param], str):
+        ...
+
+    def int_float_to_str(x: int, y: Float[Param]) -> Str[Param]:
+        return Str(f"{x};{y}")
 
     Run1 = NewType('Run1', int)
     Run2 = NewType('Run2', int)
@@ -104,22 +102,23 @@ def test_make_container_with_subgraph_template():
     def use_strings(s1: Str[Run1], s2: Str[Run2]) -> Result:
         return Result(f"{s1};{s2}")
 
-    container = sl.make_container(
-        [provide_int, float1, float2, use_strings] + child(Run1) + child(Run2),
+    container = sl.Container(
+        [provide_int, float1, float2, use_strings, int_float_to_str],
         lazy=True,
     )
     assert container.get(Result).compute() == "3;1.5;3;2.5"
     assert ncall == 1
 
 
-Str = sl.parametrized_domain_type('Str', str)
+Param = TypeVar('Param')
 
 
-def subworkflow(tp: type) -> List[Callable]:
-    def f(x: tp) -> Str[tp]:
-        return Str[tp](f'{x}')
+class Str(sl.Scope[Param], str):
+    ...
 
-    return [f]
+
+def f(x: Param) -> Str[Param]:
+    return Str(f'{x}')
 
 
 def test_container_from_templated():
@@ -129,9 +128,7 @@ def test_container_from_templated():
     def combine(x: Str[int], y: Str[float]) -> str:
         return f"{x};{y}"
 
-    container = sl.make_container(
-        [make_int, make_float, combine] + subworkflow(int) + subworkflow(float)
-    )
+    container = sl.Container([make_int, make_float, combine, f])
     assert container.get(Str[int]) == '3'
     assert container.get(Str[float]) == '1.5'
     assert container.get(str) == '3;1.5'
