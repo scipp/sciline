@@ -9,5 +9,5 @@ try:
 except importlib.metadata.PackageNotFoundError:
     __version__ = "0.0.0"
 
-from .container import Container, Container2, UnsatisfiedRequirement, make_container
+from .container import Container, UnsatisfiedRequirement
 from .domain import DomainTypeFactory, Scope, parametrized_domain_type

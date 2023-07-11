@@ -114,19 +114,17 @@ def subtract_background(
 
 
 def test_reduction_workflow():
-    providers = [
-        raw_sample,
-        raw_background,
-        detector_mask,
-        solid_angle,
-        direct_beam,
-        subtract_background,
-    ] + reduction
-    container = sl.Container2()
-    for p in providers:
-        container.insert(p)
-
-    print(container._providers.keys())
+    container = sl.Container(
+        [
+            raw_sample,
+            raw_background,
+            detector_mask,
+            solid_angle,
+            direct_beam,
+            subtract_background,
+        ]
+        + reduction
+    )
 
     assert np.array_equal(container.get(IofQ[SampleRun]), [3, 6, 0, 24])
     assert np.array_equal(container.get(IofQ[BackgroundRun]), [9, 18, 0, 72])
