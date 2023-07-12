@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright (c) 2023 Scipp contributors (https://github.com/scipp)
 from dataclasses import dataclass
-from typing import Generic, NewType, TypeVar
+from typing import Generic, List, NewType, TypeVar
 
 import dask
 import pytest
@@ -143,6 +143,44 @@ def test_inserting_provider_returning_None_raises():
     container = sl.Container([])
     with pytest.raises(ValueError):
         container.insert(provide_none)
+
+
+def test_inserting_provider_with_no_return_type_raises():
+    def provide_none():
+        return None
+
+    with pytest.raises(ValueError):
+        sl.Container([provide_none])
+    container = sl.Container([])
+    with pytest.raises(ValueError):
+        container.insert(provide_none)
+
+
+def test_typevar_requirement_of_provider_can_be_bound():
+    T = TypeVar('T')
+
+    def provider_int() -> int:
+        return 3
+
+    def provider(x: T) -> List[T]:
+        return [x, x]
+
+    container = sl.Container([provider_int, provider])
+    assert container.compute(List[int]) == [3, 3]
+
+
+def test_unsatisfiable_typevar_requirement_of_provider_raises():
+    T = TypeVar('T')
+
+    def provider_int() -> int:
+        return 3
+
+    def provider(x: T) -> List[T]:
+        return [x, x]
+
+    container = sl.Container([provider_int, provider])
+    with pytest.raises(sl.UnsatisfiedRequirement):
+        container.compute(List[float])
 
 
 def test_TypeVars_params_are_not_associated_unless_they_match():

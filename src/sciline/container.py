@@ -81,9 +81,10 @@ class Container:
             self.insert(func)
 
     def insert(self, provider: Provider) -> None:
-        key = get_type_hints(provider)['return']
+        if (key := get_type_hints(provider).get('return')) is None:
+            raise ValueError(f'Provider {provider} lacks type-hint for return value')
         if key == NoneType:
-            raise ValueError(f'Provider {provider} does not have a return type')
+            raise ValueError(f'Provider {provider} returning `None` is not allowed')
         if get_origin(key) is not None:
             subproviders = self._generic_providers.setdefault(get_origin(key), {})
             args = get_args(key)
