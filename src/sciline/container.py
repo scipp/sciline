@@ -45,6 +45,15 @@ def _is_compatible_type_tuple(
     return True
 
 
+def _bind_free_typevars(tp: type, bound: Dict[TypeVar, type]) -> type:
+    if isinstance(tp, TypeVar):
+        return bound[tp]
+    elif (origin := get_origin(tp)) is not None:
+        return origin[tuple(bound.get(a, a) for a in get_args(tp))]
+    else:
+        return tp
+
+
 Provider = Callable[..., Any]
 
 
@@ -59,9 +68,7 @@ class Container:
             List of functions to be injected. Must be annotated with type hints.
         """
         self._providers: Dict[type, Provider] = {}
-        self._generic_providers: Dict[
-            type, Dict[Tuple[type | TypeVar, ...], Provider]
-        ] = {}
+        self._subproviders: Dict[type, Dict[Tuple[type | TypeVar, ...], Provider]] = {}
         self._cache: Dict[type, Delayed] = {}
         for func in funcs:
             self.insert(func)
@@ -73,7 +80,7 @@ class Container:
         if key == type(None):  # noqa: E721
             raise ValueError(f'Provider {provider} returning `None` is not allowed')
         if get_origin(key) is not None:
-            subproviders = self._generic_providers.setdefault(get_origin(key), {})
+            subproviders = self._subproviders.setdefault(get_origin(key), {})
             args = get_args(key)
             if args in subproviders:
                 raise ValueError(f'Provider for {key} already exists')
@@ -87,18 +94,10 @@ class Container:
         tps = get_type_hints(func)
         del tps['return']
         args = {
-            name: self._get(self._bind_free_typevars(tp, bound=bound))
+            name: self._get(_bind_free_typevars(tp, bound=bound))
             for name, tp in tps.items()
         }
         return dask.delayed(func)(**args)
-
-    def _bind_free_typevars(self, tp: type, bound: Dict[TypeVar, type]) -> type:
-        if isinstance(tp, TypeVar):
-            return bound[tp]
-        elif (origin := get_origin(tp)) is not None:
-            return origin[tuple(bound.get(a, a) for a in get_args(tp))]
-        else:
-            return tp
 
     def _get(self, tp: Type[T], /) -> Delayed:
         # When building a workflow, there are two common problems:
@@ -116,9 +115,7 @@ class Container:
 
         if (provider := self._providers.get(tp)) is not None:
             result = self._call(provider, {})
-        elif (origin := get_origin(tp)) is not None and (
-            subproviders := self._generic_providers[origin]
-        ) is not None:
+        elif (subproviders := self._subproviders.get(get_origin(tp))) is not None:
             requested = get_args(tp)
             matches = [
                 (args, subprovider)
