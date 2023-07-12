@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from functools import wraps
-from types import NoneType
 from typing import (
     Any,
     Callable,
@@ -87,7 +86,8 @@ class Container:
     def insert(self, provider: Provider) -> None:
         if (key := get_type_hints(provider).get('return')) is None:
             raise ValueError(f'Provider {provider} lacks type-hint for return value')
-        if key == NoneType:
+        # isinstance does not work here and types.NoneType available only in 3.10+
+        if key == type(None):  # noqa: E721
             raise ValueError(f'Provider {provider} returning `None` is not allowed')
         if get_origin(key) is not None:
             subproviders = self._generic_providers.setdefault(get_origin(key), {})
