@@ -81,16 +81,15 @@ class Container:
 
     def insert(self, provider: Provider) -> None:
         key = get_type_hints(provider)['return']
-        generic = get_origin(key) is not None
-        if (not generic) and (key in self._providers):
-            raise ValueError(f'Provider for {key} already exists')
-        if generic:
+        if get_origin(key) is not None:
             subproviders = self._generic_providers.setdefault(get_origin(key), {})
             args = get_args(key)
             if args in subproviders:
                 raise ValueError(f'Provider for {key} already exists')
             subproviders[args] = _delayed(provider)
         else:
+            if key in self._providers:
+                raise ValueError(f'Provider for {key} already exists')
             self._providers[key] = _delayed(provider)
 
     def _call(self, func: Callable[..., Delayed], bound: Dict[TypeVar, Any]) -> Delayed:
@@ -123,32 +122,22 @@ class Container:
         # as the same object) and also wrap the function in dask.delayed.
         if (cached := self._cache.get(tp)) is not None:
             return cached
-        if tp in self._providers:
-            key = tp
-            generic = False
-        elif (origin := get_origin(tp)) in self._generic_providers:
-            key = origin
-            generic = True
-        else:
-            raise UnsatisfiedRequirement("No provider found for type", tp)
 
-        bound: Dict[TypeVar, Any] = {}
-        if not generic:
-            provider = self._providers[key]
-        else:
-            providers = self._generic_providers[key]
+        if (provider := self._providers.get(tp)) is not None:
+            result = self._call(provider, {})
+        elif (origin := get_origin(tp)) is not None and (
+            subproviders := self._generic_providers[origin]
+        ) is not None:
             requested = get_args(tp)
             matches = [
                 (args, subprovider)
-                for args, subprovider in providers.items()
+                for args, subprovider in subproviders.items()
                 if _is_compatible_type_tuple(requested, args)
             ]
             if len(matches) == 0:
                 raise UnsatisfiedRequirement("No provider found for type", tp)
             elif len(matches) > 1:
-                raise KeyError(
-                    "Multiple providers found for type", tp, "with arguments", requested
-                )
+                raise KeyError("Multiple providers found for type", tp)
             args, subprovider = matches[0]
             provider = subprovider
             bound = {
@@ -156,8 +145,10 @@ class Container:
                 for arg, req in zip(args, requested)
                 if isinstance(arg, TypeVar)
             }
+            result = self._call(provider, bound)
+        else:
+            raise UnsatisfiedRequirement("No provider found for type", tp)
 
-        result = self._call(provider, bound)
         self._cache[tp] = result
         return result
 
