@@ -335,3 +335,44 @@ def test_multiple_matching_partial_providers_raises():
     assert container.compute(A[float, float]) == A[float, float](2.0, 2.0)
     with pytest.raises(KeyError):
         container.compute(A[int, float])
+
+
+def test_TypeVar_params_track_to_multiple_sources():
+    T1 = TypeVar('T1')
+    T2 = TypeVar('T2')
+
+    @dataclass
+    class A(Generic[T1]):
+        value: T1
+
+    @dataclass
+    class B(Generic[T1]):
+        value: T1
+
+    @dataclass
+    class C(Generic[T1, T2]):
+        first: T1
+        second: T2
+
+    def provide_int() -> int:
+        return 1
+
+    def provide_float() -> float:
+        return 2.0
+
+    def provide_A(x: T1) -> A[T1]:
+        return A[T1](x)
+
+    # Note that it currently does not matter which TypeVar instance we use here:
+    # Container tracks uses of TypeVar within a single provider, but does not carry
+    # the information beyond the scope of a single call.
+    def provide_B(x: T1) -> B[T1]:
+        return B[T1](x)
+
+    def provide_C(x: A[T1], y: B[T2]) -> C[T1, T2]:
+        return C[T1, T2](x.value, y.value)
+
+    container = sl.Container(
+        [provide_int, provide_float, provide_A, provide_B, provide_C]
+    )
+    assert container.compute(C[int, float]) == C[int, float](1, 2.0)
