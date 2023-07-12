@@ -43,6 +43,10 @@ class UnsatisfiedRequirement(Exception):
     pass
 
 
+class AmbiguousProvider(Exception):
+    pass
+
+
 def _is_compatible_type_tuple(
     requested: tuple[type, ...], provided: tuple[type | TypeVar, ...]
 ) -> bool:
@@ -141,7 +145,7 @@ class Container:
             if len(matches) == 0:
                 raise UnsatisfiedRequirement("No provider found for type", tp)
             elif len(matches) > 1:
-                raise KeyError("Multiple providers found for type", tp)
+                raise AmbiguousProvider("Multiple providers found for type", tp)
             args, subprovider = matches[0]
             provider = subprovider
             bound = {

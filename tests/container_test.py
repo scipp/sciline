@@ -333,7 +333,7 @@ def test_multiple_matching_partial_providers_raises():
     container = sl.Container([int_source, float_source, provider1, provider2])
     assert container.compute(A[int, int]) == A[int, int](1, 1)
     assert container.compute(A[float, float]) == A[float, float](2.0, 2.0)
-    with pytest.raises(KeyError):
+    with pytest.raises(sl.AmbiguousProvider):
         container.compute(A[int, float])
 
 
