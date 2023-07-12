@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright (c) 2023 Scipp contributors (https://github.com/scipp)
 from dataclasses import dataclass
-from typing import Generic, NewType, TypeVar, get_origin
+from typing import Generic, NewType, TypeVar
 
 import dask
 import pytest
@@ -134,33 +134,6 @@ def test_container_from_templated():
     assert container.compute(str) == '3;1.5'
 
 
-T1 = TypeVar('T1')
-T2 = TypeVar('T2')
-
-
-class SingleArg(Generic[T1]):
-    ...
-
-
-class MultiArg(Generic[T1, T2]):
-    ...
-
-
-def test_understanding_of_Generic():
-    assert get_origin(MultiArg) is None
-    with pytest.raises(TypeError):
-        MultiArg[int]  # to few parameters
-    assert get_origin(MultiArg[int, T2]) is MultiArg
-    assert get_origin(MultiArg[T1, T2]) is MultiArg
-
-
-def test_understanding_of_TypeVar():
-    assert T1 != T2
-    assert T1 == T1
-    assert T1 is T1
-    assert TypeVar('T3') != TypeVar('T3')
-
-
 def test_TypeVars_params_are_not_associated_unless_they_match():
     T1 = TypeVar('T1')
     T2 = TypeVar('T2')
@@ -266,6 +239,7 @@ def test_distinct_fully_bound_instances_yield_distinct_results():
 
 def test_distinct_partially_bound_instances_yield_distinct_results():
     T1 = TypeVar('T1')
+    T2 = TypeVar('T2')
 
     @dataclass
     class A(Generic[T1, T2]):
@@ -288,6 +262,7 @@ def test_distinct_partially_bound_instances_yield_distinct_results():
 
 def test_multiple_matching_partial_providers_raises():
     T1 = TypeVar('T1')
+    T2 = TypeVar('T2')
 
     @dataclass
     class A(Generic[T1, T2]):
