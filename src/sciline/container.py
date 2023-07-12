@@ -60,17 +60,12 @@ class Container:
         key = get_type_hints(provider)['return']
         if (origin := get_origin(key)) is not None:
             args = get_args(key)
-            if len(args) != 1 and any(isinstance(arg, TypeVar) for arg in args):
-                raise ValueError(f'Cannot handle {key} with more than 1 argument')
-            key = origin if isinstance(args[0], TypeVar) else key
+            key = origin if any(isinstance(arg, TypeVar) for arg in args) else key
         if key in self._providers:
             raise ValueError(f'Provider for {key} already exists')
         self._providers[key] = _delayed(provider)
 
-    def _call(
-        self, func: Callable[..., Delayed], bound: Dict[TypeVar, Any] | None = None
-    ) -> Delayed:
-        bound = bound or {}
+    def _call(self, func: Callable[..., Delayed], bound: Dict[TypeVar, Any]) -> Delayed:
         tps = get_type_hints(func)
         del tps['return']
         args: Dict[str, Any] = {}
@@ -78,15 +73,12 @@ class Container:
             if isinstance(tp, TypeVar):
                 tp = bound[tp]
             elif (origin := get_origin(tp)) is not None:
-                if any(isinstance(arg, TypeVar) for arg in get_args(tp)):
-                    # replace all TypeVar with bound types
-                    tp = origin[
-                        tuple(
-                            bound[arg] if isinstance(arg, TypeVar) else arg
-                            for arg in get_args(tp)
-                        )
-                    ]
-                    # tp = origin[bound]
+                tp = origin[
+                    tuple(
+                        bound[arg] if isinstance(arg, TypeVar) else arg
+                        for arg in get_args(tp)
+                    )
+                ]
             args[name] = self._get(tp)
         return func(**args)
 
@@ -101,19 +93,17 @@ class Container:
         # of directly creating dependencies between functions. Currently we use Dask
         # for this. We cache call results to ensure Dask will recognize the task
         # as the same object) and also wrap the function in dask.delayed.
+        if (cached := self._cache.get(tp)) is not None:
+            return cached
         if tp in self._providers:
             key = tp
             direct = True
-            # bound = None
         elif (origin := get_origin(tp)) in self._providers:
             key = origin
             direct = False
-            # bound = get_args(tp)[0]
         else:
             raise UnsatisfiedRequirement("No provider found for type", tp)
-        # TODO Is using `key` correct here? Maybe need to also use `bound`?
-        if (cached := self._cache.get(key)) is not None:
-            return cached
+
         provider = self._providers[key]
         bound: Dict[TypeVar, Any] = {}
         if not direct:

@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright (c) 2023 Scipp contributors (https://github.com/scipp)
+from dataclasses import dataclass
 from typing import Generic, NewType, TypeVar, get_origin
 
 import dask
@@ -185,3 +186,61 @@ def test_TypeVars_params_are_not_associated_unless_they_match():
 
     container = sl.Container([source, matching])
     container.compute(B[int])
+
+
+def test_multi_Generic_with_fully_bound_arguments():
+    T1 = TypeVar('T1')
+    T2 = TypeVar('T2')
+
+    @dataclass
+    class A(Generic[T1, T2]):
+        first: T1
+        second: T2
+
+    def source() -> A[int, float]:
+        return A[int, float](1, 2.0)
+
+    container = sl.Container([source])
+    assert container.compute(A[int, float]) == A[int, float](1, 2.0)
+
+
+def test_multi_Generic_with_partially_bound_arguments():
+    T1 = TypeVar('T1')
+    T2 = TypeVar('T2')
+
+    @dataclass
+    class A(Generic[T1, T2]):
+        first: T1
+        second: T2
+
+    def source() -> float:
+        return 2.0
+
+    def partially_bound(x: T1) -> A[int, T1]:
+        return A[int, T1](1, x)
+
+    container = sl.Container([source, partially_bound])
+    assert container.compute(A[int, float]) == A[int, float](1, 2.0)
+
+
+def test_multi_Generic_with_multiple_unbound():
+    T1 = TypeVar('T1')
+    T2 = TypeVar('T2')
+
+    @dataclass
+    class A(Generic[T1, T2]):
+        first: T1
+        second: T2
+
+    def int_source() -> int:
+        return 1
+
+    def float_source() -> float:
+        return 2.0
+
+    def unbound(x: T1, y: T2) -> A[T1, T2]:
+        return A[T1, T2](x, y)
+
+    container = sl.Container([int_source, float_source, unbound])
+    assert container.compute(A[int, float]) == A[int, float](1, 2.0)
+    assert container.compute(A[float, int]) == A[float, int](2.0, 1)
