@@ -2,7 +2,6 @@
 # Copyright (c) 2023 Scipp contributors (https://github.com/scipp)
 from __future__ import annotations
 
-from functools import wraps
 from typing import (
     Any,
     Callable,
@@ -16,24 +15,8 @@ from typing import (
     get_type_hints,
 )
 
-from dask.delayed import Delayed, delayed
-
-
-def _delayed(func: Callable[..., Any]) -> Callable[..., Delayed]:
-    """
-    Decorator to make a function return a delayed object.
-
-    In contrast to dask.delayed, this uses functools.wraps, to preserve the
-    type hints, which is a prerequisite for injecting args based on their type hints.
-    """
-
-    @wraps(func)
-    def wrapper(*args: Any, **kwargs: Any) -> Delayed:
-        task: Delayed = delayed(func)(*args, **kwargs)
-        return task
-
-    return wrapper
-
+import dask
+from dask.delayed import Delayed
 
 T = TypeVar('T')
 
@@ -94,11 +77,11 @@ class Container:
             args = get_args(key)
             if args in subproviders:
                 raise ValueError(f'Provider for {key} already exists')
-            subproviders[args] = _delayed(provider)
+            subproviders[args] = provider
         else:
             if key in self._providers:
                 raise ValueError(f'Provider for {key} already exists')
-            self._providers[key] = _delayed(provider)
+            self._providers[key] = provider
 
     def _call(self, func: Callable[..., Delayed], bound: Dict[TypeVar, Any]) -> Delayed:
         tps = get_type_hints(func)
@@ -115,7 +98,7 @@ class Container:
                     )
                 ]
             args[name] = self._get(tp)
-        return func(**args)
+        return dask.delayed(func)(**args)
 
     def _get(self, tp: Type[T], /) -> Delayed:
         # When building a workflow, there are two common problems:
