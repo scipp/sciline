@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from functools import wraps
+from types import NoneType
 from typing import (
     Any,
     Callable,
@@ -81,6 +82,8 @@ class Container:
 
     def insert(self, provider: Provider) -> None:
         key = get_type_hints(provider)['return']
+        if key == NoneType:
+            raise ValueError(f'Provider {provider} does not have a return type')
         if get_origin(key) is not None:
             subproviders = self._generic_providers.setdefault(get_origin(key), {})
             args = get_args(key)

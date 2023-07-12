@@ -134,6 +134,17 @@ def test_container_from_templated():
     assert container.compute(str) == '3;1.5'
 
 
+def test_inserting_provider_returning_None_raises():
+    def provide_none() -> None:
+        return None
+
+    with pytest.raises(ValueError):
+        sl.Container([provide_none])
+    container = sl.Container([])
+    with pytest.raises(ValueError):
+        container.insert(provide_none)
+
+
 def test_TypeVars_params_are_not_associated_unless_they_match():
     T1 = TypeVar('T1')
     T2 = TypeVar('T2')
