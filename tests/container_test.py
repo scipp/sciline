@@ -169,6 +169,17 @@ def test_typevar_requirement_of_provider_can_be_bound() -> None:
     assert container.compute(List[int]) == [3, 3]
 
 
+def test_typevar_that_cannot_be_bound_raises_UnboundTypeVar() -> None:
+    T = TypeVar('T')
+
+    def provider(_: T) -> int:
+        return 1
+
+    container = sl.Container([provider])
+    with pytest.raises(sl.UnboundTypeVar):
+        container.compute(int)
+
+
 def test_unsatisfiable_typevar_requirement_of_provider_raises() -> None:
     T = TypeVar('T')
 
@@ -203,7 +214,7 @@ def test_TypeVar_params_are_not_associated_unless_they_match() -> None:
         return B[T1]()
 
     container = sl.Container([source, not_matching])
-    with pytest.raises(sl.UnsatisfiedRequirement):
+    with pytest.raises(sl.UnboundTypeVar):
         container.compute(B[int])
 
     container = sl.Container([source, matching])

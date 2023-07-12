@@ -25,6 +25,10 @@ class UnsatisfiedRequirement(Exception):
     pass
 
 
+class UnboundTypeVar(Exception):
+    pass
+
+
 class AmbiguousProvider(Exception):
     pass
 
@@ -47,9 +51,11 @@ def _is_compatible_type_tuple(
 
 def _bind_free_typevars(tp: type, bound: Dict[TypeVar, type]) -> type:
     if isinstance(tp, TypeVar):
-        return bound[tp]
+        if (result := bound.get(tp)) is None:
+            raise UnboundTypeVar(f'Unbound type variable {tp}')
+        return result
     elif (origin := get_origin(tp)) is not None:
-        return origin[tuple(bound.get(a, a) for a in get_args(tp))]
+        return origin[tuple(_bind_free_typevars(arg, bound) for arg in get_args(tp))]
     else:
         return tp
 
