@@ -24,19 +24,19 @@ def int_float_to_str(x: int, y: float) -> str:
     return f"{x};{y}"
 
 
-def test_make_container_sets_up_working_container():
+def test_make_container_sets_up_working_container() -> None:
     container = sl.Container([int_to_float, make_int])
     assert container.compute(float) == 1.5
     assert container.compute(int) == 3
 
 
-def test_make_container_does_not_autobind():
+def test_make_container_does_not_autobind() -> None:
     container = sl.Container([int_to_float])
     with pytest.raises(sl.UnsatisfiedRequirement):
         container.compute(float)
 
 
-def test_intermediate_computed_once():
+def test_intermediate_computed_once() -> None:
     ncall = 0
 
     def provide_int() -> int:
@@ -49,14 +49,14 @@ def test_intermediate_computed_once():
     assert ncall == 1
 
 
-def test_get_returns_task_that_computes_result():
+def test_get_returns_task_that_computes_result() -> None:
     container = sl.Container([int_to_float, make_int])
     task = container.get(float)
     assert hasattr(task, 'compute')
     assert task.compute() == 1.5
 
 
-def test_multiple_get_calls_can_be_computed_without_repeated_calls():
+def test_multiple_get_calls_can_be_computed_without_repeated_calls() -> None:
     ncall = 0
 
     def provide_int() -> int:
@@ -71,7 +71,7 @@ def test_multiple_get_calls_can_be_computed_without_repeated_calls():
     assert ncall == 1
 
 
-def test_make_container_with_subgraph_template():
+def test_make_container_with_subgraph_template() -> None:
     ncall = 0
 
     def provide_int() -> int:
@@ -121,7 +121,7 @@ def f(x: Param) -> Str[Param]:
     return Str(f'{x}')
 
 
-def test_container_from_templated():
+def test_container_from_templated() -> None:
     def make_float() -> float:
         return 1.5
 
@@ -134,7 +134,7 @@ def test_container_from_templated():
     assert container.compute(str) == '3;1.5'
 
 
-def test_inserting_provider_returning_None_raises():
+def test_inserting_provider_returning_None_raises() -> None:
     def provide_none() -> None:
         return None
 
@@ -145,8 +145,8 @@ def test_inserting_provider_returning_None_raises():
         container.insert(provide_none)
 
 
-def test_inserting_provider_with_no_return_type_raises():
-    def provide_none():
+def test_inserting_provider_with_no_return_type_raises() -> None:
+    def provide_none():  # type: ignore
         return None
 
     with pytest.raises(ValueError):
@@ -156,7 +156,7 @@ def test_inserting_provider_with_no_return_type_raises():
         container.insert(provide_none)
 
 
-def test_typevar_requirement_of_provider_can_be_bound():
+def test_typevar_requirement_of_provider_can_be_bound() -> None:
     T = TypeVar('T')
 
     def provider_int() -> int:
@@ -169,7 +169,7 @@ def test_typevar_requirement_of_provider_can_be_bound():
     assert container.compute(List[int]) == [3, 3]
 
 
-def test_unsatisfiable_typevar_requirement_of_provider_raises():
+def test_unsatisfiable_typevar_requirement_of_provider_raises() -> None:
     T = TypeVar('T')
 
     def provider_int() -> int:
@@ -183,7 +183,7 @@ def test_unsatisfiable_typevar_requirement_of_provider_raises():
         container.compute(List[float])
 
 
-def test_TypeVars_params_are_not_associated_unless_they_match():
+def test_TypeVars_params_are_not_associated_unless_they_match() -> None:
     T1 = TypeVar('T1')
     T2 = TypeVar('T2')
 
@@ -210,7 +210,7 @@ def test_TypeVars_params_are_not_associated_unless_they_match():
     container.compute(B[int])
 
 
-def test_multi_Generic_with_fully_bound_arguments():
+def test_multi_Generic_with_fully_bound_arguments() -> None:
     T1 = TypeVar('T1')
     T2 = TypeVar('T2')
 
@@ -226,7 +226,7 @@ def test_multi_Generic_with_fully_bound_arguments():
     assert container.compute(A[int, float]) == A[int, float](1, 2.0)
 
 
-def test_multi_Generic_with_partially_bound_arguments():
+def test_multi_Generic_with_partially_bound_arguments() -> None:
     T1 = TypeVar('T1')
     T2 = TypeVar('T2')
 
@@ -245,7 +245,7 @@ def test_multi_Generic_with_partially_bound_arguments():
     assert container.compute(A[int, float]) == A[int, float](1, 2.0)
 
 
-def test_multi_Generic_with_multiple_unbound():
+def test_multi_Generic_with_multiple_unbound() -> None:
     T1 = TypeVar('T1')
     T2 = TypeVar('T2')
 
@@ -268,7 +268,7 @@ def test_multi_Generic_with_multiple_unbound():
     assert container.compute(A[float, int]) == A[float, int](2.0, 1)
 
 
-def test_distinct_fully_bound_instances_yield_distinct_results():
+def test_distinct_fully_bound_instances_yield_distinct_results() -> None:
     T1 = TypeVar('T1')
 
     @dataclass
@@ -286,7 +286,7 @@ def test_distinct_fully_bound_instances_yield_distinct_results():
     assert container.compute(A[float]) == A[float](2.0)
 
 
-def test_distinct_partially_bound_instances_yield_distinct_results():
+def test_distinct_partially_bound_instances_yield_distinct_results() -> None:
     T1 = TypeVar('T1')
     T2 = TypeVar('T2')
 
@@ -309,7 +309,7 @@ def test_distinct_partially_bound_instances_yield_distinct_results():
     assert container.compute(A[float, str]) == A[float, str](2.0, 'a')
 
 
-def test_multiple_matching_partial_providers_raises():
+def test_multiple_matching_partial_providers_raises() -> None:
     T1 = TypeVar('T1')
     T2 = TypeVar('T2')
 
@@ -337,7 +337,7 @@ def test_multiple_matching_partial_providers_raises():
         container.compute(A[int, float])
 
 
-def test_TypeVar_params_track_to_multiple_sources():
+def test_TypeVar_params_track_to_multiple_sources() -> None:
     T1 = TypeVar('T1')
     T2 = TypeVar('T2')
 

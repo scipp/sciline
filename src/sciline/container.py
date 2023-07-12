@@ -83,7 +83,7 @@ class Container:
                 raise ValueError(f'Provider for {key} already exists')
             self._providers[key] = provider
 
-    def _call(self, func: Callable[..., Delayed], bound: Dict[TypeVar, Any]) -> Delayed:
+    def _call(self, func: Callable[..., Any], bound: Dict[TypeVar, Any]) -> Delayed:
         tps = get_type_hints(func)
         del tps['return']
         args: Dict[str, Any] = {}
@@ -98,7 +98,7 @@ class Container:
                     )
                 ]
             args[name] = self._get(tp)
-        return dask.delayed(func)(**args)
+        return dask.delayed(func)(**args)  # type: ignore
 
     def _get(self, tp: Type[T], /) -> Delayed:
         # When building a workflow, there are two common problems:
@@ -129,8 +129,7 @@ class Container:
                 raise UnsatisfiedRequirement("No provider found for type", tp)
             elif len(matches) > 1:
                 raise AmbiguousProvider("Multiple providers found for type", tp)
-            args, subprovider = matches[0]
-            provider = subprovider
+            args, provider = matches[0]
             bound = {
                 arg: req
                 for arg, req in zip(args, requested)
