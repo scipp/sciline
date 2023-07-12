@@ -85,8 +85,8 @@ class Container:
         # isinstance does not work here and types.NoneType available only in 3.10+
         if key == type(None):  # noqa: E721
             raise ValueError(f'Provider {provider} returning `None` is not allowed')
-        if get_origin(key) is not None:
-            subproviders = self._subproviders.setdefault(get_origin(key), {})
+        if (origin := get_origin(key)) is not None:
+            subproviders = self._subproviders.setdefault(origin, {})
             args = get_args(key)
             if args in subproviders:
                 raise ValueError(f'Provider for {key} already exists')
@@ -121,7 +121,9 @@ class Container:
 
         if (provider := self._providers.get(tp)) is not None:
             result = self._call(provider, {})
-        elif (subproviders := self._subproviders.get(get_origin(tp))) is not None:
+        elif (origin := get_origin(tp)) is not None and (
+            subproviders := self._subproviders.get(origin)
+        ) is not None:
             requested = get_args(tp)
             matches = [
                 (args, subprovider)
