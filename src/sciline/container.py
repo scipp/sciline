@@ -86,19 +86,19 @@ class Container:
     def _call(self, func: Callable[..., Any], bound: Dict[TypeVar, Any]) -> Delayed:
         tps = get_type_hints(func)
         del tps['return']
-        args: Dict[str, Any] = {}
-        for name, tp in tps.items():
-            if isinstance(tp, TypeVar):
-                tp = bound[tp]
-            elif (origin := get_origin(tp)) is not None:
-                tp = origin[
-                    tuple(
-                        bound[arg] if isinstance(arg, TypeVar) else arg
-                        for arg in get_args(tp)
-                    )
-                ]
-            args[name] = self._get(tp)
-        return dask.delayed(func)(**args)  # type: ignore
+        args = {
+            name: self._get(self._bind_free_typevars(tp, bound=bound))
+            for name, tp in tps.items()
+        }
+        return dask.delayed(func)(**args)
+
+    def _bind_free_typevars(self, tp: type, bound: Dict[TypeVar, Any]) -> type:
+        if isinstance(tp, TypeVar):
+            return bound[tp]
+        elif (origin := get_origin(tp)) is not None:
+            return origin[tuple(bound.get(a, a) for a in get_args(tp))]
+        else:
+            return tp
 
     def _get(self, tp: Type[T], /) -> Delayed:
         # When building a workflow, there are two common problems:

@@ -203,7 +203,7 @@ def test_TypeVars_params_are_not_associated_unless_they_match() -> None:
         return B[T1]()
 
     container = sl.Container([source, not_matching])
-    with pytest.raises(KeyError):
+    with pytest.raises(sl.UnsatisfiedRequirement):
         container.compute(B[int])
 
     container = sl.Container([source, matching])
