@@ -8,7 +8,6 @@ from typing import (
     Callable,
     Dict,
     List,
-    Optional,
     Type,
     TypeVar,
     get_args,
@@ -69,17 +68,25 @@ class Container:
         self._providers[key] = _delayed(provider)
 
     def _call(
-        self, func: Callable[..., Delayed], bound: Optional[Any] = None
+        self, func: Callable[..., Delayed], bound: Dict[TypeVar, Any] | None = None
     ) -> Delayed:
+        bound = bound or {}
         tps = get_type_hints(func)
         del tps['return']
         args: Dict[str, Any] = {}
         for name, tp in tps.items():
             if isinstance(tp, TypeVar):
-                tp = tp if bound is None else bound
+                tp = bound[tp]
             elif (origin := get_origin(tp)) is not None:
-                if isinstance(get_args(tp)[0], TypeVar):
-                    tp = origin[bound]
+                if any(isinstance(arg, TypeVar) for arg in get_args(tp)):
+                    # replace all TypeVar with bound types
+                    tp = origin[
+                        tuple(
+                            bound[arg] if isinstance(arg, TypeVar) else arg
+                            for arg in get_args(tp)
+                        )
+                    ]
+                    # tp = origin[bound]
             args[name] = self._get(tp)
         return func(**args)
 
@@ -96,15 +103,25 @@ class Container:
         # as the same object) and also wrap the function in dask.delayed.
         if tp in self._providers:
             key = tp
-            bound = None
+            direct = True
+            # bound = None
         elif (origin := get_origin(tp)) in self._providers:
             key = origin
-            bound = get_args(tp)[0]
+            direct = False
+            # bound = get_args(tp)[0]
         else:
             raise UnsatisfiedRequirement("No provider found for type", tp)
+        # TODO Is using `key` correct here? Maybe need to also use `bound`?
         if (cached := self._cache.get(key)) is not None:
             return cached
         provider = self._providers[key]
+        bound: Dict[TypeVar, Any] = {}
+        if not direct:
+            hints = get_type_hints(provider)['return']
+            for requested, provided in zip(get_args(tp), get_args(hints)):
+                if isinstance(provided, TypeVar):
+                    bound[provided] = requested
+
         result = self._call(provider, bound)
         self._cache[tp] = result
         return result
