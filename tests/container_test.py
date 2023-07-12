@@ -244,3 +244,44 @@ def test_multi_Generic_with_multiple_unbound():
     container = sl.Container([int_source, float_source, unbound])
     assert container.compute(A[int, float]) == A[int, float](1, 2.0)
     assert container.compute(A[float, int]) == A[float, int](2.0, 1)
+
+
+def test_distinct_fully_bound_instances_yield_distinct_results():
+    T1 = TypeVar('T1')
+
+    @dataclass
+    class A(Generic[T1]):
+        value: T1
+
+    def int_source() -> A[int]:
+        return A[int](1)
+
+    def float_source() -> A[float]:
+        return A[float](2.0)
+
+    container = sl.Container([int_source, float_source])
+    assert container.compute(A[int]) == A[int](1)
+    assert container.compute(A[float]) == A[float](2.0)
+
+
+def test_distinct_partially_bound_instances_yield_distinct_results():
+    T1 = TypeVar('T1')
+
+    @dataclass
+    class A(Generic[T1, T2]):
+        first: T1
+        second: T2
+
+    def str_source() -> str:
+        return 'a'
+
+    def int_source(x: T1) -> A[int, T1]:
+        return A[int, T1](1, x)
+
+    def float_source(x: T1) -> A[float, T1]:
+        return A[float, T1](2.0, x)
+
+    container = sl.Container([str_source, int_source, float_source])
+    print(list(container._providers))
+    assert container.compute(A[int, str]) == A[int, str](1, 'a')
+    assert container.compute(A[float, str]) == A[float, str](2.0, 'a')

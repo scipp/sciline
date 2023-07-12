@@ -41,6 +41,17 @@ class UnsatisfiedRequirement(Exception):
     pass
 
 
+def _is_compatible_type_tuple(
+    requested: tuple[type, ...], provided: tuple[type | TypeVar, ...]
+) -> bool:
+    for req, prov in zip(requested, provided):
+        if isinstance(prov, TypeVar):
+            continue
+        if req != prov:
+            return False
+    return True
+
+
 class Container:
     def __init__(self, funcs: List[Callable[..., Any]], /):
         """
@@ -58,12 +69,20 @@ class Container:
 
     def insert(self, provider: Callable[..., Any]) -> None:
         key = get_type_hints(provider)['return']
-        if (origin := get_origin(key)) is not None:
-            args = get_args(key)
-            key = origin if any(isinstance(arg, TypeVar) for arg in args) else key
-        if key in self._providers:
+        parametrized = get_origin(key) is not None
+        # if (origin := get_origin(key)) is not None:
+
+        #    key = origin if any(isinstance(arg, TypeVar) for arg in args) else key
+        if (not parametrized) and (key in self._providers):
             raise ValueError(f'Provider for {key} already exists')
-        self._providers[key] = _delayed(provider)
+        if parametrized:
+            subproviders = self._providers.setdefault(get_origin(key), {})
+            args = get_args(key)
+            if args in subproviders:
+                raise ValueError(f'Provider for {key} already exists')
+            subproviders[args] = _delayed(provider)
+        else:
+            self._providers[key] = _delayed(provider)
 
     def _call(self, func: Callable[..., Delayed], bound: Dict[TypeVar, Any]) -> Delayed:
         tps = get_type_hints(func)
@@ -107,10 +126,14 @@ class Container:
         provider = self._providers[key]
         bound: Dict[TypeVar, Any] = {}
         if not direct:
-            hints = get_type_hints(provider)['return']
-            for requested, provided in zip(get_args(tp), get_args(hints)):
-                if isinstance(provided, TypeVar):
-                    bound[provided] = requested
+            requested = get_args(tp)
+            for args, subprovider in provider.items():
+                if _is_compatible_type_tuple(requested, args):
+                    provider = subprovider
+                    bound = dict(zip(args, requested))
+                    break
+            else:
+                raise UnsatisfiedRequirement("No provider found for type", tp)
 
         result = self._call(provider, bound)
         self._cache[tp] = result
