@@ -8,6 +8,7 @@ from typing import (
     Callable,
     Dict,
     List,
+    Tuple,
     Type,
     TypeVar,
     get_args,
@@ -44,6 +45,11 @@ class UnsatisfiedRequirement(Exception):
 def _is_compatible_type_tuple(
     requested: tuple[type, ...], provided: tuple[type | TypeVar, ...]
 ) -> bool:
+    """
+    Check if a tuple of requested types is compatible with a tuple of provided types.
+
+    Types in the tuples must either by equal, or the provided type must be a TypeVar.
+    """
     for req, prov in zip(requested, provided):
         if isinstance(prov, TypeVar):
             continue
@@ -52,8 +58,11 @@ def _is_compatible_type_tuple(
     return True
 
 
+Provider = Callable[..., Any]
+
+
 class Container:
-    def __init__(self, funcs: List[Callable[..., Any]], /):
+    def __init__(self, funcs: List[Provider], /):
         """
         Create a :py:class:`Container` from a list of functions.
 
@@ -62,21 +71,21 @@ class Container:
         funcs:
             List of functions to be injected. Must be annotated with type hints.
         """
-        self._providers: Dict[type, Callable[..., Any]] = {}
+        self._providers: Dict[type, Provider] = {}
+        self._generic_providers: Dict[
+            type, Dict[Tuple[type | TypeVar, ...], Provider]
+        ] = {}
         self._cache: Dict[type, Delayed] = {}
         for func in funcs:
             self.insert(func)
 
-    def insert(self, provider: Callable[..., Any]) -> None:
+    def insert(self, provider: Provider) -> None:
         key = get_type_hints(provider)['return']
-        parametrized = get_origin(key) is not None
-        # if (origin := get_origin(key)) is not None:
-
-        #    key = origin if any(isinstance(arg, TypeVar) for arg in args) else key
-        if (not parametrized) and (key in self._providers):
+        generic = get_origin(key) is not None
+        if (not generic) and (key in self._providers):
             raise ValueError(f'Provider for {key} already exists')
-        if parametrized:
-            subproviders = self._providers.setdefault(get_origin(key), {})
+        if generic:
+            subproviders = self._generic_providers.setdefault(get_origin(key), {})
             args = get_args(key)
             if args in subproviders:
                 raise ValueError(f'Provider for {key} already exists')
@@ -116,21 +125,24 @@ class Container:
             return cached
         if tp in self._providers:
             key = tp
-            direct = True
-        elif (origin := get_origin(tp)) in self._providers:
+            generic = False
+        elif (origin := get_origin(tp)) in self._generic_providers:
             key = origin
-            direct = False
+            generic = True
         else:
             raise UnsatisfiedRequirement("No provider found for type", tp)
 
-        provider = self._providers[key]
         bound: Dict[TypeVar, Any] = {}
-        if not direct:
+        if not generic:
+            provider = self._providers[key]
+        else:
+            providers = self._generic_providers[key]
             requested = get_args(tp)
-            matches = []
-            for args, subprovider in provider.items():
-                if _is_compatible_type_tuple(requested, args):
-                    matches.append((args, subprovider))
+            matches = [
+                (args, subprovider)
+                for args, subprovider in providers.items()
+                if _is_compatible_type_tuple(requested, args)
+            ]
             if len(matches) == 0:
                 raise UnsatisfiedRequirement("No provider found for type", tp)
             elif len(matches) > 1:
@@ -139,7 +151,11 @@ class Container:
                 )
             args, subprovider = matches[0]
             provider = subprovider
-            bound = dict(zip(args, requested))
+            bound = {
+                arg: req
+                for arg, req in zip(args, requested)
+                if isinstance(arg, TypeVar)
+            }
 
         result = self._call(provider, bound)
         self._cache[tp] = result
