@@ -83,7 +83,7 @@ class Container:
                 raise ValueError(f'Provider for {key} already exists')
             self._providers[key] = provider
 
-    def _call(self, func: Callable[..., Any], bound: Dict[TypeVar, Any]) -> Delayed:
+    def _call(self, func: Callable[..., Any], bound: Dict[TypeVar, type]) -> Delayed:
         tps = get_type_hints(func)
         del tps['return']
         args = {
@@ -92,7 +92,7 @@ class Container:
         }
         return dask.delayed(func)(**args)
 
-    def _bind_free_typevars(self, tp: type, bound: Dict[TypeVar, Any]) -> type:
+    def _bind_free_typevars(self, tp: type, bound: Dict[TypeVar, type]) -> type:
         if isinstance(tp, TypeVar):
             return bound[tp]
         elif (origin := get_origin(tp)) is not None:

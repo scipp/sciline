@@ -183,7 +183,7 @@ def test_unsatisfiable_typevar_requirement_of_provider_raises() -> None:
         container.compute(List[float])
 
 
-def test_TypeVars_params_are_not_associated_unless_they_match() -> None:
+def test_TypeVar_params_are_not_associated_unless_they_match() -> None:
     T1 = TypeVar('T1')
     T2 = TypeVar('T2')
 
