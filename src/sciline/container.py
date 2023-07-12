@@ -127,13 +127,19 @@ class Container:
         bound: Dict[TypeVar, Any] = {}
         if not direct:
             requested = get_args(tp)
+            matches = []
             for args, subprovider in provider.items():
                 if _is_compatible_type_tuple(requested, args):
-                    provider = subprovider
-                    bound = dict(zip(args, requested))
-                    break
-            else:
+                    matches.append((args, subprovider))
+            if len(matches) == 0:
                 raise UnsatisfiedRequirement("No provider found for type", tp)
+            elif len(matches) > 1:
+                raise KeyError(
+                    "Multiple providers found for type", tp, "with arguments", requested
+                )
+            args, subprovider = matches[0]
+            provider = subprovider
+            bound = dict(zip(args, requested))
 
         result = self._call(provider, bound)
         self._cache[tp] = result

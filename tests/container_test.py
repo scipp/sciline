@@ -282,6 +282,32 @@ def test_distinct_partially_bound_instances_yield_distinct_results():
         return A[float, T1](2.0, x)
 
     container = sl.Container([str_source, int_source, float_source])
-    print(list(container._providers))
     assert container.compute(A[int, str]) == A[int, str](1, 'a')
     assert container.compute(A[float, str]) == A[float, str](2.0, 'a')
+
+
+def test_multiple_matching_partial_providers_raises():
+    T1 = TypeVar('T1')
+
+    @dataclass
+    class A(Generic[T1, T2]):
+        first: T1
+        second: T2
+
+    def int_source() -> int:
+        return 1
+
+    def float_source() -> float:
+        return 2.0
+
+    def provider1(x: T1) -> A[int, T1]:
+        return A[int, T1](1, x)
+
+    def provider2(x: T2) -> A[T2, float]:
+        return A[T2, float](x, 2.0)
+
+    container = sl.Container([int_source, float_source, provider1, provider2])
+    assert container.compute(A[int, int]) == A[int, int](1, 1)
+    assert container.compute(A[float, float]) == A[float, float](2.0, 2.0)
+    with pytest.raises(KeyError):
+        container.compute(A[int, float])
