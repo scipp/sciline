@@ -114,7 +114,7 @@ def subtract_background(
 
 def test_reduction_workflow() -> None:
     # See https://github.com/python/mypy/issues/14661
-    container = sl.Container(
+    pipeline = sl.Pipeline(
         [
             raw_sample,
             raw_background,
@@ -126,8 +126,6 @@ def test_reduction_workflow() -> None:
         + reduction  # type: ignore[arg-type]
     )
 
-    assert np.array_equal(container.compute(IofQ[SampleRun]), [3, 6, 0, 24])
-    assert np.array_equal(container.compute(IofQ[BackgroundRun]), [9, 18, 0, 72])
-    assert np.array_equal(
-        container.compute(BackgroundSubtractedIofQ), [-6, -12, 0, -48]
-    )
+    assert np.array_equal(pipeline.compute(IofQ[SampleRun]), [3, 6, 0, 24])
+    assert np.array_equal(pipeline.compute(IofQ[BackgroundRun]), [9, 18, 0, 72])
+    assert np.array_equal(pipeline.compute(BackgroundSubtractedIofQ), [-6, -12, 0, -48])
