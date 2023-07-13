@@ -49,13 +49,16 @@ def _is_compatible_type_tuple(
     return True
 
 
-def _bind_free_typevars(tp: type, bound: Dict[TypeVar, type]) -> type:
+def _bind_free_typevars(tp: TypeVar | type, bound: Dict[TypeVar, type]) -> type:
     if isinstance(tp, TypeVar):
         if (result := bound.get(tp)) is None:
             raise UnboundTypeVar(f'Unbound type variable {tp}')
         return result
     elif (origin := get_origin(tp)) is not None:
-        return origin[tuple(_bind_free_typevars(arg, bound) for arg in get_args(tp))]
+        result = origin[tuple(_bind_free_typevars(arg, bound) for arg in get_args(tp))]
+        if not isinstance(result, type):
+            raise ValueError(f'Binding type variable {tp} resulted in non-type')
+        return result
     else:
         return tp
 
@@ -103,7 +106,8 @@ class Container:
             name: self._get(_bind_free_typevars(tp, bound=bound))
             for name, tp in tps.items()
         }
-        return dask.delayed(func)(**args)
+        delayed = dask.delayed(func)  # type: ignore[attr-defined]
+        return delayed(**args)  # type: ignore[no-any-return]
 
     def _get(self, tp: Type[T], /) -> Delayed:
         # When building a workflow, there are two common problems:
@@ -156,5 +160,5 @@ class Container:
 
     def compute(self, tp: Type[T], /) -> T:
         task = self.get(tp)
-        result: T = task.compute()  # type: ignore
+        result: T = task.compute()  # type: ignore[no-untyped-call]
         return result

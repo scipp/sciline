@@ -3,5 +3,5 @@
 import sciline as pkg
 
 
-def test_has_version():
+def test_has_version() -> None:
     assert hasattr(pkg, '__version__')

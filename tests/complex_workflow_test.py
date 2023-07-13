@@ -5,6 +5,7 @@ from typing import NewType, TypeVar
 
 import dask
 import numpy as np
+import numpy.typing as npt
 
 import sciline as sl
 
@@ -14,16 +15,16 @@ dask.config.set(scheduler='synchronous')
 
 @dataclass
 class RawData:
-    data: np.ndarray
+    data: npt.NDArray[np.float64]
     monitor1: float
     monitor2: float
 
 
 SampleRun = NewType('SampleRun', int)
 BackgroundRun = NewType('BackgroundRun', int)
-DetectorMask = NewType('DetectorMask', np.ndarray)
-DirectBeam = NewType('DirectBeam', np.ndarray)
-SolidAngle = NewType('SolidAngle', np.ndarray)
+DetectorMask = NewType('DetectorMask', npt.NDArray[np.float64])
+DirectBeam = NewType('DirectBeam', npt.NDArray[np.float64])
+SolidAngle = NewType('SolidAngle', npt.NDArray[np.float64])
 
 Run = TypeVar('Run')
 
@@ -32,7 +33,7 @@ class Raw(sl.Scope[Run], RawData):
     ...
 
 
-class Masked(sl.Scope[Run], np.ndarray):
+class Masked(sl.Scope[Run], npt.NDArray[np.float64]):
     ...
 
 
@@ -48,11 +49,11 @@ class TransmissionFraction(sl.Scope[Run], float):
     ...
 
 
-class IofQ(sl.Scope[Run], np.ndarray):
+class IofQ(sl.Scope[Run], npt.NDArray[np.float64]):
     ...
 
 
-BackgroundSubtractedIofQ = NewType('BackgroundSubtractedIofQ', np.ndarray)
+BackgroundSubtractedIofQ = NewType('BackgroundSubtractedIofQ', npt.NDArray[np.float64])
 
 
 def incident_monitor(x: Raw[Run]) -> IncidentMonitor[Run]:
@@ -111,7 +112,7 @@ def subtract_background(
     return BackgroundSubtractedIofQ(sample - background)
 
 
-def test_reduction_workflow():
+def test_reduction_workflow() -> None:
     # See https://github.com/python/mypy/issues/14661
     container = sl.Container(
         [
@@ -122,7 +123,7 @@ def test_reduction_workflow():
             direct_beam,
             subtract_background,
         ]
-        + reduction  # type: ignore
+        + reduction  # type: ignore[arg-type]
     )
 
     assert np.array_equal(container.compute(IofQ[SampleRun]), [3, 6, 0, 24])

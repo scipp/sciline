@@ -53,7 +53,7 @@ def test_get_returns_task_that_computes_result() -> None:
     container = sl.Container([int_to_float, make_int])
     task = container.get(float)
     assert hasattr(task, 'compute')
-    assert task.compute() == 1.5
+    assert task.compute() == 1.5  # type: ignore[no-untyped-call]
 
 
 def test_multiple_get_calls_can_be_computed_without_repeated_calls() -> None:
@@ -67,7 +67,7 @@ def test_multiple_get_calls_can_be_computed_without_repeated_calls() -> None:
     container = sl.Container([int_to_float, provide_int, int_float_to_str])
     task1 = container.get(float)
     task2 = container.get(str)
-    assert dask.compute(task1, task2) == (1.5, '3;1.5')
+    assert dask.compute(task1, task2) == (1.5, '3;1.5')  # type: ignore[attr-defined]
     assert ncall == 1
 
 
@@ -106,7 +106,8 @@ def test_make_container_with_subgraph_template() -> None:
     container = sl.Container(
         [provide_int, float1, float2, use_strings, int_float_to_str],
     )
-    assert container.get(Result).compute() == "3;1.5;3;2.5"
+    task = container.get(Result)
+    assert task.compute() == "3;1.5;3;2.5"  # type: ignore[no-untyped-call]
     assert ncall == 1
 
 
@@ -146,7 +147,7 @@ def test_inserting_provider_returning_None_raises() -> None:
 
 
 def test_inserting_provider_with_no_return_type_raises() -> None:
-    def provide_none():  # type: ignore
+    def provide_none():  # type: ignore[no-untyped-def]
         return None
 
     with pytest.raises(ValueError):
