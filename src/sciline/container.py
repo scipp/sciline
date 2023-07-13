@@ -56,9 +56,9 @@ def _bind_free_typevars(tp: TypeVar | type, bound: Dict[TypeVar, type]) -> type:
         return result
     elif (origin := get_origin(tp)) is not None:
         result = origin[tuple(_bind_free_typevars(arg, bound) for arg in get_args(tp))]
-        # This is a hack to make mypy happy. The type of result is actually
-        # typing._GenericAlias.
-        return result  # type: ignore[return-value]
+        if result is None:
+            raise ValueError(f'Binding type variables in {tp} resulted in `None`')
+        return result
     else:
         return tp
 
