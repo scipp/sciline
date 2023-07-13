@@ -99,17 +99,47 @@ class Container:
                 raise ValueError(f'Provider for {key} already exists')
             self._providers[key] = provider
 
-    def _call(self, func: Callable[..., Any], bound: Dict[TypeVar, type]) -> Delayed:
-        tps = get_type_hints(func)
-        del tps['return']
-        args = {
-            name: self._get(_bind_free_typevars(tp, bound=bound))
-            for name, tp in tps.items()
+    def _get_args(
+        self, func: Callable[..., Any], bound: Dict[TypeVar, type]
+    ) -> Dict[str, Delayed]:
+        return {
+            name: self.get(_bind_free_typevars(tp, bound=bound))
+            for name, tp in get_type_hints(func).items()
+            if name != 'return'
         }
-        delayed = dask.delayed(func)  # type: ignore[attr-defined]
-        return delayed(**args)  # type: ignore[no-any-return]
 
-    def _get(self, tp: Type[T], /) -> Delayed:
+    def _get_provider(
+        self, tp: Type[T]
+    ) -> Tuple[Callable[..., T], Dict[TypeVar, type]]:
+        if (provider := self._providers.get(tp)) is not None:
+            return provider, {}
+        elif (origin := get_origin(tp)) is not None and (
+            subproviders := self._subproviders.get(origin)
+        ) is not None:
+            requested = get_args(tp)
+            matches = [
+                (args, subprovider)
+                for args, subprovider in subproviders.items()
+                if _is_compatible_type_tuple(requested, args)
+            ]
+            if len(matches) == 1:
+                args, provider = matches[0]
+                bound = {
+                    arg: req
+                    for arg, req in zip(args, requested)
+                    if isinstance(arg, TypeVar)
+                }
+                return provider, bound
+            elif len(matches) > 1:
+                raise AmbiguousProvider("Multiple providers found for type", tp)
+        raise UnsatisfiedRequirement("No provider found for type", tp)
+
+    def get(self, tp: Type[T], /) -> Delayed:
+        # We are slightly abusing Python's type system here, by using the
+        # self.get to get T, but actually it returns a Delayed that can
+        # compute T. We'd like to use Delayed[T], but that is not supported yet:
+        # https://github.com/dask/dask/pull/9256
+        #
         # When building a workflow, there are two common problems:
         #
         # 1. Intermediate results are used more than once.
@@ -123,40 +153,10 @@ class Container:
         if (cached := self._cache.get(tp)) is not None:
             return cached
 
-        if (provider := self._providers.get(tp)) is not None:
-            result = self._call(provider, {})
-        elif (origin := get_origin(tp)) is not None and (
-            subproviders := self._subproviders.get(origin)
-        ) is not None:
-            requested = get_args(tp)
-            matches = [
-                (args, subprovider)
-                for args, subprovider in subproviders.items()
-                if _is_compatible_type_tuple(requested, args)
-            ]
-            if len(matches) == 0:
-                raise UnsatisfiedRequirement("No provider found for type", tp)
-            elif len(matches) > 1:
-                raise AmbiguousProvider("Multiple providers found for type", tp)
-            args, provider = matches[0]
-            bound = {
-                arg: req
-                for arg, req in zip(args, requested)
-                if isinstance(arg, TypeVar)
-            }
-            result = self._call(provider, bound)
-        else:
-            raise UnsatisfiedRequirement("No provider found for type", tp)
-
-        self._cache[tp] = result
-        return result
-
-    def get(self, tp: Type[T], /) -> Delayed:
-        # We are slightly abusing Python's type system here, by using the
-        # self._get to get T, but actually it returns a Delayed that can
-        # compute T. We'd like to use Delayed[T], but that is not supported yet:
-        # https://github.com/dask/dask/pull/9256
-        return self._get(tp)
+        provider, bound = self._get_provider(tp)
+        args = self._get_args(provider, bound=bound)
+        delayed = dask.delayed(provider)  # type: ignore[attr-defined]
+        return self._cache.setdefault(tp, delayed(**args))
 
     def compute(self, tp: Type[T], /) -> T:
         task = self.get(tp)
