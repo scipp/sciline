@@ -76,7 +76,7 @@ class Pipeline:
         ----------
         providers:
             List of providers. Providers can be instances (providing themselves) or
-            functions. Functions provider their return value. Their arguments and
+            functions. Functions provide their return value. Their arguments and
             return value must be annotated with type hints.
         """
         self._providers: Dict[type, Provider] = {}
