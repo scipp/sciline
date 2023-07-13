@@ -113,7 +113,6 @@ def subtract_background(
 
 
 def test_reduction_workflow() -> None:
-    # See https://github.com/python/mypy/issues/14661
     pipeline = sl.Pipeline(
         [
             raw_sample,
@@ -123,7 +122,7 @@ def test_reduction_workflow() -> None:
             direct_beam,
             subtract_background,
         ]
-        + reduction  # type: ignore[arg-type]
+        + reduction
     )
 
     assert np.array_equal(pipeline.compute(IofQ[SampleRun]), [3, 6, 0, 24])

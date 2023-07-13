@@ -10,6 +10,7 @@ from typing import (
     Tuple,
     Type,
     TypeVar,
+    Union,
     get_args,
     get_origin,
     get_type_hints,
@@ -63,28 +64,39 @@ def _bind_free_typevars(tp: TypeVar | type, bound: Dict[TypeVar, type]) -> type:
         return tp
 
 
-Provider = Callable[..., Any]
+Provider = Union[Any, Callable[..., Any]]
 
 
 class Pipeline:
-    def __init__(self, funcs: List[Provider], /):
+    def __init__(self, providers: List[Provider], /):
         """
-        Setup a Pipeline from a list of functions.
+        Setup a Pipeline from a list providers
 
         Parameters
         ----------
-        funcs:
-            List of functions to be injected. Must be annotated with type hints.
+        providers:
+            List of providers. Providers can be instances (providing themselves) or
+            functions. Functions provider their return value. Their arguments and
+            return value must be annotated with type hints.
         """
         self._providers: Dict[type, Provider] = {}
         self._subproviders: Dict[type, Dict[Tuple[type | TypeVar, ...], Provider]] = {}
         self._cache: Dict[type, Delayed] = {}
-        for func in funcs:
-            self.insert(func)
+        for provider in providers:
+            self.insert(provider)
 
     def insert(self, provider: Provider) -> None:
-        if (key := get_type_hints(provider).get('return')) is None:
+        if not callable(provider):
+            key = type(provider)
+            instance = provider
+
+            def provider() -> Any:
+                return instance
+
+        elif (ret := get_type_hints(provider).get('return')) is None:
             raise ValueError(f'Provider {provider} lacks type-hint for return value')
+        else:
+            key = ret
         # isinstance does not work here and types.NoneType available only in 3.10+
         if key == type(None):  # noqa: E721
             raise ValueError(f'Provider {provider} returning `None` is not allowed')

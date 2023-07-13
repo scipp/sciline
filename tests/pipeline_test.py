@@ -388,3 +388,29 @@ def test_TypeVar_params_track_to_multiple_sources() -> None:
         [provide_int, provide_float, provide_A, provide_B, provide_C]
     )
     assert pipeline.compute(C[int, float]) == C[int, float](1, 2.0)
+
+
+def test_instance_provider() -> None:
+    Result = NewType('Result', float)
+
+    def f(x: int, y: float) -> Result:
+        return Result(x / y)
+
+    pl = sl.Pipeline([3, 2.0, f])
+    assert pl.compute(int) == 3
+    assert pl.compute(float) == 2.0
+    assert pl.compute(Result) == 1.5
+
+
+def test_instances_of_generics_cannot_be_distinguished_and_raise() -> None:
+    T = TypeVar('T')
+
+    @dataclass
+    class A(Generic[T]):
+        value: T
+
+    instances = [A[int](3), A[float](2.0)]
+
+    with pytest.raises(ValueError):
+        # Both instances have type A
+        sl.Pipeline(instances)
