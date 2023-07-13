@@ -9,17 +9,17 @@ try:
 except importlib.metadata.PackageNotFoundError:
     __version__ = "0.0.0"
 
-from .container import (
+from .domain import Scope
+from .pipeline import (
     AmbiguousProvider,
-    Container,
+    Pipeline,
     UnboundTypeVar,
     UnsatisfiedRequirement,
 )
-from .domain import Scope
 
 __all__ = [
     "AmbiguousProvider",
-    "Container",
+    "Pipeline",
     "Scope",
     "UnboundTypeVar",
     "UnsatisfiedRequirement",

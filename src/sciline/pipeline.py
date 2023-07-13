@@ -66,10 +66,10 @@ def _bind_free_typevars(tp: TypeVar | type, bound: Dict[TypeVar, type]) -> type:
 Provider = Callable[..., Any]
 
 
-class Container:
+class Pipeline:
     def __init__(self, funcs: List[Provider], /):
         """
-        Create a :py:class:`Container` from a list of functions.
+        Setup a Pipeline from a list of functions.
 
         Parameters
         ----------
