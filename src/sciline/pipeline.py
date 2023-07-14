@@ -187,6 +187,34 @@ class Pipeline:
                 raise AmbiguousProvider("Multiple providers found for type", tp)
         raise UnsatisfiedRequirement("No provider found for type", tp)
 
+    def get_graph(self, tp: Type[T], /) -> Dict[str, Tuple[List[str], str]]:
+        """
+        Return a dict that can be turned into a graphviz graph.
+
+        Each entry represents a provider. The key is the name of the provider
+        and the value is a tuple of the argument list and the return type.
+
+        Parameters
+        ----------
+        tp:
+            Type to get the graph for.
+        """
+        graph = {}
+        provider, bound = self._get_provider(tp)
+        tps = get_type_hints(provider)
+        ret = _bind_free_typevars(tps.pop('return'), bound=bound)
+        args = {name: _bind_free_typevars(t, bound=bound) for name, t in tps.items()}
+        key = provider.__qualname__
+        if bound:
+            key += f'[{",".join([_format_type(b) for b in bound.values()])}]'
+        graph[key] = (
+            [_format_type(arg) for arg in args.values()],
+            _format_type(ret),
+        )
+        for arg in args.values():
+            graph.update(self.get_graph(arg))
+        return graph
+
     def get(self, tp: Type[T], /) -> Delayed:
         # We are slightly abusing Python's type system here, by using the
         # self.get to get T, but actually it returns a Delayed that can
@@ -215,3 +243,19 @@ class Pipeline:
         task = self.get(tp)
         result: T = task.compute()  # type: ignore[no-untyped-call]
         return result
+
+
+def _format_type(tp: type) -> str:
+    """
+    Helper for Pipeline.get_graph.
+
+    If tp is a generic such as Array[float], we want to return 'Array[float]',
+    but strip all module prefixes from the type name as well as the params.
+    We may make this configurable in the future.
+    """
+    base = tp.__name__ if hasattr(tp, '__name__') else str(tp).split('.')[-1]
+    if get_origin(tp) is not None:
+        params = [_format_type(param) for param in get_args(tp)]
+        return f'{base}[{", ".join(params)}]'
+    else:
+        return base
