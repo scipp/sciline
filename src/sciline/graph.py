@@ -5,7 +5,7 @@ from typing import Dict, List, Tuple
 from graphviz import Digraph
 
 
-def make_graph(graph: Dict[str, Tuple[List[str], str]]) -> Digraph:
+def to_graphviz(graph: Dict[str, Tuple[List[str], str]]) -> Digraph:
     """
     Convert output of :py:class:`sciline.Pipeline.get_graph` to a graphviz graph.
 
