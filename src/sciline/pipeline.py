@@ -7,10 +7,11 @@ from typing import (
     Callable,
     Dict,
     List,
+    NewType,
+    Optional,
     Tuple,
     Type,
     TypeVar,
-    Union,
     get_args,
     get_origin,
     get_type_hints,
@@ -35,7 +36,8 @@ class AmbiguousProvider(Exception):
 
 
 def _is_compatible_type_tuple(
-    requested: tuple[type, ...], provided: tuple[type | TypeVar, ...]
+    requested: tuple[type | NewType, ...],
+    provided: tuple[type | TypeVar | NewType, ...],
 ) -> bool:
     """
     Check if a tuple of requested types is compatible with a tuple of provided types.
@@ -64,39 +66,67 @@ def _bind_free_typevars(tp: TypeVar | type, bound: Dict[TypeVar, type]) -> type:
         return tp
 
 
-Provider = Union[Any, Callable[..., Any]]
+Provider = Callable[..., Any]
 
 
 class Pipeline:
-    def __init__(self, providers: List[Provider], /):
+    def __init__(self, providers: Optional[List[Provider]] = None, /):
         """
         Setup a Pipeline from a list providers
 
         Parameters
         ----------
         providers:
-            List of providers. Providers can be instances (providing themselves) or
-            functions. Functions provide their return value. Their arguments and
-            return value must be annotated with type hints.
+            List of callable providers. Each provides its return value.
+            Their arguments and return value must be annotated with type hints.
         """
-        self._providers: Dict[type, Provider] = {}
-        self._subproviders: Dict[type, Dict[Tuple[type | TypeVar, ...], Provider]] = {}
-        self._cache: Dict[type, Delayed] = {}
+        self._providers: Dict[type | NewType, Provider] = {}
+        self._subproviders: Dict[
+            type, Dict[Tuple[type | TypeVar | NewType, ...], Provider]
+        ] = {}
+        self._cache: Dict[type | NewType, Delayed] = {}
+        providers = providers or []
         for provider in providers:
             self.insert(provider)
 
-    def insert(self, provider: Provider) -> None:
-        if not callable(provider):
-            key = type(provider)
-            instance = provider
+    def insert(self, provider: Provider, /) -> None:
+        """
+        Add a callable that provides its return value to the pipeline.
 
-            def provider() -> Any:
-                return instance
-
-        elif (ret := get_type_hints(provider).get('return')) is None:
+        Parameters
+        ----------
+        provider:
+            Callable that provides its return value. Its arguments and return value
+            must be annotated with type hints.
+        """
+        if (key := get_type_hints(provider).get('return')) is None:
             raise ValueError(f'Provider {provider} lacks type-hint for return value')
+        self._set_provider(key, provider)
+
+    def __setitem__(self, key: Type[T] | NewType, instance: T) -> None:
+        """
+        Provide a concrete value for a type.
+
+        Parameters
+        ----------
+        key:
+            Type to provide a value for.
+        instance:
+            Concrete value to provide.
+        """
+        if isinstance(key, NewType):
+            expected = key.__supertype__
+        elif (origin := get_origin(key)) is None:
+            expected = key
         else:
-            key = ret
+            expected = origin
+        if not isinstance(instance, expected):
+            raise TypeError(
+                f'Key {key} incompatible to value {instance} of type {type(instance)}'
+            )
+        self._set_provider(key, lambda: instance)
+
+    def _set_provider(self, key: Type[T] | NewType, provider: Callable[..., T]) -> None:
         # isinstance does not work here and types.NoneType available only in 3.10+
         if key == type(None):  # noqa: E721
             raise ValueError(f'Provider {provider} returning `None` is not allowed')

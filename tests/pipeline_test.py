@@ -396,21 +396,68 @@ def test_instance_provider() -> None:
     def f(x: int, y: float) -> Result:
         return Result(x / y)
 
-    pl = sl.Pipeline([3, 2.0, f])
+    pl = sl.Pipeline([f])
+    pl[int] = 3
+    pl[float] = 2.0
     assert pl.compute(int) == 3
     assert pl.compute(float) == 2.0
     assert pl.compute(Result) == 1.5
 
 
-def test_instances_of_generics_cannot_be_distinguished_and_raise() -> None:
+def test_provider_NewType_instance() -> None:
+    A = NewType('A', int)
+    pl = sl.Pipeline([])
+    pl[A] = A(3)
+    assert pl.compute(A) == 3
+
+
+def test_setitem_generic_sets_up_working_subproviders() -> None:
     T = TypeVar('T')
 
     @dataclass
     class A(Generic[T]):
         value: T
 
-    instances = [A[int](3), A[float](2.0)]
+    pl = sl.Pipeline()
+    pl[A[int]] = A[int](3)
+    pl[A[float]] = A[float](2.0)
+    assert pl.compute(A[int]) == A[int](3)
+    assert pl.compute(A[float]) == A[float](2.0)
+    with pytest.raises(sl.UnsatisfiedRequirement):
+        pl.compute(A[str])
 
+
+def test_setitem_generic_works_without_params() -> None:
+    T = TypeVar('T')
+
+    @dataclass
+    class A(Generic[T]):
+        value: T
+
+    pl = sl.Pipeline()
+    pl[A] = A(3)
+    assert pl.compute(A) == A(3)
+
+
+def test_setitem_raises_TypeError_if_instance_does_not_match_key() -> None:
+    A = NewType('A', int)
+    T = TypeVar('T')
+
+    @dataclass
+    class B(Generic[T]):
+        value: T
+
+    pl = sl.Pipeline()
+    with pytest.raises(TypeError):
+        pl[int] = 1.0
+    with pytest.raises(TypeError):
+        pl[A] = 1.0
+    with pytest.raises(TypeError):
+        pl[B[int]] = 1.0
+
+
+def test_setitem_raises_if_key_exists() -> None:
+    pl = sl.Pipeline()
+    pl[int] = 1
     with pytest.raises(ValueError):
-        # Both instances have type A
-        sl.Pipeline(instances)
+        pl[int] = 2
