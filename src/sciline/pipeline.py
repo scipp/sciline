@@ -124,7 +124,7 @@ class Pipeline:
             Concrete value to provide.
         """
         # TODO Switch to isinstance(key, NewType) once our minimum is Python 3.10
-        # Note that we cannot pass mypy in Python<3.10 since NewType is no a type.
+        # Note that we cannot pass mypy in Python<3.10 since NewType is not a type.
         if hasattr(key, '__supertype__'):
             expected = key.__supertype__
         elif (origin := get_origin(key)) is None:
