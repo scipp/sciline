@@ -461,3 +461,25 @@ def test_setitem_raises_if_key_exists() -> None:
     pl[int] = 1
     with pytest.raises(ValueError):
         pl[int] = 2
+
+
+def test_has_no_delitem() -> None:
+    # We currently do not support this as it would require clearing the cache.
+    # If required this could be implemented, but make sure the cache is cleared
+    # and tests added.
+    pl = sl.Pipeline()
+    assert not hasattr(pl, '__delitem__')
+
+
+def test_init_with_params() -> None:
+    pl = sl.Pipeline(params={int: 1, float: 2.0})
+    assert pl.compute(int) == 1
+    assert pl.compute(float) == 2.0
+
+
+def test_init_with_providers_and_params() -> None:
+    def func(x: int, y: float) -> str:
+        return f'{x} {y}'
+
+    pl = sl.Pipeline(providers=[func], params={int: 1, float: 2.0})
+    assert pl.compute(str) == "1 2.0"

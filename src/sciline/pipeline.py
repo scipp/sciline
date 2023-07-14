@@ -70,7 +70,12 @@ Provider = Callable[..., Any]
 
 
 class Pipeline:
-    def __init__(self, providers: Optional[List[Provider]] = None, /):
+    def __init__(
+        self,
+        providers: Optional[List[Provider]] = None,
+        *,
+        params: Optional[Dict[type | NewType, Any]] = None,
+    ):
         """
         Setup a Pipeline from a list providers
 
@@ -79,6 +84,8 @@ class Pipeline:
         providers:
             List of callable providers. Each provides its return value.
             Their arguments and return value must be annotated with type hints.
+        params:
+            Dictionary of concrete values to provide for types.
         """
         self._providers: Dict[type | NewType, Provider] = {}
         self._subproviders: Dict[
@@ -88,6 +95,8 @@ class Pipeline:
         providers = providers or []
         for provider in providers:
             self.insert(provider)
+        for tp, param in (params or {}).items():
+            self[tp] = param
 
     def insert(self, provider: Provider, /) -> None:
         """
@@ -103,7 +112,7 @@ class Pipeline:
             raise ValueError(f'Provider {provider} lacks type-hint for return value')
         self._set_provider(key, provider)
 
-    def __setitem__(self, key: Type[T] | NewType, instance: T) -> None:
+    def __setitem__(self, key: Type[T] | NewType, param: T) -> None:
         """
         Provide a concrete value for a type.
 
@@ -111,7 +120,7 @@ class Pipeline:
         ----------
         key:
             Type to provide a value for.
-        instance:
+        param:
             Concrete value to provide.
         """
         # TODO Switch to isinstance(key, NewType) once our minimum is Python 3.10
@@ -122,11 +131,11 @@ class Pipeline:
             expected = key
         else:
             expected = origin
-        if not isinstance(instance, expected):
+        if not isinstance(param, expected):
             raise TypeError(
-                f'Key {key} incompatible to value {instance} of type {type(instance)}'
+                f'Key {key} incompatible to value {param} of type {type(param)}'
             )
-        self._set_provider(key, lambda: instance)
+        self._set_provider(key, lambda: param)
 
     def _set_provider(self, key: Type[T] | NewType, provider: Callable[..., T]) -> None:
         # isinstance does not work here and types.NoneType available only in 3.10+
