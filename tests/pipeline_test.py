@@ -388,3 +388,98 @@ def test_TypeVar_params_track_to_multiple_sources() -> None:
         [provide_int, provide_float, provide_A, provide_B, provide_C]
     )
     assert pipeline.compute(C[int, float]) == C[int, float](1, 2.0)
+
+
+def test_instance_provider() -> None:
+    Result = NewType('Result', float)
+
+    def f(x: int, y: float) -> Result:
+        return Result(x / y)
+
+    pl = sl.Pipeline([f])
+    pl[int] = 3
+    pl[float] = 2.0
+    assert pl.compute(int) == 3
+    assert pl.compute(float) == 2.0
+    assert pl.compute(Result) == 1.5
+
+
+def test_provider_NewType_instance() -> None:
+    A = NewType('A', int)
+    pl = sl.Pipeline([])
+    pl[A] = A(3)
+    assert pl.compute(A) == 3
+
+
+def test_setitem_generic_sets_up_working_subproviders() -> None:
+    T = TypeVar('T')
+
+    @dataclass
+    class A(Generic[T]):
+        value: T
+
+    pl = sl.Pipeline()
+    pl[A[int]] = A[int](3)
+    pl[A[float]] = A[float](2.0)
+    assert pl.compute(A[int]) == A[int](3)
+    assert pl.compute(A[float]) == A[float](2.0)
+    with pytest.raises(sl.UnsatisfiedRequirement):
+        pl.compute(A[str])
+
+
+def test_setitem_generic_works_without_params() -> None:
+    T = TypeVar('T')
+
+    @dataclass
+    class A(Generic[T]):
+        value: T
+
+    pl = sl.Pipeline()
+    pl[A] = A(3)
+    assert pl.compute(A) == A(3)
+
+
+def test_setitem_raises_TypeError_if_instance_does_not_match_key() -> None:
+    A = NewType('A', int)
+    T = TypeVar('T')
+
+    @dataclass
+    class B(Generic[T]):
+        value: T
+
+    pl = sl.Pipeline()
+    with pytest.raises(TypeError):
+        pl[int] = 1.0
+    with pytest.raises(TypeError):
+        pl[A] = 1.0
+    with pytest.raises(TypeError):
+        pl[B[int]] = 1.0
+
+
+def test_setitem_raises_if_key_exists() -> None:
+    pl = sl.Pipeline()
+    pl[int] = 1
+    with pytest.raises(ValueError):
+        pl[int] = 2
+
+
+def test_has_no_delitem() -> None:
+    # We currently do not support this as it would require clearing the cache.
+    # If required this could be implemented, but make sure the cache is cleared
+    # and tests added.
+    pl = sl.Pipeline()
+    assert not hasattr(pl, '__delitem__')
+
+
+def test_init_with_params() -> None:
+    pl = sl.Pipeline(params={int: 1, float: 2.0})
+    assert pl.compute(int) == 1
+    assert pl.compute(float) == 2.0
+
+
+def test_init_with_providers_and_params() -> None:
+    def func(x: int, y: float) -> str:
+        return f'{x} {y}'
+
+    pl = sl.Pipeline(providers=[func], params={int: 1, float: 2.0})
+    assert pl.compute(str) == "1 2.0"
