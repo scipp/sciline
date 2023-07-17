@@ -483,7 +483,7 @@ def test_init_with_providers_and_params() -> None:
     assert pl.compute(str) == "1 2.0"
 
 
-def test_build_graph_to_dsk() -> None:
+def test_can_create_graphs_compatible_with_dask_get() -> None:
     ncall = 0
 
     def provide_int() -> int:
@@ -493,14 +493,13 @@ def test_build_graph_to_dsk() -> None:
 
     pipeline = sl.Pipeline([int_to_float, provide_int])
     graph = pipeline.build(float)
-    dsk = {tp: (provider, *args.values()) for tp, (provider, _, args) in graph.items()}
+    dsk = as_dask_graph(graph)
 
     assert dask.get(dsk, [float, int]) == (1.5, 3)
-
     assert ncall == 1
 
 
-def test_build_graph_to_dsk_combine() -> None:
+def test_can_merge_graphs_resulting_in_graph_compatible_with_dask_get() -> None:
     ncall = 0
 
     def provide_int() -> int:
@@ -513,10 +512,7 @@ def test_build_graph_to_dsk_combine() -> None:
     graph2 = pipeline.build(str)
     graph = {**graph1, **graph2}
 
-    from sciline.pipeline import as_dask_graph
-
     dsk = as_dask_graph(graph)
 
     assert dask.get(dsk, [float, str]) == (1.5, '3;1.5')
-
     assert ncall == 1

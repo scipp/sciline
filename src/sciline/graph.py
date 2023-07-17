@@ -56,7 +56,7 @@ def _format_provider(provider: Callable[..., Any], bound: Dict[TypeVar, type]) -
 
 def _format_type(tp: type | NewType) -> str:
     """
-    Helper for Pipeline.get_graph.
+    Helper for _format_graph.
 
     If tp is a generic such as Array[float], we want to return 'Array[float]',
     but strip all module prefixes from the type name as well as the params.
