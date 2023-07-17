@@ -7,6 +7,7 @@ import dask
 import pytest
 
 import sciline as sl
+from sciline.pipeline import as_dask_graph
 
 # We use dask with a single thread, to ensure that call counting below is correct.
 dask.config.set(scheduler='synchronous')
@@ -49,14 +50,13 @@ def test_intermediate_computed_once() -> None:
     assert ncall == 1
 
 
-def test_get_returns_task_that_computes_result() -> None:
+def test_build_returns_graph_that_can_be_used_to_compute_result() -> None:
     pipeline = sl.Pipeline([int_to_float, make_int])
-    task = pipeline.get(float)
-    assert hasattr(task, 'compute')
-    assert task.compute() == 1.5  # type: ignore[no-untyped-call]
+    graph = pipeline.build(float)
+    assert dask.get(as_dask_graph(graph), float) == 1.5  # type: ignore[no-untyped-call]
 
 
-def test_multiple_get_calls_can_be_computed_without_repeated_calls() -> None:
+def test_multiple_keys_can_be_computed_without_repeated_calls() -> None:
     ncall = 0
 
     def provide_int() -> int:
@@ -65,9 +65,8 @@ def test_multiple_get_calls_can_be_computed_without_repeated_calls() -> None:
         return 3
 
     pipeline = sl.Pipeline([int_to_float, provide_int, int_float_to_str])
-    task1 = pipeline.get(float)
-    task2 = pipeline.get(str)
-    assert dask.compute(task1, task2) == (1.5, '3;1.5')  # type: ignore[attr-defined]
+    dsk = as_dask_graph(pipeline.build(str))
+    assert dask.get(dsk, [float, str]) == (1.5, '3;1.5')  # type: ignore[attr-defined]
     assert ncall == 1
 
 
@@ -106,8 +105,7 @@ def test_make_pipeline_with_subgraph_template() -> None:
     pipeline = sl.Pipeline(
         [provide_int, float1, float2, use_strings, int_float_to_str],
     )
-    task = pipeline.get(Result)
-    assert task.compute() == "3;1.5;3;2.5"  # type: ignore[no-untyped-call]
+    assert pipeline.compute(Result) == "3;1.5;3;2.5"  # type: ignore[no-untyped-call]
     assert ncall == 1
 
 

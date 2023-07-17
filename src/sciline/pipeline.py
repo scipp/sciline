@@ -2,7 +2,6 @@
 # Copyright (c) 2023 Scipp contributors (https://github.com/scipp)
 from __future__ import annotations
 
-from graphlib import TopologicalSorter
 from typing import (
     Any,
     Callable,
@@ -16,9 +15,6 @@ from typing import (
     get_origin,
     get_type_hints,
 )
-
-import dask
-from dask.delayed import Delayed
 
 T = TypeVar('T')
 
@@ -94,9 +90,7 @@ class Pipeline:
         """
         self._providers: Dict[Key, Provider] = {}
         self._subproviders: Dict[type, Dict[Tuple[Key | TypeVar, ...], Provider]] = {}
-        self._cache: Dict[Key, Delayed] = {}
-        providers = providers or []
-        for provider in providers:
+        for provider in providers or []:
             self.insert(provider)
         for tp, param in (params or {}).items():
             self[tp] = param
@@ -205,43 +199,14 @@ class Pipeline:
             graph.update(self.build(arg))
         return graph
 
-    def get(self, tp: Type[T], /) -> Delayed:
-        # We are slightly abusing Python's type system here, by using the
-        # self.get to get T, but actually it returns a Delayed that can
-        # compute T. We'd like to use Delayed[T], but that is not supported yet:
-        # https://github.com/dask/dask/pull/9256
-        #
-        # When building a workflow, there are two common problems:
-        #
-        # 1. Intermediate results are used more than once.
-        # 2. Intermediate results are large, so we generally do not want to keep them
-        #    in memory longer than necessary.
-        #
-        # To address these problems, we can internally build a graph of tasks, instead
-        # of directly creating dependencies between functions. Currently we use Dask
-        # for this. We cache call results to ensure Dask will recognize the task
-        # as the same object) and also wrap the function in dask.delayed.
-        if (cached := self._cache.get(tp)) is not None:
-            return cached
+    def compute(self, tp: Type[T]) -> T:
+        import dask
 
-        graph = self.build(tp)
-        dependencies = {tp: set(args.values()) for tp, (_, _, args) in graph.items()}
-        ts = TopologicalSorter(dependencies)
-        for key in ts.static_order():
-            provider, _, args = graph[key]
-            delayed = dask.delayed(provider)
-            self._cache.setdefault(
-                key, delayed(**{name: self._cache[arg] for name, arg in args.items()})
-            )
-
-        return self._cache[tp]
-
-    def compute(self, tp: Type[T], /) -> T:
-        task = self.get(tp)
-        result: T = task.compute()  # type: ignore[no-untyped-call]
+        dsk = as_dask_graph(self.build(tp))
+        result: T = dask.get(dsk, tp)
         return result
 
 
-def as_dask_graph(graph):
+def as_dask_graph(graph: Graph) -> Dict[type, Tuple[Provider, ...]]:
     # Note: Only works if all providers support posargs
     return {tp: (provider, *args.values()) for tp, (provider, _, args) in graph.items()}

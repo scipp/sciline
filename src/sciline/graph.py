@@ -39,11 +39,11 @@ def to_graphviz(graph: Graph) -> Digraph:
 
 def _format_graph(graph: Graph) -> Dict[str, Tuple[List[str], str]]:
     return {
-        _format_provider(p, b): (
+        _format_provider(provider, bound=bound): (
             [_format_type(a) for a in args.values()],
-            _format_type(r),
+            _format_type(ret),
         )
-        for r, (p, b, args) in graph.items()
+        for ret, (provider, bound, args) in graph.items()
     }
 
 
