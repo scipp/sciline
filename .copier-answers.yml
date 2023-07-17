@@ -1,7 +1,8 @@
 # Changes here will be overwritten by Copier; NEVER EDIT MANUALLY
-_commit: 6c45980
+_commit: 3143b74
 _src_path: gh:scipp/copier_template
 description: Build scientific pipelines for your data
+github_linux_image: ubuntu-20.04
 max_python: '3.11'
 min_python: '3.8'
 orgname: scipp
