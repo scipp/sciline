@@ -2,7 +2,7 @@
 # Copyright (c) 2023 Scipp contributors (https://github.com/scipp)
 from __future__ import annotations
 
-from graphlib import CycleError
+from graphlib import CycleError, TopologicalSorter
 from typing import (
     Any,
     Callable,
@@ -15,6 +15,7 @@ from typing import (
     get_args,
     get_origin,
     get_type_hints,
+    overload,
 )
 
 T = TypeVar('T')
@@ -203,14 +204,69 @@ class Pipeline:
             raise CycleError("Cycle detected while building graph for", tp)
         return graph
 
+    @overload
     def compute(self, tp: Type[T]) -> T:
+        ...
+
+    @overload
+    def compute(self, tp: Tuple[Type[T], ...]) -> Tuple[T, ...]:
+        ...
+
+    def compute(self, tp):
         import dask
 
-        dsk = as_dask_graph(self.build(tp))
-        result: T = dask.get(dsk, tp)
-        return result
+        if isinstance(tp, tuple):
+            dsk: Dict[type, Tuple[Provider, ...]] = {}
+            for t in tp:
+                dsk.update(as_dask_graph(self.build(t)))
+            result: Tuple[T, ...] = dask.get(dsk, list(tp))
+            return result
+        else:
+            dsk = as_dask_graph(self.build(tp))
+            result: T = dask.get(dsk, tp)
+            return result
+
+    def get(self, keys: type | Tuple[type, ...]) -> TaskGraph:
+        if isinstance(keys, tuple):
+            graph: Graph = {}
+            for t in keys:
+                graph.update(self.build(t))
+        else:
+            graph = self.build(keys)
+        return TaskGraph(graph=graph, keys=keys)
 
 
 def as_dask_graph(graph: Graph) -> Dict[type, Tuple[Provider, ...]]:
     # Note: Only works if all providers support posargs
     return {tp: (provider, *args.values()) for tp, (provider, _, args) in graph.items()}
+
+
+class TaskGraph:
+    def __init__(self, graph: Graph, keys: type | Tuple[type, ...]) -> None:
+        # two requirements:
+        # 1. give multiple keys, but only once, then compute
+        # 2. give single key, inspect graph, decide which keys to use for compute
+        self._graph = as_dask_graph(graph)
+        self._keys = keys
+
+    def compute(self, keys=None) -> Any:
+        import dask
+
+        if keys is None:
+            keys = self._keys
+        if isinstance(keys, tuple):
+            return dask.get(self._graph, list(keys))
+        else:
+            return dask.get(self._graph, keys)
+
+    def _compute(self) -> Any:
+        results: Dict[type, Any] = {}
+        dependencies = {
+            tp: set(args.values()) for tp, (_, _, args) in self._graph.items()
+        }
+        ts = TopologicalSorter(dependencies)
+        for t in ts.static_order():
+            provider, _, args = self._graph[t]
+            args = {name: results[arg] for name, arg in args.items()}
+            results[t] = provider(*args.values())
+        return tuple(results[key] for key in self._keys)

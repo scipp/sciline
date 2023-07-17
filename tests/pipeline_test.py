@@ -66,9 +66,7 @@ def test_multiple_keys_can_be_computed_without_repeated_calls() -> None:
         return 3
 
     pipeline = sl.Pipeline([int_to_float, provide_int, int_float_to_str])
-    dsk = as_dask_graph(pipeline.build(str))
-    assert dask.get(dsk, [float, str]) == (1.5, '3;1.5')  # type: ignore[attr-defined]
-    assert ncall == 1
+    assert pipeline.compute((float, str)) == (1.5, "3;1.5")
 
 
 def test_make_pipeline_with_subgraph_template() -> None:
@@ -529,3 +527,36 @@ def test_building_graph_with_loop_raises_CycleError() -> None:
     pipeline = sl.Pipeline([f, g])
     with pytest.raises(CycleError):
         pipeline.build(int)
+
+
+def test_get_with_single_key_return_task_graph_that_computes_value():
+    pipeline = sl.Pipeline([int_to_float, make_int, int_float_to_str])
+    task = pipeline.get(str)
+    assert task.compute() == '3;1.5'
+
+
+def test_get_with_key_tuple_return_task_graph_that_computes_tuple_of_values():
+    pipeline = sl.Pipeline([int_to_float, make_int])
+    task = pipeline.get((float, int))
+    assert task.compute() == (1.5, 3)
+
+
+def test_task_graph_compute_can_override_single_key():
+    pipeline = sl.Pipeline([int_to_float, make_int])
+    task = pipeline.get(float)
+    assert task.compute(int) == 3
+
+
+def test_task_graph_compute_can_override_key_tuple():
+    pipeline = sl.Pipeline([int_to_float, make_int])
+    task = pipeline.get(float)
+    assert task.compute((int, float)) == (3, 1.5)
+
+
+def test_task_graph_compute_raises_if_override_keys_outside_graph():
+    pipeline = sl.Pipeline([int_to_float, make_int])
+    task = pipeline.get(int)
+    # The pipeline knows how to compute int, but the task graph does not
+    # a the task graph is fixed at this point.
+    with pytest.raises(KeyError):
+        task.compute(float)
