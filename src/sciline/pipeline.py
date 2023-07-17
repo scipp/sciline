@@ -2,6 +2,7 @@
 # Copyright (c) 2023 Scipp contributors (https://github.com/scipp)
 from __future__ import annotations
 
+from graphlib import CycleError
 from typing import (
     Any,
     Callable,
@@ -195,8 +196,11 @@ class Pipeline:
             if name != 'return'
         }
         graph: Graph = {tp: (provider, bound, args)}
-        for arg in args.values():
-            graph.update(self.build(arg))
+        try:
+            for arg in args.values():
+                graph.update(self.build(arg))
+        except RecursionError:
+            raise CycleError("Cycle detected while building graph for", tp)
         return graph
 
     def compute(self, tp: Type[T]) -> T:

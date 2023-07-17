@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright (c) 2023 Scipp contributors (https://github.com/scipp)
 from dataclasses import dataclass
+from graphlib import CycleError
 from typing import Generic, List, NewType, TypeVar
 
 import dask
@@ -516,3 +517,15 @@ def test_can_merge_graphs_resulting_in_graph_compatible_with_dask_get() -> None:
 
     assert dask.get(dsk, [float, str]) == (1.5, '3;1.5')
     assert ncall == 1
+
+
+def test_building_graph_with_loop_raises_CycleError() -> None:
+    def f(x: int) -> float:
+        return float(x)
+
+    def g(x: float) -> int:
+        return int(x)
+
+    pipeline = sl.Pipeline([f, g])
+    with pytest.raises(CycleError):
+        pipeline.build(int)
