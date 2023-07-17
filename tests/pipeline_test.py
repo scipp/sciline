@@ -494,7 +494,7 @@ def test_build_graph_to_dsk() -> None:
         return 3
 
     pipeline = sl.Pipeline([int_to_float, provide_int])
-    graph = pipeline.build_graph(float)
+    graph = pipeline.build(float)
     dsk = {tp: (provider, *args.values()) for tp, (provider, _, args) in graph.items()}
 
     assert dask.get(dsk, [float, int]) == (1.5, 3)
@@ -511,8 +511,8 @@ def test_build_graph_to_dsk_combine() -> None:
         return 3
 
     pipeline = sl.Pipeline([int_to_float, provide_int, int_float_to_str])
-    graph1 = pipeline.build_graph(float)
-    graph2 = pipeline.build_graph(str)
+    graph1 = pipeline.build(float)
+    graph2 = pipeline.build(str)
     graph = {**graph1, **graph2}
 
     from sciline.pipeline import as_dask_graph

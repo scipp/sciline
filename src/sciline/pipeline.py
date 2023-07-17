@@ -8,7 +8,6 @@ from typing import (
     Callable,
     Dict,
     List,
-    NewType,
     Optional,
     Tuple,
     Type,
@@ -36,9 +35,17 @@ class AmbiguousProvider(Exception):
     pass
 
 
+Provider = Callable[..., Any]
+Key = type
+Graph = Dict[
+    Key,
+    Tuple[Callable[..., Any], Dict[TypeVar, type], Dict[str, Key]],
+]
+
+
 def _is_compatible_type_tuple(
-    requested: tuple[type | NewType, ...],
-    provided: tuple[type | TypeVar | NewType, ...],
+    requested: tuple[Key, ...],
+    provided: tuple[Key | TypeVar, ...],
 ) -> bool:
     """
     Check if a tuple of requested types is compatible with a tuple of provided types.
@@ -53,7 +60,7 @@ def _is_compatible_type_tuple(
     return True
 
 
-def _bind_free_typevars(tp: TypeVar | type, bound: Dict[TypeVar, type]) -> type:
+def _bind_free_typevars(tp: TypeVar | Key, bound: Dict[TypeVar, Key]) -> Key:
     if isinstance(tp, TypeVar):
         if (result := bound.get(tp)) is None:
             raise UnboundTypeVar(f'Unbound type variable {tp}')
@@ -67,20 +74,12 @@ def _bind_free_typevars(tp: TypeVar | type, bound: Dict[TypeVar, type]) -> type:
         return tp
 
 
-Provider = Callable[..., Any]
-Key = type | NewType
-Graph = Dict[
-    Key,
-    Tuple[Callable[..., Any], Dict[TypeVar, type], Dict[str, Key]],
-]
-
-
 class Pipeline:
     def __init__(
         self,
         providers: Optional[List[Provider]] = None,
         *,
-        params: Optional[Dict[type | NewType, Any]] = None,
+        params: Optional[Dict[Key, Any]] = None,
     ):
         """
         Setup a Pipeline from a list providers
@@ -93,11 +92,9 @@ class Pipeline:
         params:
             Dictionary of concrete values to provide for types.
         """
-        self._providers: Dict[type | NewType, Provider] = {}
-        self._subproviders: Dict[
-            type, Dict[Tuple[type | TypeVar | NewType, ...], Provider]
-        ] = {}
-        self._cache: Dict[type | NewType, Delayed] = {}
+        self._providers: Dict[Key, Provider] = {}
+        self._subproviders: Dict[type, Dict[Tuple[Key | TypeVar, ...], Provider]] = {}
+        self._cache: Dict[Key, Delayed] = {}
         providers = providers or []
         for provider in providers:
             self.insert(provider)
@@ -118,7 +115,7 @@ class Pipeline:
             raise ValueError(f'Provider {provider} lacks type-hint for return value')
         self._set_provider(key, provider)
 
-    def __setitem__(self, key: Type[T] | NewType, param: T) -> None:
+    def __setitem__(self, key: Type[T], param: T) -> None:
         """
         Provide a concrete value for a type.
 
@@ -143,7 +140,7 @@ class Pipeline:
             )
         self._set_provider(key, lambda: param)
 
-    def _set_provider(self, key: Type[T] | NewType, provider: Callable[..., T]) -> None:
+    def _set_provider(self, key: Type[T], provider: Callable[..., T]) -> None:
         # isinstance does not work here and types.NoneType available only in 3.10+
         if key == type(None):  # noqa: E721
             raise ValueError(f'Provider {provider} returning `None` is not allowed')
@@ -158,18 +155,7 @@ class Pipeline:
                 raise ValueError(f'Provider for {key} already exists')
             self._providers[key] = provider
 
-    def _get_args(
-        self, func: Callable[..., Any], bound: Dict[TypeVar, type]
-    ) -> Dict[str, Delayed]:
-        return {
-            name: self.get(_bind_free_typevars(tp, bound=bound))
-            for name, tp in get_type_hints(func).items()
-            if name != 'return'
-        }
-
-    def _get_provider(
-        self, tp: Type[T]
-    ) -> Tuple[Callable[..., T], Dict[TypeVar, type]]:
+    def _get_provider(self, tp: Type[T]) -> Tuple[Callable[..., T], Dict[TypeVar, Key]]:
         if (provider := self._providers.get(tp)) is not None:
             return provider, {}
         elif (origin := get_origin(tp)) is not None and (
@@ -193,7 +179,7 @@ class Pipeline:
                 raise AmbiguousProvider("Multiple providers found for type", tp)
         raise UnsatisfiedRequirement("No provider found for type", tp)
 
-    def build_graph(self, tp: Type[T], /) -> Graph:
+    def build(self, tp: Type[T], /) -> Graph:
         """
         Return a dict of providers required for building the provided type `tp`.
 
@@ -206,6 +192,7 @@ class Pipeline:
         tp:
             Type to build the graph for.
         """
+        provider: Callable[..., T]
         provider, bound = self._get_provider(tp)
         tps = get_type_hints(provider)
         args = {
@@ -213,9 +200,9 @@ class Pipeline:
             for name, t in tps.items()
             if name != 'return'
         }
-        graph = {tp: (provider, bound, args)}
+        graph: Graph = {tp: (provider, bound, args)}
         for arg in args.values():
-            graph.update(self.build_graph(arg))
+            graph.update(self.build(arg))
         return graph
 
     def get(self, tp: Type[T], /) -> Delayed:
@@ -237,7 +224,7 @@ class Pipeline:
         if (cached := self._cache.get(tp)) is not None:
             return cached
 
-        graph = self.build_graph(tp)
+        graph = self.build(tp)
         dependencies = {tp: set(args.values()) for tp, (_, _, args) in graph.items()}
         ts = TopologicalSorter(dependencies)
         for key in ts.static_order():
