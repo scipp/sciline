@@ -175,9 +175,9 @@ class Pipeline:
 
     def build(self, tp: Type[T], /) -> Graph:
         """
-        Return a dict of providers required for building the provided type `tp`.
+        Return a dict of providers required for building the requested type `tp`.
 
-        The values are tuples container the provider, the dict of bound typevars,
+        The values are tuples containing the provider, the dict of bound typevars,
         and the dict of arguments for the provider. The values in the latter dict
         reference other keys in the returned graph.
 
