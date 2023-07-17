@@ -2,7 +2,7 @@
 # Copyright (c) 2023 Scipp contributors (https://github.com/scipp)
 from __future__ import annotations
 
-from graphlib import CycleError, TopologicalSorter
+from graphlib import CycleError
 from typing import (
     Any,
     Callable,
@@ -213,18 +213,7 @@ class Pipeline:
         ...
 
     def compute(self, tp):
-        import dask
-
-        if isinstance(tp, tuple):
-            dsk: Dict[type, Tuple[Provider, ...]] = {}
-            for t in tp:
-                dsk.update(as_dask_graph(self.build(t)))
-            result: Tuple[T, ...] = dask.get(dsk, list(tp))
-            return result
-        else:
-            dsk = as_dask_graph(self.build(tp))
-            result: T = dask.get(dsk, tp)
-            return result
+        return self.get(tp).compute()
 
     def get(self, keys: type | Tuple[type, ...]) -> TaskGraph:
         if isinstance(keys, tuple):
@@ -236,7 +225,7 @@ class Pipeline:
         return TaskGraph(graph=graph, keys=keys)
 
 
-def as_dask_graph(graph: Graph) -> Dict[type, Tuple[Provider, ...]]:
+def _as_dask_graph(graph: Graph) -> Dict[type, Tuple[Provider, ...]]:
     # Note: Only works if all providers support posargs
     return {tp: (provider, *args.values()) for tp, (provider, _, args) in graph.items()}
 
@@ -246,7 +235,7 @@ class TaskGraph:
         # two requirements:
         # 1. give multiple keys, but only once, then compute
         # 2. give single key, inspect graph, decide which keys to use for compute
-        self._graph = as_dask_graph(graph)
+        self._graph = _as_dask_graph(graph)
         self._keys = keys
 
     def compute(self, keys=None) -> Any:
@@ -258,15 +247,3 @@ class TaskGraph:
             return dask.get(self._graph, list(keys))
         else:
             return dask.get(self._graph, keys)
-
-    def _compute(self) -> Any:
-        results: Dict[type, Any] = {}
-        dependencies = {
-            tp: set(args.values()) for tp, (_, _, args) in self._graph.items()
-        }
-        ts = TopologicalSorter(dependencies)
-        for t in ts.static_order():
-            provider, _, args = self._graph[t]
-            args = {name: results[arg] for name, arg in args.items()}
-            results[t] = provider(*args.values())
-        return tuple(results[key] for key in self._keys)
