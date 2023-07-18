@@ -14,6 +14,28 @@ class Scheduler(Protocol):
         ...
 
 
+class NaiveScheduler:
+    """
+    A naive scheduler that simply executes providers in the order they are.
+
+    May consume excessive memory since intermediate results are not freed eagerly,
+    but kept until returning the final result. Prefer installing `dask` and using
+    :py:class:`DaskScheduler` instead.
+    """
+
+    def get(self, graph: Graph, keys: List[type]):
+        from graphlib import TopologicalSorter
+
+        results: Dict[type, Any] = {}
+        dependencies = {tp: set(args.values()) for tp, (_, args) in graph.items()}
+        ts = TopologicalSorter(dependencies)
+        for t in ts.static_order():
+            provider, args = graph[t]
+            args = {name: results[arg] for name, arg in args.items()}
+            results[t] = provider(*args.values())
+        return tuple(results[key] for key in keys)
+
+
 class DaskScheduler:
     def __init__(self, scheduler: Optional[Callable[..., Any]] = None):
         """Wrapper for a Dask scheduler.

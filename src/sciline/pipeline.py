@@ -217,14 +217,16 @@ class Pipeline:
     def compute(self, tp):
         return self.get(tp).compute()
 
-    def get(self, keys: type | Tuple[type, ...]) -> TaskGraph:
+    def get(
+        self, keys: type | Tuple[type, ...], *, scheduler: Optional[Scheduler] = None
+    ) -> TaskGraph:
         if isinstance(keys, tuple):
             graph: Graph = {}
             for t in keys:
                 graph.update(self.build(t))
         else:
             graph = self.build(keys)
-        return TaskGraph(graph=graph, keys=keys)
+        return TaskGraph(graph=graph, keys=keys, scheduler=scheduler)
 
 
 class TaskGraph:

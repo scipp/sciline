@@ -518,3 +518,9 @@ def test_task_graph_compute_raises_if_override_keys_outside_graph():
     # a the task graph is fixed at this point.
     with pytest.raises(KeyError):
         task.compute(float)
+
+
+def test_get_with_NaiveScheduler():
+    pipeline = sl.Pipeline([int_to_float, make_int])
+    task = pipeline.get(float, scheduler=sl.scheduler.NaiveScheduler())
+    assert task.compute() == 1.5
