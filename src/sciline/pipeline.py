@@ -9,7 +9,6 @@ from typing import (
     Dict,
     List,
     Optional,
-    Protocol,
     Tuple,
     Type,
     TypeVar,
@@ -18,6 +17,8 @@ from typing import (
     get_type_hints,
     overload,
 )
+
+from .scheduler import DaskScheduler, Scheduler
 
 T = TypeVar('T')
 
@@ -226,31 +227,17 @@ class Pipeline:
         return TaskGraph(graph=graph, keys=keys)
 
 
-def _as_dask_graph(graph: Graph) -> Dict[type, Tuple[Provider, ...]]:
-    # Note: Only works if all providers support posargs
-    return {tp: (provider, *args.values()) for tp, (provider, args) in graph.items()}
-
-
-class Scheduler(Protocol):
-    def get(self, graph: Graph, keys: List[type]):
-        ...
-
-
-class DaskScheduler:
-    def get(self, graph: Graph, keys: List[type]):
-        import dask
-
-        return dask.get(_as_dask_graph(graph), keys)
-
-
 class TaskGraph:
-    def __init__(self, graph: Graph, keys: type | Tuple[type, ...]) -> None:
-        # two requirements:
-        # 1. give multiple keys, but only once, then compute
-        # 2. give single key, inspect graph, decide which keys to use for compute
+    def __init__(
+        self,
+        *,
+        graph: Graph,
+        keys: type | Tuple[type, ...],
+        scheduler: Optional[Scheduler] = None,
+    ) -> None:
         self._graph = graph
         self._keys = keys
-        self._scheduler: Scheduler = DaskScheduler()
+        self._scheduler = scheduler or DaskScheduler()
 
     def compute(self, keys=None) -> Any:
         if keys is None:
