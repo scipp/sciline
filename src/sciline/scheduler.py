@@ -51,7 +51,7 @@ class DaskScheduler:
         if scheduler is None:
             import dask
 
-            self._dask_get = dask.get
+            self._dask_get = dask.get  # type: ignore[attr-defined]
         else:
             self._dask_get = scheduler
 

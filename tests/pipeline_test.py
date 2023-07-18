@@ -97,7 +97,7 @@ def test_make_pipeline_with_subgraph_template() -> None:
     pipeline = sl.Pipeline(
         [provide_int, float1, float2, use_strings, int_float_to_str],
     )
-    assert pipeline.compute(Result) == "3;1.5;3;2.5"  # type: ignore[no-untyped-call]
+    assert pipeline.compute(Result) == "3;1.5;3;2.5"
     assert ncall == 1
 
 
@@ -487,31 +487,31 @@ def test_building_graph_with_loop_raises_CycleError() -> None:
         pipeline.build(int)
 
 
-def test_get_with_single_key_return_task_graph_that_computes_value():
+def test_get_with_single_key_return_task_graph_that_computes_value() -> None:
     pipeline = sl.Pipeline([int_to_float, make_int, int_float_to_str])
     task = pipeline.get(str)
     assert task.compute() == '3;1.5'
 
 
-def test_get_with_key_tuple_return_task_graph_that_computes_tuple_of_values():
+def test_get_with_key_tuple_return_task_graph_that_computes_tuple_of_values() -> None:
     pipeline = sl.Pipeline([int_to_float, make_int])
     task = pipeline.get((float, int))
     assert task.compute() == (1.5, 3)
 
 
-def test_task_graph_compute_can_override_single_key():
+def test_task_graph_compute_can_override_single_key() -> None:
     pipeline = sl.Pipeline([int_to_float, make_int])
     task = pipeline.get(float)
     assert task.compute(int) == 3
 
 
-def test_task_graph_compute_can_override_key_tuple():
+def test_task_graph_compute_can_override_key_tuple() -> None:
     pipeline = sl.Pipeline([int_to_float, make_int])
     task = pipeline.get(float)
     assert task.compute((int, float)) == (3, 1.5)
 
 
-def test_task_graph_compute_raises_if_override_keys_outside_graph():
+def test_task_graph_compute_raises_if_override_keys_outside_graph() -> None:
     pipeline = sl.Pipeline([int_to_float, make_int])
     task = pipeline.get(int)
     # The pipeline knows how to compute int, but the task graph does not
@@ -520,7 +520,7 @@ def test_task_graph_compute_raises_if_override_keys_outside_graph():
         task.compute(float)
 
 
-def test_get_with_NaiveScheduler():
+def test_get_with_NaiveScheduler() -> None:
     pipeline = sl.Pipeline([int_to_float, make_int])
     task = pipeline.get(float, scheduler=sl.scheduler.NaiveScheduler())
     assert task.compute() == 1.5

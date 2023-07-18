@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright (c) 2023 Scipp contributors (https://github.com/scipp)
-from typing import Any, Callable, Dict, List, NewType, Tuple, get_args, get_origin
+from typing import Any, Callable, Dict, List, Tuple, get_args, get_origin
 
 from graphviz import Digraph
 
@@ -42,7 +42,7 @@ def _format_provider(provider: Callable[..., Any], ret: type) -> str:
     return f'{provider.__qualname__}_{_format_type(ret)}'
 
 
-def _format_type(tp: type | NewType) -> str:
+def _format_type(tp: type) -> str:
     """
     Helper for _format_graph.
 

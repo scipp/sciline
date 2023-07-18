@@ -127,7 +127,7 @@ class Pipeline:
         # TODO Switch to isinstance(key, NewType) once our minimum is Python 3.10
         # Note that we cannot pass mypy in Python<3.10 since NewType is not a type.
         if hasattr(key, '__supertype__'):
-            expected = key.__supertype__
+            expected = key.__supertype__  # type: ignore[attr-defined]
         elif (origin := get_origin(key)) is None:
             expected = key
         else:
@@ -214,7 +214,7 @@ class Pipeline:
     def compute(self, tp: Tuple[Type[T], ...]) -> Tuple[T, ...]:
         ...
 
-    def compute(self, tp):
+    def compute(self, tp: type | Tuple[type, ...]) -> Any:
         return self.get(tp).compute()
 
     def get(
