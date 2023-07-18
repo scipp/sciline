@@ -10,7 +10,7 @@ Graph = Dict[
 
 
 class Scheduler(Protocol):
-    def get(self, graph: Graph, keys: List[type]):
+    def get(self, graph: Graph, keys: List[type]) -> Any:
         ...
 
 
@@ -23,7 +23,7 @@ class NaiveScheduler:
     :py:class:`DaskScheduler` instead.
     """
 
-    def get(self, graph: Graph, keys: List[type]):
+    def get(self, graph: Graph, keys: List[type]) -> Any:
         from graphlib import TopologicalSorter
 
         results: Dict[type, Any] = {}
@@ -37,7 +37,7 @@ class NaiveScheduler:
 
 
 class DaskScheduler:
-    def __init__(self, scheduler: Optional[Callable[..., Any]] = None):
+    def __init__(self, scheduler: Optional[Callable[..., Any]] = None) -> None:
         """Wrapper for a Dask scheduler.
 
         Note that this currently only works if all providers support posargs.
@@ -55,6 +55,6 @@ class DaskScheduler:
         else:
             self._dask_get = scheduler
 
-    def get(self, graph: Graph, keys: List[type]):
+    def get(self, graph: Graph, keys: List[type]) -> Any:
         dsk = {tp: (provider, *args.values()) for tp, (provider, args) in graph.items()}
         return self._dask_get(dsk, keys)
