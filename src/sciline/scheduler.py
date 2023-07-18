@@ -16,7 +16,7 @@ class Scheduler(Protocol):
 
 class NaiveScheduler:
     """
-    A naive scheduler that simply executes providers in the order they are.
+    A naive scheduler that computes intermediate results and results in order.
 
     May consume excessive memory since intermediate results are not freed eagerly,
     but kept until returning the final result. Prefer installing `dask` and using

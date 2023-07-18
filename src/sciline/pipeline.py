@@ -241,7 +241,17 @@ class TaskGraph:
         self._keys = keys
         self._scheduler = scheduler or DaskScheduler()
 
-    def compute(self, keys=None) -> Any:
+    def compute(self, keys: Optional[type | Tuple[type, ...]] = None) -> Any:
+        """
+        Compute the result of the graph.
+
+        Parameters
+        ----------
+        keys:
+            Optional list of keys to compute. This can be used to override the keys
+            stored in the graph instance. Note that the keys must be present in the
+            graph as intermediate results, otherwise KeyError is raised.
+        """
         if keys is None:
             keys = self._keys
         if isinstance(keys, tuple):
