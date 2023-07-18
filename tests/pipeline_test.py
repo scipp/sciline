@@ -21,19 +21,21 @@ def int_float_to_str(x: int, y: float) -> str:
     return f"{x};{y}"
 
 
-def test_make_pipeline_sets_up_working_pipeline() -> None:
+def test_pipeline_with_callables_can_compute_single_results() -> None:
     pipeline = sl.Pipeline([int_to_float, make_int])
     assert pipeline.compute(float) == 1.5
     assert pipeline.compute(int) == 3
 
 
-def test_make_pipeline_does_not_autobind() -> None:
+def test_pipeline_does_not_autobind_types_that_can_be_default_constructed() -> None:
+    # `int` can be constructed without arguments (and returns 0). Make sure that
+    # the pipeline does not automatically bind `int` to `0`.
     pipeline = sl.Pipeline([int_to_float])
     with pytest.raises(sl.UnsatisfiedRequirement):
         pipeline.compute(float)
 
 
-def test_intermediate_computed_once() -> None:
+def test_intermediate_used_multiple_times_is_computed_only_once() -> None:
     ncall = 0
 
     def provide_int() -> int:
@@ -58,7 +60,47 @@ def test_multiple_keys_can_be_computed_without_repeated_calls() -> None:
     assert pipeline.compute((float, str)) == (1.5, "3;1.5")
 
 
-def test_make_pipeline_with_subgraph_template() -> None:
+def test_multiple_keys_not_in_same_path_use_same_intermediate() -> None:
+    ncall = 0
+
+    def provide_int() -> int:
+        nonlocal ncall
+        ncall += 1
+        return 3
+
+    def func1(x: int) -> float:
+        return 0.5 * x
+
+    def func2(x: int) -> str:
+        return f"{x}"
+
+    pipeline = sl.Pipeline([provide_int, func1, func2])
+    assert pipeline.compute((float, str)) == (1.5, "3")
+    assert ncall == 1
+
+
+def test_generic_providers_produce_use_dependencies_based_on_bound_typevar() -> None:
+    Param = TypeVar('Param')
+
+    class Str(sl.Scope[Param], str):
+        ...
+
+    def parametrized(x: Param) -> Str[Param]:
+        return Str(f'{x}')
+
+    def make_float() -> float:
+        return 1.5
+
+    def combine(x: Str[int], y: Str[float]) -> str:
+        return f"{x};{y}"
+
+    pipeline = sl.Pipeline([make_int, make_float, combine, parametrized])
+    assert pipeline.compute(Str[int]) == '3'
+    assert pipeline.compute(Str[float]) == '1.5'
+    assert pipeline.compute(str) == '3;1.5'
+
+
+def test_can_compute_result_depending_on_two_instances_of_generic_provider() -> None:
     ncall = 0
 
     def provide_int() -> int:
@@ -97,30 +139,6 @@ def test_make_pipeline_with_subgraph_template() -> None:
     assert ncall == 1
 
 
-Param = TypeVar('Param')
-
-
-class Str(sl.Scope[Param], str):
-    ...
-
-
-def f(x: Param) -> Str[Param]:
-    return Str(f'{x}')
-
-
-def test_pipeline_from_templated() -> None:
-    def make_float() -> float:
-        return 1.5
-
-    def combine(x: Str[int], y: Str[float]) -> str:
-        return f"{x};{y}"
-
-    pipeline = sl.Pipeline([make_int, make_float, combine, f])
-    assert pipeline.compute(Str[int]) == '3'
-    assert pipeline.compute(Str[float]) == '1.5'
-    assert pipeline.compute(str) == '3;1.5'
-
-
 def test_inserting_provider_returning_None_raises() -> None:
     def provide_none() -> None:
         return None
@@ -143,7 +161,7 @@ def test_inserting_provider_with_no_return_type_raises() -> None:
         pipeline.insert(provide_none)
 
 
-def test_typevar_requirement_of_provider_can_be_bound() -> None:
+def test_TypeVar_requirement_of_provider_can_be_bound() -> None:
     T = TypeVar('T')
 
     def provider_int() -> int:
@@ -156,7 +174,7 @@ def test_typevar_requirement_of_provider_can_be_bound() -> None:
     assert pipeline.compute(List[int]) == [3, 3]
 
 
-def test_typevar_that_cannot_be_bound_raises_UnboundTypeVar() -> None:
+def test_TypeVar_that_cannot_be_bound_raises_UnboundTypeVar() -> None:
     T = TypeVar('T')
 
     def provider(_: T) -> int:
@@ -167,7 +185,7 @@ def test_typevar_that_cannot_be_bound_raises_UnboundTypeVar() -> None:
         pipeline.compute(int)
 
 
-def test_unsatisfiable_typevar_requirement_of_provider_raises() -> None:
+def test_unsatisfiable_TypeVar_requirement_of_provider_raises() -> None:
     T = TypeVar('T')
 
     def provider_int() -> int:
@@ -449,14 +467,6 @@ def test_setitem_raises_if_key_exists() -> None:
         pl[int] = 2
 
 
-def test_has_no_delitem() -> None:
-    # We currently do not support this as it would require clearing the cache.
-    # If required this could be implemented, but make sure the cache is cleared
-    # and tests added.
-    pl = sl.Pipeline()
-    assert not hasattr(pl, '__delitem__')
-
-
 def test_init_with_params() -> None:
     pl = sl.Pipeline(params={int: 1, float: 2.0})
     assert pl.compute(int) == 1
@@ -511,7 +521,7 @@ def test_task_graph_compute_raises_if_override_keys_outside_graph() -> None:
     pipeline = sl.Pipeline([int_to_float, make_int])
     task = pipeline.get(int)
     # The pipeline knows how to compute int, but the task graph does not
-    # a the task graph is fixed at this point.
+    # as the task graph is fixed at this point.
     with pytest.raises(KeyError):
         task.compute(float)
 
