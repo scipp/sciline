@@ -481,6 +481,17 @@ def test_init_with_providers_and_params() -> None:
     assert pl.compute(str) == "1 2.0"
 
 
+def test_init_with_sciline_Scope_subclass_param_works() -> None:
+    T = TypeVar('T')
+
+    class A(sl.Scope[T], int):
+        ...
+
+    pl = sl.Pipeline(params={A[float]: A(1), A[str]: A(2)})
+    assert pl.compute(A[float]) == A(1)
+    assert pl.compute(A[str]) == A(2)
+
+
 def test_building_graph_with_loop_raises_CycleError() -> None:
     def f(x: int) -> float:
         return float(x)

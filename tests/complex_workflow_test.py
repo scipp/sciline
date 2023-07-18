@@ -11,16 +11,16 @@ import sciline as sl
 
 @dataclass
 class RawData:
-    data: npt.NDArray[np.float64]
+    data: np.ndarray
     monitor1: float
     monitor2: float
 
 
 SampleRun = NewType('SampleRun', int)
 BackgroundRun = NewType('BackgroundRun', int)
-DetectorMask = NewType('DetectorMask', npt.NDArray[np.float64])
-DirectBeam = NewType('DirectBeam', npt.NDArray[np.float64])
-SolidAngle = NewType('SolidAngle', npt.NDArray[np.float64])
+DetectorMask = NewType('DetectorMask', np.ndarray)
+DirectBeam = NewType('DirectBeam', np.ndarray)
+SolidAngle = NewType('SolidAngle', np.ndarray)
 
 Run = TypeVar('Run')
 
@@ -29,7 +29,7 @@ class Raw(sl.Scope[Run], RawData):
     ...
 
 
-class Masked(sl.Scope[Run], npt.NDArray[np.float64]):
+class Masked(sl.Scope[Run], np.ndarray):
     ...
 
 
@@ -80,26 +80,13 @@ def iofq(
 
 
 reduction = [incident_monitor, transmission_monitor, mask_detector, transmission, iofq]
-
-
-def raw_sample() -> Raw[SampleRun]:
-    return Raw(RawData(data=np.ones(4), monitor1=1.0, monitor2=2.0))
-
-
-def raw_background() -> Raw[BackgroundRun]:
-    return Raw(RawData(data=np.ones(4) * 1.5, monitor1=1.0, monitor2=4.0))
-
-
-def detector_mask() -> DetectorMask:
-    return DetectorMask(np.array([1, 1, 0, 1]))
-
-
-def solid_angle() -> SolidAngle:
-    return SolidAngle(np.array([1.0, 0.5, 0.25, 0.125]))
-
-
-def direct_beam() -> DirectBeam:
-    return DirectBeam(np.array(1 / 1.5))
+params = {
+    Raw[SampleRun]: Raw(RawData(data=np.ones(4), monitor1=1.0, monitor2=2.0)),
+    Raw[BackgroundRun]: Raw(RawData(data=np.ones(4) * 1.5, monitor1=1.0, monitor2=4.0)),
+    DetectorMask: DetectorMask(np.array([1, 1, 0, 1])),
+    SolidAngle: SolidAngle(np.array([1.0, 0.5, 0.25, 0.125])),
+    DirectBeam: DirectBeam(np.array(1 / 1.5)),
+}
 
 
 def subtract_background(
@@ -111,15 +98,8 @@ def subtract_background(
 def test_reduction_workflow() -> None:
     # See https://github.com/python/mypy/issues/14661
     pipeline = sl.Pipeline(
-        [
-            raw_sample,
-            raw_background,
-            detector_mask,
-            solid_angle,
-            direct_beam,
-            subtract_background,
-        ]
-        + reduction  # type: ignore[arg-type]
+        [subtract_background] + reduction,  # type: ignore[arg-type]
+        params=params,
     )
 
     assert np.array_equal(pipeline.compute(IofQ[SampleRun]), [3, 6, 0, 24])

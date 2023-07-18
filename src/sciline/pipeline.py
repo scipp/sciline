@@ -20,6 +20,7 @@ from typing import (
 
 from sciline.task_graph import TaskGraph
 
+from .domain import Scope
 from .scheduler import Graph, Scheduler
 
 T = TypeVar('T')
@@ -129,7 +130,9 @@ class Pipeline:
         elif (origin := get_origin(key)) is None:
             expected = key
         else:
-            expected = origin
+            # TODO This is probably quite brittle, maybe we can find a better way?
+            expected = origin.__bases__[1] if issubclass(origin, Scope) else origin
+
         if not isinstance(param, expected):
             raise TypeError(
                 f'Key {key} incompatible to value {param} of type {type(param)}'
