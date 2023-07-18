@@ -16,6 +16,12 @@ def make_task_graph() -> Graph:
     return pl.build(float)
 
 
+def test_default_scheduler_is_dask_when_dask_available() -> None:
+    _ = pytest.importorskip("dask")
+    tg = TaskGraph(graph={}, keys=())
+    assert isinstance(tg._scheduler, sl.scheduler.DaskScheduler)
+
+
 def test_compute_returns_value_when_initialized_with_single_key() -> None:
     graph = make_task_graph()
     tg = TaskGraph(graph=graph, keys=float)
