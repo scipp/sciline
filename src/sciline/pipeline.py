@@ -38,7 +38,7 @@ Provider = Callable[..., Any]
 Key = type
 Graph = Dict[
     Key,
-    Tuple[Callable[..., Any], Dict[TypeVar, type], Dict[str, Key]],
+    Tuple[Callable[..., Any], Dict[str, Key]],
 ]
 
 
@@ -197,7 +197,7 @@ class Pipeline:
             for name, t in tps.items()
             if name != 'return'
         }
-        graph: Graph = {tp: (provider, bound, args)}
+        graph: Graph = {tp: (provider, args)}
         try:
             for arg in args.values():
                 graph.update(self.build(arg))
@@ -228,7 +228,7 @@ class Pipeline:
 
 def _as_dask_graph(graph: Graph) -> Dict[type, Tuple[Provider, ...]]:
     # Note: Only works if all providers support posargs
-    return {tp: (provider, *args.values()) for tp, (provider, _, args) in graph.items()}
+    return {tp: (provider, *args.values()) for tp, (provider, args) in graph.items()}
 
 
 class Scheduler(Protocol):
