@@ -31,9 +31,8 @@ jobs:
       matrix:
 
         os: ['ubuntu-20.04']
-        python:
-          - version: '3.8'
-            tox-env: ['py38', 'dask']
+        python: ['3.8']
+        tox-env: ['py38', 'dask']
 
     uses: ./.github/workflows/test.yml
     with:
