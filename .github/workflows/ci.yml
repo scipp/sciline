@@ -25,7 +25,7 @@ jobs:
           commit_message: Apply automatic formatting
 
   tests:
-    name: Tests ${{ matrix.os }} py${{ matrix.python }}
+    name: Tests
     needs: formatting
     strategy:
       matrix:
