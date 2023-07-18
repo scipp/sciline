@@ -2,12 +2,12 @@
 # Copyright (c) 2023 Scipp contributors (https://github.com/scipp)
 from __future__ import annotations
 
+from graphlib import CycleError
 from typing import (
     Any,
     Callable,
     Dict,
     List,
-    NewType,
     Optional,
     Tuple,
     Type,
@@ -16,9 +16,6 @@ from typing import (
     get_origin,
     get_type_hints,
 )
-
-import dask
-from dask.delayed import Delayed
 
 T = TypeVar('T')
 
@@ -35,9 +32,17 @@ class AmbiguousProvider(Exception):
     pass
 
 
+Provider = Callable[..., Any]
+Key = type
+Graph = Dict[
+    Key,
+    Tuple[Callable[..., Any], Dict[TypeVar, type], Dict[str, Key]],
+]
+
+
 def _is_compatible_type_tuple(
-    requested: tuple[type | NewType, ...],
-    provided: tuple[type | TypeVar | NewType, ...],
+    requested: tuple[Key, ...],
+    provided: tuple[Key | TypeVar, ...],
 ) -> bool:
     """
     Check if a tuple of requested types is compatible with a tuple of provided types.
@@ -52,7 +57,7 @@ def _is_compatible_type_tuple(
     return True
 
 
-def _bind_free_typevars(tp: TypeVar | type, bound: Dict[TypeVar, type]) -> type:
+def _bind_free_typevars(tp: TypeVar | Key, bound: Dict[TypeVar, Key]) -> Key:
     if isinstance(tp, TypeVar):
         if (result := bound.get(tp)) is None:
             raise UnboundTypeVar(f'Unbound type variable {tp}')
@@ -66,15 +71,12 @@ def _bind_free_typevars(tp: TypeVar | type, bound: Dict[TypeVar, type]) -> type:
         return tp
 
 
-Provider = Callable[..., Any]
-
-
 class Pipeline:
     def __init__(
         self,
         providers: Optional[List[Provider]] = None,
         *,
-        params: Optional[Dict[type | NewType, Any]] = None,
+        params: Optional[Dict[Key, Any]] = None,
     ):
         """
         Setup a Pipeline from a list providers
@@ -87,13 +89,9 @@ class Pipeline:
         params:
             Dictionary of concrete values to provide for types.
         """
-        self._providers: Dict[type | NewType, Provider] = {}
-        self._subproviders: Dict[
-            type, Dict[Tuple[type | TypeVar | NewType, ...], Provider]
-        ] = {}
-        self._cache: Dict[type | NewType, Delayed] = {}
-        providers = providers or []
-        for provider in providers:
+        self._providers: Dict[Key, Provider] = {}
+        self._subproviders: Dict[type, Dict[Tuple[Key | TypeVar, ...], Provider]] = {}
+        for provider in providers or []:
             self.insert(provider)
         for tp, param in (params or {}).items():
             self[tp] = param
@@ -112,7 +110,7 @@ class Pipeline:
             raise ValueError(f'Provider {provider} lacks type-hint for return value')
         self._set_provider(key, provider)
 
-    def __setitem__(self, key: Type[T] | NewType, param: T) -> None:
+    def __setitem__(self, key: Type[T], param: T) -> None:
         """
         Provide a concrete value for a type.
 
@@ -137,7 +135,7 @@ class Pipeline:
             )
         self._set_provider(key, lambda: param)
 
-    def _set_provider(self, key: Type[T] | NewType, provider: Callable[..., T]) -> None:
+    def _set_provider(self, key: Type[T], provider: Callable[..., T]) -> None:
         # isinstance does not work here and types.NoneType available only in 3.10+
         if key == type(None):  # noqa: E721
             raise ValueError(f'Provider {provider} returning `None` is not allowed')
@@ -152,18 +150,7 @@ class Pipeline:
                 raise ValueError(f'Provider for {key} already exists')
             self._providers[key] = provider
 
-    def _get_args(
-        self, func: Callable[..., Any], bound: Dict[TypeVar, type]
-    ) -> Dict[str, Delayed]:
-        return {
-            name: self.get(_bind_free_typevars(tp, bound=bound))
-            for name, tp in get_type_hints(func).items()
-            if name != 'return'
-        }
-
-    def _get_provider(
-        self, tp: Type[T]
-    ) -> Tuple[Callable[..., T], Dict[TypeVar, type]]:
+    def _get_provider(self, tp: Type[T]) -> Tuple[Callable[..., T], Dict[TypeVar, Key]]:
         if (provider := self._providers.get(tp)) is not None:
             return provider, {}
         elif (origin := get_origin(tp)) is not None and (
@@ -187,31 +174,43 @@ class Pipeline:
                 raise AmbiguousProvider("Multiple providers found for type", tp)
         raise UnsatisfiedRequirement("No provider found for type", tp)
 
-    def get(self, tp: Type[T], /) -> Delayed:
-        # We are slightly abusing Python's type system here, by using the
-        # self.get to get T, but actually it returns a Delayed that can
-        # compute T. We'd like to use Delayed[T], but that is not supported yet:
-        # https://github.com/dask/dask/pull/9256
-        #
-        # When building a workflow, there are two common problems:
-        #
-        # 1. Intermediate results are used more than once.
-        # 2. Intermediate results are large, so we generally do not want to keep them
-        #    in memory longer than necessary.
-        #
-        # To address these problems, we can internally build a graph of tasks, instead
-        # of directly creating dependencies between functions. Currently we use Dask
-        # for this. We cache call results to ensure Dask will recognize the task
-        # as the same object) and also wrap the function in dask.delayed.
-        if (cached := self._cache.get(tp)) is not None:
-            return cached
+    def build(self, tp: Type[T], /) -> Graph:
+        """
+        Return a dict of providers required for building the requested type `tp`.
 
+        The values are tuples containing the provider, the dict of bound typevars,
+        and the dict of arguments for the provider. The values in the latter dict
+        reference other keys in the returned graph.
+
+        Parameters
+        ----------
+        tp:
+            Type to build the graph for.
+        """
+        provider: Callable[..., T]
         provider, bound = self._get_provider(tp)
-        args = self._get_args(provider, bound=bound)
-        delayed = dask.delayed(provider)  # type: ignore[attr-defined]
-        return self._cache.setdefault(tp, delayed(**args))
+        tps = get_type_hints(provider)
+        args = {
+            name: _bind_free_typevars(t, bound=bound)
+            for name, t in tps.items()
+            if name != 'return'
+        }
+        graph: Graph = {tp: (provider, bound, args)}
+        try:
+            for arg in args.values():
+                graph.update(self.build(arg))
+        except RecursionError:
+            raise CycleError("Cycle detected while building graph for", tp)
+        return graph
 
-    def compute(self, tp: Type[T], /) -> T:
-        task = self.get(tp)
-        result: T = task.compute()  # type: ignore[no-untyped-call]
+    def compute(self, tp: Type[T]) -> T:
+        import dask
+
+        dsk = as_dask_graph(self.build(tp))
+        result: T = dask.get(dsk, tp)
         return result
+
+
+def as_dask_graph(graph: Graph) -> Dict[type, Tuple[Provider, ...]]:
+    # Note: Only works if all providers support posargs
+    return {tp: (provider, *args.values()) for tp, (provider, _, args) in graph.items()}

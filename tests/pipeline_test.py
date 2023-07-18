@@ -1,12 +1,14 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright (c) 2023 Scipp contributors (https://github.com/scipp)
 from dataclasses import dataclass
+from graphlib import CycleError
 from typing import Generic, List, NewType, TypeVar
 
 import dask
 import pytest
 
 import sciline as sl
+from sciline.pipeline import as_dask_graph
 
 # We use dask with a single thread, to ensure that call counting below is correct.
 dask.config.set(scheduler='synchronous')
@@ -49,14 +51,13 @@ def test_intermediate_computed_once() -> None:
     assert ncall == 1
 
 
-def test_get_returns_task_that_computes_result() -> None:
+def test_build_returns_graph_that_can_be_used_to_compute_result() -> None:
     pipeline = sl.Pipeline([int_to_float, make_int])
-    task = pipeline.get(float)
-    assert hasattr(task, 'compute')
-    assert task.compute() == 1.5  # type: ignore[no-untyped-call]
+    graph = pipeline.build(float)
+    assert dask.get(as_dask_graph(graph), float) == 1.5  # type: ignore[no-untyped-call]
 
 
-def test_multiple_get_calls_can_be_computed_without_repeated_calls() -> None:
+def test_multiple_keys_can_be_computed_without_repeated_calls() -> None:
     ncall = 0
 
     def provide_int() -> int:
@@ -65,9 +66,8 @@ def test_multiple_get_calls_can_be_computed_without_repeated_calls() -> None:
         return 3
 
     pipeline = sl.Pipeline([int_to_float, provide_int, int_float_to_str])
-    task1 = pipeline.get(float)
-    task2 = pipeline.get(str)
-    assert dask.compute(task1, task2) == (1.5, '3;1.5')  # type: ignore[attr-defined]
+    dsk = as_dask_graph(pipeline.build(str))
+    assert dask.get(dsk, [float, str]) == (1.5, '3;1.5')  # type: ignore[attr-defined]
     assert ncall == 1
 
 
@@ -106,8 +106,7 @@ def test_make_pipeline_with_subgraph_template() -> None:
     pipeline = sl.Pipeline(
         [provide_int, float1, float2, use_strings, int_float_to_str],
     )
-    task = pipeline.get(Result)
-    assert task.compute() == "3;1.5;3;2.5"  # type: ignore[no-untyped-call]
+    assert pipeline.compute(Result) == "3;1.5;3;2.5"  # type: ignore[no-untyped-call]
     assert ncall == 1
 
 
@@ -483,3 +482,50 @@ def test_init_with_providers_and_params() -> None:
 
     pl = sl.Pipeline(providers=[func], params={int: 1, float: 2.0})
     assert pl.compute(str) == "1 2.0"
+
+
+def test_can_create_graphs_compatible_with_dask_get() -> None:
+    ncall = 0
+
+    def provide_int() -> int:
+        nonlocal ncall
+        ncall += 1
+        return 3
+
+    pipeline = sl.Pipeline([int_to_float, provide_int])
+    graph = pipeline.build(float)
+    dsk = as_dask_graph(graph)
+
+    assert dask.get(dsk, [float, int]) == (1.5, 3)
+    assert ncall == 1
+
+
+def test_can_merge_graphs_resulting_in_graph_compatible_with_dask_get() -> None:
+    ncall = 0
+
+    def provide_int() -> int:
+        nonlocal ncall
+        ncall += 1
+        return 3
+
+    pipeline = sl.Pipeline([int_to_float, provide_int, int_float_to_str])
+    graph1 = pipeline.build(float)
+    graph2 = pipeline.build(str)
+    graph = {**graph1, **graph2}
+
+    dsk = as_dask_graph(graph)
+
+    assert dask.get(dsk, [float, str]) == (1.5, '3;1.5')
+    assert ncall == 1
+
+
+def test_building_graph_with_loop_raises_CycleError() -> None:
+    def f(x: int) -> float:
+        return float(x)
+
+    def g(x: float) -> int:
+        return int(x)
+
+    pipeline = sl.Pipeline([f, g])
+    with pytest.raises(CycleError):
+        pipeline.build(int)
