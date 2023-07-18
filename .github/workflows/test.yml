@@ -41,7 +41,6 @@ on:
 
 jobs:
   test:
-    name: tests ${{ inputs.os-variant }}, py${{ inputs.python-version }}
     runs-on: ${{ inputs.os-variant }}
 
     steps:
@@ -57,3 +56,4 @@ jobs:
         with:
           name: CoverageReport
           path: coverage_html/
+
