@@ -9,7 +9,7 @@ build-backend = "setuptools.build_meta"
 name = "sciline"
 description = "Build scientific pipelines for your data"
 authors= [{name="Scipp contributors"}]
-license = { "file" = "LICENSE" }
+license = { file = "LICENSE" }
 readme = "README.md"
 classifiers = [
     "Intended Audience :: Science/Research",
@@ -57,5 +57,12 @@ skip_gitignore = true
 profile = "black"
 
 [tool.mypy]
-mypy_path = "src"
+strict = true
 ignore_missing_imports = true
+enable_error_code = [
+    "ignore-without-code",
+    "redundant-expr",
+    "truthy-bool",
+]
+show_error_codes = true
+warn_unreachable = true
