@@ -11,8 +11,6 @@ requirements:
     - setuptools
     - setuptools_scm
   run:
-    - dask
-    - injector
     - python>=3.8
 
 test:

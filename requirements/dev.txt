@@ -23,6 +23,10 @@ async-lru==2.0.3
     # via jupyterlab
 cffi==1.15.1
     # via argon2-cffi-bindings
+click==8.1.5
+    # via
+    #   pip-compile-multi
+    #   pip-tools
 fqdn==1.5.1
     # via jsonschema
 isoduration==20.11.0
@@ -31,7 +35,7 @@ json5==0.9.14
     # via jupyterlab-server
 jsonpointer==2.4
     # via jsonschema
-jsonschema[format-nongpl]==4.18.0
+jsonschema[format-nongpl]==4.18.3
     # via
     #   jupyter-events
     #   jupyterlab-server
@@ -48,7 +52,7 @@ jupyter-server==2.7.0
     #   notebook-shim
 jupyter-server-terminals==0.4.4
     # via jupyter-server
-jupyterlab==4.0.2
+jupyterlab==4.0.3
     # via -r dev.in
 jupyterlab-server==2.23.0
     # via jupyterlab
@@ -58,7 +62,7 @@ overrides==7.3.1
     # via jupyter-server
 pip-compile-multi==2.6.3
     # via -r dev.in
-pip-tools==6.14.0
+pip-tools==7.0.0
     # via pip-compile-multi
 prometheus-client==0.17.1
     # via jupyter-server

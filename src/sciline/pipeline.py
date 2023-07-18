@@ -18,7 +18,7 @@ from typing import (
     overload,
 )
 
-from .scheduler import DaskScheduler, Scheduler
+from .scheduler import DaskScheduler, NaiveScheduler, Scheduler
 
 T = TypeVar('T')
 
@@ -239,6 +239,11 @@ class TaskGraph:
     ) -> None:
         self._graph = graph
         self._keys = keys
+        if scheduler is None:
+            try:
+                scheduler = DaskScheduler()
+            except ImportError:
+                scheduler = NaiveScheduler()
         self._scheduler = scheduler or DaskScheduler()
 
     def compute(self, keys: Optional[type | Tuple[type, ...]] = None) -> Any:

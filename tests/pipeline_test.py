@@ -4,13 +4,9 @@ from dataclasses import dataclass
 from graphlib import CycleError
 from typing import Generic, List, NewType, TypeVar
 
-import dask
 import pytest
 
 import sciline as sl
-
-# We use dask with a single thread, to ensure that call counting below is correct.
-dask.config.set(scheduler='synchronous')
 
 
 def int_to_float(x: int) -> float:
