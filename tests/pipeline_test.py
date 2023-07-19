@@ -94,8 +94,8 @@ def test_generic_providers_produce_use_dependencies_based_on_bound_typevar() -> 
         return f"{x};{y}"
 
     pipeline = sl.Pipeline([make_int, make_float, combine, parametrized])
-    assert pipeline.compute(Str[int]) == '3'
-    assert pipeline.compute(Str[float]) == '1.5'
+    assert pipeline.compute(Str[int]) == Str[int]('3')
+    assert pipeline.compute(Str[float]) == Str[float]('1.5')
     assert pipeline.compute(str) == '3;1.5'
 
 

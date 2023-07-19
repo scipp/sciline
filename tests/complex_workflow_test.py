@@ -25,7 +25,8 @@ SolidAngle = NewType('SolidAngle', npt.NDArray[np.float64])
 Run = TypeVar('Run')
 
 
-class Raw(sl.Scope[Run, RawData]):
+# TODO Giving the base twice works with mypy, how can we avoid typing it twice?
+class Raw(sl.Scope[Run, RawData], RawData):
     ...
 
 
