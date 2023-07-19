@@ -1,5 +1,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright (c) 2023 Scipp contributors (https://github.com/scipp)
+from __future__ import annotations
+
 from typing import Any, Optional, Tuple, Union
 
 from sciline.scheduler import DaskScheduler, Graph, NaiveScheduler, Scheduler
@@ -38,3 +40,8 @@ class TaskGraph:
             return self._scheduler.get(self._graph, list(keys))
         else:
             return self._scheduler.get(self._graph, [keys])[0]
+
+    def visualize(self) -> graphviz.Digraph:  # noqa: F821
+        from .visualize import to_graphviz
+
+        return to_graphviz(self._graph)

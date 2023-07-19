@@ -219,6 +219,9 @@ class Pipeline:
     def compute(self, tp: type | Tuple[type, ...]) -> Any:
         return self.get(tp).compute()
 
+    def visualize(self, tp: type | Tuple[type, ...]) -> graphviz.Digraph:  # noqa: F821
+        return self.get(tp).visualize()
+
     def get(
         self, keys: type | Tuple[type, ...], *, scheduler: Optional[Scheduler] = None
     ) -> TaskGraph:
