@@ -18,11 +18,14 @@ def to_graphviz(graph: Graph) -> Digraph:
     """
     dot = Digraph(strict=True)
     for p, (p_name, args, ret) in _format_graph(graph).items():
+        dot.node(ret, ret, shape='rectangle')
+        # Do not draw dummy providers created by Pipeline when setting instances
+        if p_name == 'Pipeline.__setitem__.<locals>.<lambda>':
+            continue
         dot.node(p, p_name, shape='ellipse')
         for arg in args:
             dot.node(arg, arg, shape='rectangle')
             dot.edge(arg, p)
-        dot.node(ret, ret, shape='rectangle')
         dot.edge(p, ret)
     return dot
 
