@@ -70,7 +70,7 @@ class DaskScheduler:
         if scheduler is None:
             import dask
 
-            self._dask_get = dask.threaded.get  # type: ignore[attr-defined]
+            self._dask_get = dask.threaded.get
         else:
             self._dask_get = scheduler
 

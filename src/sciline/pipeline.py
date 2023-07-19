@@ -125,9 +125,16 @@ class Pipeline:
         # TODO Switch to isinstance(key, NewType) once our minimum is Python 3.10
         # Note that we cannot pass mypy in Python<3.10 since NewType is not a type.
         if hasattr(key, '__supertype__'):
-            expected = key.__supertype__  # type: ignore[attr-defined]
-        elif (origin := get_origin(key)) is None:
-            expected = key
+            underlying = key.__supertype__  # type: ignore[attr-defined]
+        else:
+            underlying = key
+        if (origin := get_origin(underlying)) is None:
+            # In Python 3.8, get_origin does not work with numpy.typing.NDArray,
+            # but it defines __origin__
+            if (np_origin := getattr(underlying, '__origin__', None)) is not None:
+                expected = np_origin
+            else:
+                expected = underlying
         else:
             # TODO This is probably quite brittle, maybe we can find a better way?
             expected = origin.__bases__[1] if issubclass(origin, Scope) else origin
@@ -233,7 +240,7 @@ class Pipeline:
 
     def visualize(
         self, tp: type | Tuple[type, ...], **kwargs: Any
-    ) -> graphviz.Digraph:  # noqa: F821
+    ) -> graphviz.Digraph:  # type: ignore[name-defined] # noqa: F821
         """
         Return a graphviz Digraph object representing the graph for the given keys.
 
