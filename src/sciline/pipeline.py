@@ -2,7 +2,6 @@
 # Copyright (c) 2023 Scipp contributors (https://github.com/scipp)
 from __future__ import annotations
 
-from graphlib import CycleError
 from typing import (
     Any,
     Callable,
@@ -191,20 +190,22 @@ class Pipeline:
         tp:
             Type to build the graph for.
         """
-        provider: Callable[..., T]
-        provider, bound = self._get_provider(tp)
-        tps = get_type_hints(provider)
-        args = {
-            name: _bind_free_typevars(t, bound=bound)
-            for name, t in tps.items()
-            if name != 'return'
-        }
-        graph: Graph = {tp: (provider, args)}
-        try:
+        graph: Graph = {}
+        stack: List[Tuple[Type[T], Dict[TypeVar, Key]]] = [(tp, {})]
+        while stack:
+            tp, bound = stack.pop()
+            provider: Callable[..., T]
+            provider, bound = self._get_provider(tp)
+            tps = get_type_hints(provider)
+            args = {
+                name: _bind_free_typevars(t, bound=bound)
+                for name, t in tps.items()
+                if name != 'return'
+            }
+            graph[tp] = (provider, args)
             for arg in args.values():
-                graph.update(self.build(arg))
-        except RecursionError:
-            raise CycleError("Cycle detected while building graph for", tp)
+                if arg not in graph:
+                    stack.append((arg, bound))
         return graph
 
     @overload
