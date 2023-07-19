@@ -136,8 +136,11 @@ class Pipeline:
             else:
                 expected = underlying
         else:
-            # TODO This is probably quite brittle, maybe we can find a better way?
-            expected = origin.__bases__[1] if issubclass(origin, Scope) else origin
+            expected = (
+                get_args(origin.__orig_bases__[0])[1]
+                if issubclass(origin, Scope)
+                else origin
+            )
 
         if not isinstance(param, expected):
             raise TypeError(
