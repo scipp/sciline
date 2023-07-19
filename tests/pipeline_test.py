@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright (c) 2023 Scipp contributors (https://github.com/scipp)
 from dataclasses import dataclass
+from graphlib import CycleError
 from typing import Generic, List, NewType, TypeVar
 
 import pytest
@@ -491,7 +492,7 @@ def test_init_with_sciline_Scope_subclass_param_works() -> None:
     assert pl.compute(A[str]) == A(2)
 
 
-def test_building_graph_with_loop_succeeds() -> None:
+def test_building_graph_with_cycle_succeeds() -> None:
     def f(x: int) -> float:
         return float(x)
 
@@ -502,7 +503,7 @@ def test_building_graph_with_loop_succeeds() -> None:
     _ = pipeline.build(int)
 
 
-def test_computing_graph_with_loop_raises_RuntimeError() -> None:
+def test_computing_graph_with_cycle_raises_RuntimeError() -> None:
     def f(x: int) -> float:
         return float(x)
 
@@ -510,7 +511,8 @@ def test_computing_graph_with_loop_raises_RuntimeError() -> None:
         return int(x)
 
     pipeline = sl.Pipeline([f, g])
-    with pytest.raises(RuntimeError):
+    # graphlic.TopologicalSorter raises CycleError, dask raises RuntimeError
+    with pytest.raises((CycleError, RuntimeError)):
         pipeline.compute(int)
 
 
