@@ -190,9 +190,9 @@ class Pipeline:
 
         This is mainly for internal and low-level use. Prefer using :py:meth:`get`.
 
-        The values are tuples containing the provider, the dict of bound typevars,
-        and the dict of arguments for the provider. The values in the latter dict
-        reference other keys in the returned graph.
+        The values are tuples containing the provider and the dict of arguments for
+        the provider. The values in the latter dict reference other keys in the returned
+        graph.
 
         Parameters
         ----------
