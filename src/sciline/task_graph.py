@@ -49,10 +49,15 @@ class TaskGraph:
         else:
             return self._scheduler.get(self._graph, [keys])[0]
 
-    def visualize(self) -> graphviz.Digraph:  # noqa: F821
+    def visualize(self, **kwargs: Any) -> graphviz.Digraph:  # noqa: F821
         """
         Return a graphviz Digraph object representing the graph.
+
+        Parameters
+        ----------
+        kwargs:
+            Keyword arguments passed to :py:class:`graphviz.Digraph`.
         """
         from .visualize import to_graphviz
 
-        return to_graphviz(self._graph)
+        return to_graphviz(self._graph, **kwargs)

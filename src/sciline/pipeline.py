@@ -231,7 +231,9 @@ class Pipeline:
         """
         return self.get(tp).compute()
 
-    def visualize(self, tp: type | Tuple[type, ...]) -> graphviz.Digraph:  # noqa: F821
+    def visualize(
+        self, tp: type | Tuple[type, ...], **kwargs: Any
+    ) -> graphviz.Digraph:  # noqa: F821
         """
         Return a graphviz Digraph object representing the graph for the given keys.
 
@@ -241,8 +243,10 @@ class Pipeline:
         ----------
         tp:
             Type to visualize the graph for. Can be a single type or a tuple of types.
+        kwargs:
+            Keyword arguments passed to :py:class:`graphviz.Digraph`.
         """
-        return self.get(tp).visualize()
+        return self.get(tp).visualize(**kwargs)
 
     def get(
         self, keys: type | Tuple[type, ...], *, scheduler: Optional[Scheduler] = None
