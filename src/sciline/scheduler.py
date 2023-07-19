@@ -39,7 +39,8 @@ class NaiveScheduler:
         dependencies = {tp: set(args.values()) for tp, (_, args) in graph.items()}
         ts = graphlib.TopologicalSorter(dependencies)
         try:
-            tasks = ts.static_order()
+            # Create list from generator to force early exception if there is a cycle
+            tasks = list(ts.static_order())
         except graphlib.CycleError as e:
             raise CycleError from e
         results: Dict[type, Any] = {}
