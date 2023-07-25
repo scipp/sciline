@@ -181,6 +181,8 @@ class Pipeline:
         """
         Return a dict of providers required for building the requested type `tp`.
 
+        This is mainly for internal and low-level use. Prefer using :py:meth:`get`.
+
         The values are tuples containing the provider, the dict of bound typevars,
         and the dict of arguments for the provider. The values in the latter dict
         reference other keys in the returned graph.
@@ -217,11 +219,50 @@ class Pipeline:
         ...
 
     def compute(self, tp: type | Tuple[type, ...]) -> Any:
+        """
+        Compute result for the given keys.
+
+        Equivalent to ``self.get(tp).compute()``.
+
+        Parameters
+        ----------
+        tp:
+            Type to compute the result for. Can be a single type or a tuple of types.
+        """
         return self.get(tp).compute()
+
+    def visualize(
+        self, tp: type | Tuple[type, ...], **kwargs: Any
+    ) -> graphviz.Digraph:  # noqa: F821
+        """
+        Return a graphviz Digraph object representing the graph for the given keys.
+
+        Equivalent to ``self.get(tp).visualize()``.
+
+        Parameters
+        ----------
+        tp:
+            Type to visualize the graph for. Can be a single type or a tuple of types.
+        kwargs:
+            Keyword arguments passed to :py:class:`graphviz.Digraph`.
+        """
+        return self.get(tp).visualize(**kwargs)
 
     def get(
         self, keys: type | Tuple[type, ...], *, scheduler: Optional[Scheduler] = None
     ) -> TaskGraph:
+        """
+        Return a TaskGraph for the given keys.
+
+        Parameters
+        ----------
+        keys:
+            Type to compute the result for. Can be a single type or a tuple of types.
+        scheduler:
+            Optional scheduler to use for computing the result. If not given, a
+            :py:class:`NaiveScheduler` is used if `dask` is not installed,
+            otherwise dask's threaded scheduler is used.
+        """
         if isinstance(keys, tuple):
             graph: Graph = {}
             for t in keys:

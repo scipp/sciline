@@ -14,6 +14,10 @@ class CycleError(Exception):
 
 
 class Scheduler(Protocol):
+    """
+    Scheduler interface compatible with :py:class:`sciline.Pipeline`.
+    """
+
     def get(self, graph: Graph, keys: List[type]) -> Any:
         """
         Compute the result for given keys from the graph.

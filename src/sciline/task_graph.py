@@ -1,11 +1,20 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright (c) 2023 Scipp contributors (https://github.com/scipp)
+from __future__ import annotations
+
 from typing import Any, Optional, Tuple, Union
 
 from sciline.scheduler import DaskScheduler, Graph, NaiveScheduler, Scheduler
 
 
 class TaskGraph:
+    """
+    Holds a concrete task graph and keys to compute.
+
+    Task graphs are typically created by :py:class:`sciline.Pipeline.build`. They allow
+    for computing all or a subset of the results in the graph.
+    """
+
     def __init__(
         self,
         *,
@@ -25,6 +34,7 @@ class TaskGraph:
     def compute(self, keys: Optional[Union[type, Tuple[type, ...]]] = None) -> Any:
         """
         Compute the result of the graph.
+
         Parameters
         ----------
         keys:
@@ -38,3 +48,16 @@ class TaskGraph:
             return self._scheduler.get(self._graph, list(keys))
         else:
             return self._scheduler.get(self._graph, [keys])[0]
+
+    def visualize(self, **kwargs: Any) -> graphviz.Digraph:  # noqa: F821
+        """
+        Return a graphviz Digraph object representing the graph.
+
+        Parameters
+        ----------
+        kwargs:
+            Keyword arguments passed to :py:class:`graphviz.Digraph`.
+        """
+        from .visualize import to_graphviz
+
+        return to_graphviz(self._graph, **kwargs)

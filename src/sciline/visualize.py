@@ -7,7 +7,7 @@ from graphviz import Digraph
 from .pipeline import Graph
 
 
-def to_graphviz(graph: Graph) -> Digraph:
+def to_graphviz(graph: Graph, **kwargs: Any) -> Digraph:
     """
     Convert output of :py:class:`sciline.Pipeline.get_graph` to a graphviz graph.
 
@@ -15,14 +15,19 @@ def to_graphviz(graph: Graph) -> Digraph:
     ----------
     graph:
         Output of :py:class:`sciline.Pipeline.get_graph`.
+    kwargs:
+        Keyword arguments passed to :py:class:`graphviz.Digraph`.
     """
-    dot = Digraph(strict=True)
+    dot = Digraph(strict=True, **kwargs)
     for p, (p_name, args, ret) in _format_graph(graph).items():
+        dot.node(ret, ret, shape='rectangle')
+        # Do not draw dummy providers created by Pipeline when setting instances
+        if p_name == 'Pipeline.__setitem__.<locals>.<lambda>':
+            continue
         dot.node(p, p_name, shape='ellipse')
         for arg in args:
             dot.node(arg, arg, shape='rectangle')
             dot.edge(arg, p)
-        dot.node(ret, ret, shape='rectangle')
         dot.edge(p, ret)
     return dot
 
