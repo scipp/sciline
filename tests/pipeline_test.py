@@ -153,20 +153,30 @@ def test_subclasses_of_generic_provider_defined_with_Scope_work() -> None:
     class Str3(StrT[Param]):
         ...
 
+    class Str4(Str3[Param]):
+        ...
+
     def make_str1() -> Str1[Param]:
         return Str1('1')
 
     def make_str2() -> Str2[Param]:
         return Str2('2')
 
+    # Note that mypy cannot detect if when setting params, the type of the
+    # parameter does not match the key. Same problem as with NewType.
     pipeline = sl.Pipeline(
         [make_str1, make_str2],
-        params={Str3[int]: Str3[int]('int3'), Str3[float]: Str3[float]('float3')},
+        params={
+            Str3[int]: Str3[int]('int3'),
+            Str3[float]: Str3[float]('float3'),
+            Str4[int]: Str2[int]('int4'),
+        },
     )
     assert pipeline.compute(Str1[float]) == Str1[float]('1')
     assert pipeline.compute(Str2[float]) == Str2[float]('2')
     assert pipeline.compute(Str3[int]) == Str3[int]('int3')
     assert pipeline.compute(Str3[float]) == Str3[float]('float3')
+    assert pipeline.compute(Str4[int]) == Str4[int]('int4')
 
 
 def test_inserting_provider_returning_None_raises() -> None:
