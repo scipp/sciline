@@ -126,7 +126,7 @@ html_theme_options = {
     "pygment_dark_style": "github-dark-high-contrast",
     "logo": {
         "image_light": "_static/logo.svg",
-        "image_dark": "_static/logo-dark.svg",
+        "image_dark": "_static/logo.svg",
     },
     "external_links": [],
     "icon_links": [
