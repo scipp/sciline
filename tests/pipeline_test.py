@@ -1,7 +1,6 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright (c) 2023 Scipp contributors (https://github.com/scipp)
 from dataclasses import dataclass
-from graphlib import CycleError
 from typing import Generic, List, NewType, TypeVar
 
 import pytest
@@ -493,7 +492,7 @@ def test_init_with_sciline_Scope_subclass_param_works() -> None:
     assert pl.compute(A[str]) == A(2)
 
 
-def test_building_graph_with_loop_raises_CycleError() -> None:
+def test_building_graph_with_cycle_succeeds() -> None:
     def f(x: int) -> float:
         return float(x)
 
@@ -501,8 +500,19 @@ def test_building_graph_with_loop_raises_CycleError() -> None:
         return int(x)
 
     pipeline = sl.Pipeline([f, g])
-    with pytest.raises(CycleError):
-        pipeline.build(int)
+    _ = pipeline.build(int)
+
+
+def test_computing_graph_with_cycle_raises_CycleError() -> None:
+    def f(x: int) -> float:
+        return float(x)
+
+    def g(x: float) -> int:
+        return int(x)
+
+    pipeline = sl.Pipeline([f, g])
+    with pytest.raises(sl.scheduler.CycleError):
+        pipeline.compute(int)
 
 
 def test_get_with_single_key_return_task_graph_that_computes_value() -> None:
