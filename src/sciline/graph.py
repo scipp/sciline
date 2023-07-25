@@ -1,16 +1,6 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright (c) 2023 Scipp contributors (https://github.com/scipp)
-from typing import (
-    Any,
-    Callable,
-    Dict,
-    List,
-    NewType,
-    Tuple,
-    TypeVar,
-    get_args,
-    get_origin,
-)
+from typing import Any, Callable, Dict, List, Tuple, get_args, get_origin
 
 from graphviz import Digraph
 
@@ -27,8 +17,8 @@ def to_graphviz(graph: Graph) -> Digraph:
         Output of :py:class:`sciline.Pipeline.get_graph`.
     """
     dot = Digraph(strict=True)
-    for p, (args, ret) in _format_graph(graph).items():
-        dot.node(p, p, shape='ellipse')
+    for p, (p_name, args, ret) in _format_graph(graph).items():
+        dot.node(p, p_name, shape='ellipse')
         for arg in args:
             dot.node(arg, arg, shape='rectangle')
             dot.edge(arg, p)
@@ -37,24 +27,22 @@ def to_graphviz(graph: Graph) -> Digraph:
     return dot
 
 
-def _format_graph(graph: Graph) -> Dict[str, Tuple[List[str], str]]:
+def _format_graph(graph: Graph) -> Dict[str, Tuple[str, List[str], str]]:
     return {
-        _format_provider(provider, bound=bound): (
+        _format_provider(provider, ret): (
+            provider.__qualname__,
             [_format_type(a) for a in args.values()],
             _format_type(ret),
         )
-        for ret, (provider, bound, args) in graph.items()
+        for ret, (provider, args) in graph.items()
     }
 
 
-def _format_provider(provider: Callable[..., Any], bound: Dict[TypeVar, type]) -> str:
-    s = provider.__qualname__
-    if bound:
-        s += f'[{",".join([_format_type(b) for b in bound.values()])}]'
-    return s
+def _format_provider(provider: Callable[..., Any], ret: type) -> str:
+    return f'{provider.__qualname__}_{_format_type(ret)}'
 
 
-def _format_type(tp: type | NewType) -> str:
+def _format_type(tp: type) -> str:
     """
     Helper for _format_graph.
 

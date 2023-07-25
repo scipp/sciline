@@ -15,7 +15,10 @@ from typing import (
     get_args,
     get_origin,
     get_type_hints,
+    overload,
 )
+
+from .scheduler import DaskScheduler, Scheduler
 
 T = TypeVar('T')
 
@@ -36,7 +39,7 @@ Provider = Callable[..., Any]
 Key = type
 Graph = Dict[
     Key,
-    Tuple[Callable[..., Any], Dict[TypeVar, type], Dict[str, Key]],
+    Tuple[Callable[..., Any], Dict[str, Key]],
 ]
 
 
@@ -124,7 +127,7 @@ class Pipeline:
         # TODO Switch to isinstance(key, NewType) once our minimum is Python 3.10
         # Note that we cannot pass mypy in Python<3.10 since NewType is not a type.
         if hasattr(key, '__supertype__'):
-            expected = key.__supertype__
+            expected = key.__supertype__  # type: ignore[attr-defined]
         elif (origin := get_origin(key)) is None:
             expected = key
         else:
@@ -195,7 +198,7 @@ class Pipeline:
             for name, t in tps.items()
             if name != 'return'
         }
-        graph: Graph = {tp: (provider, bound, args)}
+        graph: Graph = {tp: (provider, args)}
         try:
             for arg in args.values():
                 graph.update(self.build(arg))
@@ -203,14 +206,55 @@ class Pipeline:
             raise CycleError("Cycle detected while building graph for", tp)
         return graph
 
+    @overload
     def compute(self, tp: Type[T]) -> T:
-        import dask
+        ...
 
-        dsk = as_dask_graph(self.build(tp))
-        result: T = dask.get(dsk, tp)
-        return result
+    @overload
+    def compute(self, tp: Tuple[Type[T], ...]) -> Tuple[T, ...]:
+        ...
+
+    def compute(self, tp: type | Tuple[type, ...]) -> Any:
+        return self.get(tp).compute()
+
+    def get(
+        self, keys: type | Tuple[type, ...], *, scheduler: Optional[Scheduler] = None
+    ) -> TaskGraph:
+        if isinstance(keys, tuple):
+            graph: Graph = {}
+            for t in keys:
+                graph.update(self.build(t))
+        else:
+            graph = self.build(keys)
+        return TaskGraph(graph=graph, keys=keys, scheduler=scheduler)
 
 
-def as_dask_graph(graph: Graph) -> Dict[type, Tuple[Provider, ...]]:
-    # Note: Only works if all providers support posargs
-    return {tp: (provider, *args.values()) for tp, (provider, _, args) in graph.items()}
+class TaskGraph:
+    def __init__(
+        self,
+        *,
+        graph: Graph,
+        keys: type | Tuple[type, ...],
+        scheduler: Optional[Scheduler] = None,
+    ) -> None:
+        self._graph = graph
+        self._keys = keys
+        self._scheduler = scheduler or DaskScheduler()
+
+    def compute(self, keys: Optional[type | Tuple[type, ...]] = None) -> Any:
+        """
+        Compute the result of the graph.
+
+        Parameters
+        ----------
+        keys:
+            Optional list of keys to compute. This can be used to override the keys
+            stored in the graph instance. Note that the keys must be present in the
+            graph as intermediate results, otherwise KeyError is raised.
+        """
+        if keys is None:
+            keys = self._keys
+        if isinstance(keys, tuple):
+            return self._scheduler.get(self._graph, list(keys))
+        else:
+            return self._scheduler.get(self._graph, [keys])[0]

@@ -8,7 +8,6 @@ import dask
 import pytest
 
 import sciline as sl
-from sciline.pipeline import as_dask_graph
 
 # We use dask with a single thread, to ensure that call counting below is correct.
 dask.config.set(scheduler='synchronous')
@@ -51,12 +50,6 @@ def test_intermediate_computed_once() -> None:
     assert ncall == 1
 
 
-def test_build_returns_graph_that_can_be_used_to_compute_result() -> None:
-    pipeline = sl.Pipeline([int_to_float, make_int])
-    graph = pipeline.build(float)
-    assert dask.get(as_dask_graph(graph), float) == 1.5  # type: ignore[no-untyped-call]
-
-
 def test_multiple_keys_can_be_computed_without_repeated_calls() -> None:
     ncall = 0
 
@@ -66,9 +59,7 @@ def test_multiple_keys_can_be_computed_without_repeated_calls() -> None:
         return 3
 
     pipeline = sl.Pipeline([int_to_float, provide_int, int_float_to_str])
-    dsk = as_dask_graph(pipeline.build(str))
-    assert dask.get(dsk, [float, str]) == (1.5, '3;1.5')  # type: ignore[attr-defined]
-    assert ncall == 1
+    assert pipeline.compute((float, str)) == (1.5, "3;1.5")
 
 
 def test_make_pipeline_with_subgraph_template() -> None:
@@ -106,7 +97,7 @@ def test_make_pipeline_with_subgraph_template() -> None:
     pipeline = sl.Pipeline(
         [provide_int, float1, float2, use_strings, int_float_to_str],
     )
-    assert pipeline.compute(Result) == "3;1.5;3;2.5"  # type: ignore[no-untyped-call]
+    assert pipeline.compute(Result) == "3;1.5;3;2.5"
     assert ncall == 1
 
 
@@ -484,41 +475,6 @@ def test_init_with_providers_and_params() -> None:
     assert pl.compute(str) == "1 2.0"
 
 
-def test_can_create_graphs_compatible_with_dask_get() -> None:
-    ncall = 0
-
-    def provide_int() -> int:
-        nonlocal ncall
-        ncall += 1
-        return 3
-
-    pipeline = sl.Pipeline([int_to_float, provide_int])
-    graph = pipeline.build(float)
-    dsk = as_dask_graph(graph)
-
-    assert dask.get(dsk, [float, int]) == (1.5, 3)
-    assert ncall == 1
-
-
-def test_can_merge_graphs_resulting_in_graph_compatible_with_dask_get() -> None:
-    ncall = 0
-
-    def provide_int() -> int:
-        nonlocal ncall
-        ncall += 1
-        return 3
-
-    pipeline = sl.Pipeline([int_to_float, provide_int, int_float_to_str])
-    graph1 = pipeline.build(float)
-    graph2 = pipeline.build(str)
-    graph = {**graph1, **graph2}
-
-    dsk = as_dask_graph(graph)
-
-    assert dask.get(dsk, [float, str]) == (1.5, '3;1.5')
-    assert ncall == 1
-
-
 def test_building_graph_with_loop_raises_CycleError() -> None:
     def f(x: int) -> float:
         return float(x)
@@ -529,3 +485,42 @@ def test_building_graph_with_loop_raises_CycleError() -> None:
     pipeline = sl.Pipeline([f, g])
     with pytest.raises(CycleError):
         pipeline.build(int)
+
+
+def test_get_with_single_key_return_task_graph_that_computes_value() -> None:
+    pipeline = sl.Pipeline([int_to_float, make_int, int_float_to_str])
+    task = pipeline.get(str)
+    assert task.compute() == '3;1.5'
+
+
+def test_get_with_key_tuple_return_task_graph_that_computes_tuple_of_values() -> None:
+    pipeline = sl.Pipeline([int_to_float, make_int])
+    task = pipeline.get((float, int))
+    assert task.compute() == (1.5, 3)
+
+
+def test_task_graph_compute_can_override_single_key() -> None:
+    pipeline = sl.Pipeline([int_to_float, make_int])
+    task = pipeline.get(float)
+    assert task.compute(int) == 3
+
+
+def test_task_graph_compute_can_override_key_tuple() -> None:
+    pipeline = sl.Pipeline([int_to_float, make_int])
+    task = pipeline.get(float)
+    assert task.compute((int, float)) == (3, 1.5)
+
+
+def test_task_graph_compute_raises_if_override_keys_outside_graph() -> None:
+    pipeline = sl.Pipeline([int_to_float, make_int])
+    task = pipeline.get(int)
+    # The pipeline knows how to compute int, but the task graph does not
+    # a the task graph is fixed at this point.
+    with pytest.raises(KeyError):
+        task.compute(float)
+
+
+def test_get_with_NaiveScheduler() -> None:
+    pipeline = sl.Pipeline([int_to_float, make_int])
+    task = pipeline.get(float, scheduler=sl.scheduler.NaiveScheduler())
+    assert task.compute() == 1.5
