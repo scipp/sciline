@@ -3,14 +3,10 @@
 from dataclasses import dataclass
 from typing import NewType, TypeVar
 
-import dask
 import numpy as np
 import numpy.typing as npt
 
 import sciline as sl
-
-# We use dask with a single thread, to ensure that call counting below is correct.
-dask.config.set(scheduler='synchronous')
 
 
 @dataclass

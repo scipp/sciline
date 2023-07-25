@@ -27,7 +27,7 @@ classifiers = [
 ]
 requires-python = ">=3.8"
 dependencies = [
-  "dask",
+  "graphlib-backport",
 ]
 dynamic = ["version"]
 

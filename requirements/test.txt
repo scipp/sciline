@@ -12,6 +12,8 @@ iniconfig==2.0.0
     # via pytest
 numpy==1.24.4
     # via -r test.in
+packaging==23.1
+    # via pytest
 pluggy==1.2.0
     # via pytest
 pytest==7.4.0

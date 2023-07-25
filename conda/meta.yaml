@@ -11,8 +11,7 @@ requirements:
     - setuptools
     - setuptools_scm
   run:
-    - dask
-    - injector
+    - graphlib-backport
     - python>=3.8
 
 test:

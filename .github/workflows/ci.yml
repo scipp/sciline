@@ -29,17 +29,16 @@ jobs:
     needs: formatting
     strategy:
       matrix:
-
         os: ['ubuntu-20.04']
-        python:
-          - version: '3.8'
-            tox-env: 'py38'
+        tox-env: [py38, dask]
+        include:
+          - python-version: '3.8'
 
     uses: ./.github/workflows/test.yml
     with:
       os-variant: ${{ matrix.os }}
-      python-version: ${{ matrix.python.version }}
-      tox-env: ${{ matrix.python.tox-env }}
+      python-version: ${{ matrix.python-version }}
+      tox-env: ${{ matrix.tox-env }}
 
   docs:
     needs: tests
