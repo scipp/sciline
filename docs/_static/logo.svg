@@ -2,9 +2,9 @@
 <!-- Created with Inkscape (http://www.inkscape.org/) -->
 
 <svg
-   width="146.95078mm"
-   height="42.177414mm"
-   viewBox="0 0 146.95078 42.177414"
+   width="164.78963mm"
+   height="42.177418mm"
+   viewBox="0 0 164.78963 42.177418"
    version="1.1"
    id="svg8"
    inkscape:version="1.1.2 (0a00cf5339, 2022-02-04)"
@@ -555,15 +555,19 @@
      inkscape:bbox-nodes="true"
      inkscape:snap-intersection-paths="true"
      inkscape:object-paths="true"
-     inkscape:snap-bbox-edge-midpoints="true">
+     inkscape:snap-bbox-edge-midpoints="true"
+     fit-margin-top="0"
+     fit-margin-left="0"
+     fit-margin-right="0"
+     fit-margin-bottom="0">
     <inkscape:grid
        type="axonomgrid"
        id="grid815"
        units="mm"
        empspacing="12"
        spacingy="1"
-       originx="-25.582033"
-       originy="-19.098809" />
+       originx="-25.582032"
+       originy="-19.09881" />
     <sodipodi:guide
        position="1082.9305,-1531.4681"
        orientation="0,1"
@@ -585,11 +589,11 @@
        id="guide37695"
        inkscape:locked="false" />
     <sodipodi:guide
-       position="-13.457676,10.276234"
+       position="-13.457676,10.276238"
        orientation="0,-1"
        id="guide894" />
     <sodipodi:guide
-       position="9.9250101,31.776234"
+       position="9.92501,31.776238"
        orientation="0,-1"
        id="guide896" />
   </sodipodi:namedview>
