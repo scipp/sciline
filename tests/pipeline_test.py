@@ -58,6 +58,7 @@ def test_multiple_keys_can_be_computed_without_repeated_calls() -> None:
 
     pipeline = sl.Pipeline([int_to_float, provide_int, int_float_to_str])
     assert pipeline.compute((float, str)) == (1.5, "3;1.5")
+    assert ncall == 1
 
 
 def test_multiple_keys_not_in_same_path_use_same_intermediate() -> None:
