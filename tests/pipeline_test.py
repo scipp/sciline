@@ -3,6 +3,8 @@
 from dataclasses import dataclass
 from typing import Generic, List, NewType, TypeVar
 
+import numpy as np
+import numpy.typing as npt
 import pytest
 
 import sciline as sl
@@ -177,6 +179,30 @@ def test_subclasses_of_generic_provider_defined_with_Scope_work() -> None:
     assert pipeline.compute(Str3[int]) == Str3[int]('int3')
     assert pipeline.compute(Str3[float]) == Str3[float]('float3')
     assert pipeline.compute(Str4[int]) == Str4[int]('int4')
+
+
+def test_subclasses_of_generic_array_provider_defined_with_Scope_work() -> None:
+    Param = TypeVar('Param')
+
+    class ArrayT(sl.Scope[Param, npt.NDArray[np.int64]], npt.NDArray[np.int64]):
+        ...
+
+    class Array1(ArrayT[Param]):
+        ...
+
+    class Array2(ArrayT[Param]):
+        ...
+
+    def make_array1() -> Array1[Param]:
+        return Array1(np.array([1, 2, 3]))
+
+    def make_array2() -> Array2[Param]:
+        return Array2(np.array([4, 5, 6]))
+
+    pipeline = sl.Pipeline([make_array1, make_array2])
+    # Note that the param is not the dtype
+    assert np.all(pipeline.compute(Array1[str]) == np.array([1, 2, 3]))
+    assert np.all(pipeline.compute(Array2[str]) == np.array([4, 5, 6]))
 
 
 def test_inserting_provider_returning_None_raises() -> None:
