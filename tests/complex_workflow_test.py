@@ -11,16 +11,16 @@ import sciline as sl
 
 @dataclass
 class RawData:
-    data: np.ndarray
+    data: npt.NDArray[np.float64]
     monitor1: float
     monitor2: float
 
 
 SampleRun = NewType('SampleRun', int)
 BackgroundRun = NewType('BackgroundRun', int)
-DetectorMask = NewType('DetectorMask', np.ndarray)
-DirectBeam = NewType('DirectBeam', np.ndarray)
-SolidAngle = NewType('SolidAngle', np.ndarray)
+DetectorMask = NewType('DetectorMask', npt.NDArray[np.int64])
+DirectBeam = NewType('DirectBeam', npt.NDArray[np.float64])
+SolidAngle = NewType('SolidAngle', npt.NDArray[np.float64])
 
 Run = TypeVar('Run')
 
@@ -29,7 +29,7 @@ class Raw(sl.Scope[Run], RawData):
     ...
 
 
-class Masked(sl.Scope[Run], np.ndarray):
+class Masked(sl.Scope[Run], npt.NDArray[np.float64]):
     ...
 
 
@@ -98,7 +98,7 @@ def subtract_background(
 def test_reduction_workflow() -> None:
     # See https://github.com/python/mypy/issues/14661
     pipeline = sl.Pipeline(
-        [subtract_background] + reduction,  # type: ignore[arg-type]
+        [subtract_background] + reduction,  # type: ignore[operator]
         params=params,
     )
 

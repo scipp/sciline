@@ -49,7 +49,9 @@ class TaskGraph:
         else:
             return self._scheduler.get(self._graph, [keys])[0]
 
-    def visualize(self, **kwargs: Any) -> graphviz.Digraph:  # noqa: F821
+    def visualize(
+        self, **kwargs: Any
+    ) -> graphviz.Digraph:  # type: ignore[name-defined] # noqa: F821
         """
         Return a graphviz Digraph object representing the graph.
 

@@ -4,7 +4,7 @@ from typing import Any, Callable, Dict, List, Tuple, get_args, get_origin
 
 from graphviz import Digraph
 
-from .pipeline import Graph
+from .scheduler import Graph
 
 
 def to_graphviz(graph: Graph, **kwargs: Any) -> Digraph:

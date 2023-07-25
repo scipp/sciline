@@ -51,7 +51,7 @@ class NaiveScheduler:
         for t in tasks:
             provider, args = graph[t]
             args = {name: results[arg] for name, arg in args.items()}
-            results[t] = provider(*args.values())
+            results[t] = provider(**args)
         return tuple(results[key] for key in keys)
 
 
@@ -70,7 +70,7 @@ class DaskScheduler:
         if scheduler is None:
             import dask
 
-            self._dask_get = dask.threaded.get  # type: ignore[attr-defined]
+            self._dask_get = dask.threaded.get
         else:
             self._dask_get = scheduler
 

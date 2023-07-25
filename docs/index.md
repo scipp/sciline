@@ -10,5 +10,6 @@
 hidden:
 ---
 
+user-guide/index
 developer/index
 ```
