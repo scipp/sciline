@@ -135,12 +135,13 @@ class Pipeline:
                 expected = np_origin
             else:
                 expected = underlying
+        elif issubclass(origin, Scope):
+            scope = origin.__orig_bases__[0]
+            while (orig := get_origin(scope)) is not None and orig is not Scope:
+                scope = orig.__orig_bases__[0]
+            expected = get_args(scope)[1]
         else:
-            expected = (
-                get_args(origin.__orig_bases__[0])[1]
-                if issubclass(origin, Scope)
-                else origin
-            )
+            expected = origin
 
         if not isinstance(param, expected):
             raise TypeError(

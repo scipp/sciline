@@ -30,23 +30,23 @@ class Raw(sl.Scope[Run, RawData], RawData):
     ...
 
 
-class Masked(sl.Scope[Run, npt.NDArray[np.float64]]):
+class Masked(sl.Scope[Run, npt.NDArray[np.float64]], npt.NDArray[np.float64]):
     ...
 
 
-class IncidentMonitor(sl.Scope[Run, float]):
+class IncidentMonitor(sl.Scope[Run, float], float):
     ...
 
 
-class TransmissionMonitor(sl.Scope[Run, float]):
+class TransmissionMonitor(sl.Scope[Run, float], float):
     ...
 
 
-class TransmissionFraction(sl.Scope[Run, float]):
+class TransmissionFraction(sl.Scope[Run, float], float):
     ...
 
 
-class IofQ(sl.Scope[Run, npt.NDArray[np.float64]]):
+class IofQ(sl.Scope[Run, npt.NDArray[np.float64]], npt.NDArray[np.float64]):
     ...
 
 

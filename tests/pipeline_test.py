@@ -138,6 +138,37 @@ def test_can_compute_result_depending_on_two_instances_of_generic_provider() -> 
     assert ncall == 1
 
 
+def test_subclasses_of_generic_provider_defined_with_Scope_work() -> None:
+    Param = TypeVar('Param')
+
+    class StrT(sl.Scope[Param, str], str):
+        ...
+
+    class Str1(StrT[Param]):
+        ...
+
+    class Str2(StrT[Param]):
+        ...
+
+    class Str3(StrT[Param]):
+        ...
+
+    def make_str1() -> Str1[Param]:
+        return Str1('1')
+
+    def make_str2() -> Str2[Param]:
+        return Str2('2')
+
+    pipeline = sl.Pipeline(
+        [make_str1, make_str2],
+        params={Str3[int]: Str3[int]('int3'), Str3[float]: Str3[float]('float3')},
+    )
+    assert pipeline.compute(Str1[float]) == Str1[float]('1')
+    assert pipeline.compute(Str2[float]) == Str2[float]('2')
+    assert pipeline.compute(Str3[int]) == Str3[int]('int3')
+    assert pipeline.compute(Str3[float]) == Str3[float]('float3')
+
+
 def test_inserting_provider_returning_None_raises() -> None:
     def provide_none() -> None:
         return None
