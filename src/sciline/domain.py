@@ -7,5 +7,9 @@ SUPER = TypeVar("SUPER")
 
 
 class Scope(Generic[PARAM, SUPER]):
+    """
+    Helper for defining a generic type alias.
+    """
+
     def __new__(cls, x: SUPER) -> SUPER:  # type: ignore[misc]
         return x
