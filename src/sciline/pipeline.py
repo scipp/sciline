@@ -26,15 +26,17 @@ T = TypeVar('T')
 
 
 class UnsatisfiedRequirement(Exception):
-    pass
+    """Raised when a type cannot be provided."""
 
 
 class UnboundTypeVar(Exception):
-    pass
+    """
+    Raised when a parameter of a generic provider is not bound to a concrete type.
+    """
 
 
 class AmbiguousProvider(Exception):
-    pass
+    """Raised when multiple providers are found for a type."""
 
 
 Provider = Callable[..., Any]
@@ -73,6 +75,8 @@ def _bind_free_typevars(tp: TypeVar | Key, bound: Dict[TypeVar, Key]) -> Key:
 
 
 class Pipeline:
+    """A container for providers that can be assembled into a task graph."""
+
     def __init__(
         self,
         providers: Optional[List[Provider]] = None,

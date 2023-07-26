@@ -7,6 +7,10 @@ SUPER = TypeVar("SUPER")
 
 
 class Scope(Generic[PARAM, SUPER]):
+    """
+    Helper for defining a generic type alias.
+    """
+
     def __init_subclass__(cls, **kwargs: Any) -> None:
         # Mypy does not support __orig_bases__ yet(?)
         # See also https://stackoverflow.com/a/73746554 for useful info

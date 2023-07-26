@@ -56,10 +56,13 @@ class NaiveScheduler:
 
 
 class DaskScheduler:
-    def __init__(self, scheduler: Optional[Callable[..., Any]] = None) -> None:
-        """Wrapper for a Dask scheduler.
+    """Wrapper for a Dask scheduler.
 
-        Note that this currently only works if all providers support posargs.
+    Note that this currently only works if all providers support posargs.
+    """
+
+    def __init__(self, scheduler: Optional[Callable[..., Any]] = None) -> None:
+        """Wrap a dask scheduler or the default `dask.threaded.get`.
 
         Parameters
         ----------
