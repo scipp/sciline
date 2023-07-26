@@ -1,1 +1,2 @@
+-r test.in
 mypy
