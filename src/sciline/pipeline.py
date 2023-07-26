@@ -208,9 +208,9 @@ class Pipeline:
             Type to build the graph for.
         """
         graph: Graph = {}
-        stack: List[Tuple[Type[T], Dict[TypeVar, Key]]] = [(tp, {})]
+        stack: List[Type[T]] = [tp]
         while stack:
-            tp, bound = stack.pop()
+            tp = stack.pop()
             provider: Callable[..., T]
             provider, bound = self._get_provider(tp)
             tps = get_type_hints(provider)
@@ -222,7 +222,7 @@ class Pipeline:
             graph[tp] = (provider, args)
             for arg in args.values():
                 if arg not in graph:
-                    stack.append((arg, bound))
+                    stack.append(arg)
         return graph
 
     @overload

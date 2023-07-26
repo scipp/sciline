@@ -59,6 +59,7 @@ def test_multiple_keys_can_be_computed_without_repeated_calls() -> None:
 
     pipeline = sl.Pipeline([int_to_float, provide_int, int_float_to_str])
     assert pipeline.compute((float, str)) == (1.5, "3;1.5")
+    assert ncall == 1
 
 
 def test_multiple_keys_not_in_same_path_use_same_intermediate() -> None:
@@ -83,7 +84,7 @@ def test_multiple_keys_not_in_same_path_use_same_intermediate() -> None:
 def test_generic_providers_produce_use_dependencies_based_on_bound_typevar() -> None:
     Param = TypeVar('Param')
 
-    class Str(sl.Scope[Param, str]):
+    class Str(sl.Scope[Param, str], str):
         ...
 
     def parametrized(x: Param) -> Str[Param]:
@@ -111,10 +112,10 @@ def test_can_compute_result_depending_on_two_instances_of_generic_provider() -> 
 
     Param = TypeVar('Param')
 
-    class Float(sl.Scope[Param, float]):
+    class Float(sl.Scope[Param, float], float):
         ...
 
-    class Str(sl.Scope[Param, str]):
+    class Str(sl.Scope[Param, str], str):
         ...
 
     def int_float_to_str(x: int, y: Float[Param]) -> Str[Param]:
@@ -550,7 +551,7 @@ def test_init_with_providers_and_params() -> None:
 def test_init_with_sciline_Scope_subclass_param_works() -> None:
     T = TypeVar('T')
 
-    class A(sl.Scope[T, int]):
+    class A(sl.Scope[T, int], int):
         ...
 
     pl = sl.Pipeline(params={A[float]: A(1), A[str]: A(2)})
