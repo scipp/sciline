@@ -3,6 +3,8 @@
 from dataclasses import dataclass
 from typing import Generic, List, NewType, TypeVar
 
+import numpy as np
+import numpy.typing as npt
 import pytest
 
 import sciline as sl
@@ -82,7 +84,7 @@ def test_multiple_keys_not_in_same_path_use_same_intermediate() -> None:
 def test_generic_providers_produce_use_dependencies_based_on_bound_typevar() -> None:
     Param = TypeVar('Param')
 
-    class Str(sl.Scope[Param], str):
+    class Str(sl.Scope[Param, str], str):
         ...
 
     def parametrized(x: Param) -> Str[Param]:
@@ -95,8 +97,8 @@ def test_generic_providers_produce_use_dependencies_based_on_bound_typevar() -> 
         return f"{x};{y}"
 
     pipeline = sl.Pipeline([make_int, make_float, combine, parametrized])
-    assert pipeline.compute(Str[int]) == '3'
-    assert pipeline.compute(Str[float]) == '1.5'
+    assert pipeline.compute(Str[int]) == Str[int]('3')
+    assert pipeline.compute(Str[float]) == Str[float]('1.5')
     assert pipeline.compute(str) == '3;1.5'
 
 
@@ -110,10 +112,10 @@ def test_can_compute_result_depending_on_two_instances_of_generic_provider() -> 
 
     Param = TypeVar('Param')
 
-    class Float(sl.Scope[Param], float):
+    class Float(sl.Scope[Param, float], float):
         ...
 
-    class Str(sl.Scope[Param], str):
+    class Str(sl.Scope[Param, str], str):
         ...
 
     def int_float_to_str(x: int, y: Float[Param]) -> Str[Param]:
@@ -137,6 +139,71 @@ def test_can_compute_result_depending_on_two_instances_of_generic_provider() -> 
     )
     assert pipeline.compute(Result) == "3;1.5;3;2.5"
     assert ncall == 1
+
+
+def test_subclasses_of_generic_provider_defined_with_Scope_work() -> None:
+    Param = TypeVar('Param')
+
+    class StrT(sl.Scope[Param, str], str):
+        ...
+
+    class Str1(StrT[Param]):
+        ...
+
+    class Str2(StrT[Param]):
+        ...
+
+    class Str3(StrT[Param]):
+        ...
+
+    class Str4(Str3[Param]):
+        ...
+
+    def make_str1() -> Str1[Param]:
+        return Str1('1')
+
+    def make_str2() -> Str2[Param]:
+        return Str2('2')
+
+    # Note that mypy cannot detect if when setting params, the type of the
+    # parameter does not match the key. Same problem as with NewType.
+    pipeline = sl.Pipeline(
+        [make_str1, make_str2],
+        params={
+            Str3[int]: Str3[int]('int3'),
+            Str3[float]: Str3[float]('float3'),
+            Str4[int]: Str2[int]('int4'),
+        },
+    )
+    assert pipeline.compute(Str1[float]) == Str1[float]('1')
+    assert pipeline.compute(Str2[float]) == Str2[float]('2')
+    assert pipeline.compute(Str3[int]) == Str3[int]('int3')
+    assert pipeline.compute(Str3[float]) == Str3[float]('float3')
+    assert pipeline.compute(Str4[int]) == Str4[int]('int4')
+
+
+def test_subclasses_of_generic_array_provider_defined_with_Scope_work() -> None:
+    Param = TypeVar('Param')
+
+    class ArrayT(sl.Scope[Param, npt.NDArray[np.int64]], npt.NDArray[np.int64]):
+        ...
+
+    class Array1(ArrayT[Param]):
+        ...
+
+    class Array2(ArrayT[Param]):
+        ...
+
+    def make_array1() -> Array1[Param]:
+        return Array1(np.array([1, 2, 3]))
+
+    def make_array2() -> Array2[Param]:
+        return Array2(np.array([4, 5, 6]))
+
+    pipeline = sl.Pipeline([make_array1, make_array2])
+    # Note that the param is not the dtype
+    assert np.all(pipeline.compute(Array1[str]) == np.array([1, 2, 3]))
+    assert np.all(pipeline.compute(Array2[str]) == np.array([4, 5, 6]))
 
 
 def test_inserting_provider_returning_None_raises() -> None:
@@ -484,7 +551,7 @@ def test_init_with_providers_and_params() -> None:
 def test_init_with_sciline_Scope_subclass_param_works() -> None:
     T = TypeVar('T')
 
-    class A(sl.Scope[T], int):
+    class A(sl.Scope[T, int], int):
         ...
 
     pl = sl.Pipeline(params={A[float]: A(1), A[str]: A(2)})
