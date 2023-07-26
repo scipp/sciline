@@ -55,9 +55,12 @@ def _format_type(tp: type) -> str:
     but strip all module prefixes from the type name as well as the params.
     We may make this configurable in the future.
     """
-    base = tp.__name__ if hasattr(tp, '__name__') else str(tp).split('.')[-1]
-    if get_origin(tp) is not None:
+
+    def get_base(tp: type) -> type:
+        return tp.__name__ if hasattr(tp, '__name__') else str(tp).split('.')[-1]
+
+    if (origin := get_origin(tp)) is not None:
         params = [_format_type(param) for param in get_args(tp)]
-        return f'{base}[{", ".join(params)}]'
+        return f'{get_base(origin)}[{", ".join(params)}]'
     else:
-        return base
+        return get_base(tp)
