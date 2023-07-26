@@ -56,7 +56,7 @@ def _format_type(tp: type) -> str:
     We may make this configurable in the future.
     """
 
-    def get_base(tp: type) -> type:
+    def get_base(tp: type) -> str:
         return tp.__name__ if hasattr(tp, '__name__') else str(tp).split('.')[-1]
 
     if (origin := get_origin(tp)) is not None:
