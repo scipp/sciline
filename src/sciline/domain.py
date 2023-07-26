@@ -15,7 +15,9 @@ class Scope(Generic[PARAM, SUPER]):
         if get_origin(scope) is Scope:
             supertype = get_args(scope)[1]
             # Remove potential generic params
-            supertype = get_origin(supertype) or supertype
+            # In Python 3.8, get_origin does not work with numpy.typing.NDArray,
+            # but it defines __origin__
+            supertype = getattr(supertype, '__origin__', None) or supertype
             if supertype not in cls.__bases__:
                 raise TypeError(
                     f"Missing or wrong interface for {cls}, "
