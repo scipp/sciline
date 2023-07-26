@@ -18,6 +18,9 @@ test:
   imports:
     - sciline
   requires:
+    - dask
+    - graphviz
+    - numpy
     - pytest
   source_files:
     - pyproject.toml
