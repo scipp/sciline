@@ -19,7 +19,7 @@ test:
     - sciline
   requires:
     - dask
-    - graphviz
+    - python-graphviz
     - numpy
     - pytest
   source_files:
