@@ -54,7 +54,6 @@ jobs:
       - run: |
           tox --skip-pkg-install -e docs -- sciline==${VERSION}
 
-          echo "target=$(python docs/version.py --version=${VERSION} --action=get-target)" >> $GITHUB_ENV
         if: ${{ inputs.publish }}
       - run: tox -e docs
         if: ${{ !inputs.publish }}
@@ -68,7 +67,6 @@ jobs:
         with:
           branch: gh-pages
           folder: html
-          target-folder: ${{ env.target }}
           single-commit: true
           clean-exclude: release
           ssh-key: ${{ secrets.GH_PAGES_DEPLOY_KEY }}
