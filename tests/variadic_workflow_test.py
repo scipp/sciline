@@ -133,63 +133,6 @@ class Key:
     index: int
 
 
-def build_old(
-    providers: Dict[type, Callable[..., Any]],
-    indices: Dict[type, Iterable],
-    tp: Type[T],
-) -> Dict[type, Tuple[Callable[..., Any], ...]]:
-    graph = {}
-    stack: List[Type[T]] = [tp]
-    while stack:
-        tp = stack.pop()
-        if get_origin(tp) == Map:
-            Index, Value = get_args(tp)
-
-            def provider(*values: Value) -> tp:
-                return tp(dict(zip(indices[Key], values)))
-
-            size = len(indices[Index])
-            args = {Value: Key(Index, Value, i) for i in range(size)}
-            graph[tp] = (provider, *args.values())
-            # Is it easier to insert a single task, and branch when inserting into graph?
-            # might be easier to track dependencies
-
-            # Need: Map[Filename, Image]
-            # write combining provider and insert into graph
-            # get Image provider
-            # add all into graph... args?
-            value_provider = providers[Value]
-            args = get_type_hints(value_provider)
-            del args['return']
-            # rewrite args to use Key... btu which args!???
-            # this does not work... first have to find path to indices, then rewrite args
-            # that track to an index with to array of tasks
-            for i in range(size):
-                graph[Key(Index, Value, i)] = (value_provider,)
-
-            for arg in args.values():
-                if arg not in graph:
-                    stack.append(arg)
-            # for key, value in graph.items():
-            #    print(key, value)
-        elif isinstance(tp, Key):
-            provider = providers[tp.tp]
-            size = len(indices[tp.key])
-            # graph[tp] = (provider, Key(tp.key, tp.index, i) for i in range(size)])
-            # TODO
-
-        elif (provider := providers.get(tp)) is not None:
-            args = get_type_hints(provider)
-            del args['return']
-            graph[tp] = (provider, *args.values())
-            for arg in args.values():
-                if arg not in graph:
-                    stack.append(arg)
-        else:
-            raise RuntimeError(f'No provider for {tp}')
-    return graph
-
-
 def build(
     providers: Dict[type, Callable[..., Any]],
     indices: Dict[type, Iterable],
@@ -262,7 +205,7 @@ def test_Map():
     def make_param() -> Param:
         return 2.0
 
-    filenames = tuple(f'file{i}' for i in range(3))
+    filenames = tuple(f'file{i}' for i in range(6))
     indices = {Filename: filenames}
     providers = {
         Image: read,
@@ -278,7 +221,7 @@ def test_Map():
     graph = build(providers, indices, int)
     assert dask.get(graph, int) == 2
     graph = build(providers, indices, float)
-    assert dask.get(graph, float) == 6.0
     from dask.delayed import Delayed
 
     Delayed(float, graph).visualize(filename='graph.png')
+    assert dask.get(graph, float) == 30.0
