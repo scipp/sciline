@@ -2,26 +2,24 @@
 # Copyright (c) 2023 Scipp contributors (https://github.com/scipp)
 from dataclasses import dataclass
 from typing import (
-    NewType,
-    TypeVar,
+    Any,
+    Callable,
+    Dict,
     Generic,
     Iterable,
-    Tuple,
-    Dict,
-    Callable,
-    get_type_hints,
-    get_origin,
-    get_args,
     List,
+    NewType,
+    Tuple,
     Type,
-    Any,
+    TypeVar,
+    get_args,
+    get_origin,
+    get_type_hints,
 )
 
-
 import sciline as sl
-from sciline.variadic import Stack, Map
-from sciline.graph import find_path, find_unique_path
-
+from sciline.graph import find_path, find_unique_path, find_all_paths
+from sciline.variadic import Map, Stack
 
 T = TypeVar('T')
 
@@ -78,7 +76,7 @@ def test_literal_param() -> None:
     assert dask.get(graph, float) == 45.0
 
 
-from inspect import getfullargspec, signature, Parameter
+from inspect import Parameter, getfullargspec, signature
 from typing import get_type_hints
 
 
@@ -155,7 +153,11 @@ def build(
             graph[tp] = (provider, *args)
 
             subgraph = build(providers, indices, Value)
-            path = find_unique_path(subgraph, Value, Index)
+            paths = find_all_paths(subgraph, Value, Index)
+            # flatten paths, remove duplicates
+            path = set()
+            for p in paths:
+                path.update(p)
             for key, value in subgraph.items():
                 if key in path:
                     for i in range(size):
@@ -186,17 +188,25 @@ def test_Map():
     CleanedImage = NewType('CleanedImage', float)
     ScaledImage = NewType('ScaledImage', float)
     Param = NewType('Param', float)
+    ImageParam = NewType('ImageParam', float)
 
     def read(filename: Filename) -> Image:
         return Image(float(filename[-1]))
 
-    def clean(x: Image) -> CleanedImage:
-        return x
+    def image_param(filename: Filename) -> ImageParam:
+        return ImageParam(sum(ord(c) for c in filename))
+
+    def clean(x: Image, param: ImageParam) -> CleanedImage:
+        return x * param
 
     def scale(x: CleanedImage, param: Param) -> ScaledImage:
         return x * param
 
-    def combine(images: Map[Filename, ScaledImage]) -> float:
+    def combine(
+        images: Map[Filename, ScaledImage], params: Map[Filename, ImageParam]
+    ) -> float:
+        print(list(images.values()))
+        print(list(params.values()))
         return sum(images.values())
 
     def make_int() -> int:
@@ -214,6 +224,7 @@ def test_Map():
         float: combine,
         int: make_int,
         Param: make_param,
+        ImageParam: image_param,
     }
 
     import dask
