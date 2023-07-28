@@ -2,26 +2,8 @@
 # Copyright (c) 2023 Scipp contributors (https://github.com/scipp)
 from __future__ import annotations
 
-from typing import TypeVar, Iterator, Generic, List
-
-from collections.abc import Collection, Mapping
-
-T = TypeVar('T')
-
-
-class Stack(Collection, Generic[T]):
-    def __init__(self, values: List[T]) -> None:
-        self._stack: List[T] = values
-
-    def __contains__(self, item: object) -> bool:
-        return item in self._stack
-
-    def __iter__(self) -> Iterator[T]:
-        return iter(self._stack)
-
-    def __len__(self) -> int:
-        return len(self._stack)
-
+from collections.abc import Mapping
+from typing import Iterator, TypeVar
 
 Key = TypeVar('Key')
 Value = TypeVar('Value')
