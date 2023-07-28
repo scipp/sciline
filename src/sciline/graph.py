@@ -1,7 +1,6 @@
-from sciline.pipeline import Key
-
-
 from typing import List
+
+from sciline.pipeline import Key
 
 
 def find_path(graph, start, end) -> List[Key]:

@@ -5,7 +5,6 @@ from typing import (
     Any,
     Callable,
     Dict,
-    Generic,
     Iterable,
     List,
     NewType,
@@ -17,111 +16,12 @@ from typing import (
     get_type_hints,
 )
 
-import sciline as sl
-from sciline.graph import find_path, find_unique_path, find_all_paths
-from sciline.variadic import Map, Stack
+import dask
+
+from sciline.graph import find_all_paths
+from sciline.variadic import Map
 
 T = TypeVar('T')
-
-
-class Multi(Generic[T]):
-    def __init__(self, values: Iterable[T]) -> None:
-        self.values = values
-
-
-def test_literal_param() -> None:
-    Filename = NewType('Filename', str)
-    Image = NewType('Image', float)
-
-    def read_file(filename: Filename) -> Image:
-        print(filename)
-        return Image(float(filename[-1]))
-
-    def combine(images: Multi[Image]) -> float:
-        return sum(images.values)
-
-    filenames = [f'file{i}' for i in range(10)]
-    # pipeline = sl.Pipeline([read_file, combine])
-    # pipeline[Multi[Filename]] = Multi(filenames)
-    # assert pipeline.compute(float) == 45.0
-
-    # -> Multi[Image] not found
-    # -> look for Image provider
-    # -> look for Filename provider
-    # -> look for Multi[Filename] provider
-
-    @dataclass(frozen=True)
-    class Key:
-        tp: type
-        index: int
-
-    # How do write down graph for this?
-    # - need dummy __getitem__ tasks
-    # - need dummy to_list tasks
-    graph = {}
-    graph[Multi[Filename]] = Multi(filenames)
-    size = len(filenames)
-    for i in range(size):
-        graph[Key(Filename, i)] = (lambda x, j: x.values[j], Multi[Filename], i)
-        graph[Key(Image, i)] = (read_file, Key(Filename, i))
-    graph[Multi[Image]] = (
-        lambda *args: Multi(args),
-        *[Key(Image, i) for i in range(size)],
-    )
-    graph[float] = (combine, Multi[Image])
-
-    import dask
-
-    assert dask.get(graph, Multi[Filename]).values == filenames
-    assert dask.get(graph, float) == 45.0
-
-
-from inspect import Parameter, getfullargspec, signature
-from typing import get_type_hints
-
-
-def test_args_hints() -> None:
-    def f(*myargs: int) -> None:
-        pass
-
-    args_name = getfullargspec(f)[1]
-    params = signature(f).parameters
-    for p in params.values():
-        if p.kind == Parameter.VAR_POSITIONAL:
-            args_name = p.name
-            args_type = p.annotation
-            break
-    assert args_name == 'myargs'
-    assert args_type == int
-    # args_name = signature(f).parameters['args'].name
-
-    assert get_type_hints(f)[args_name] == int
-
-
-def test_Stack_dependency_uses_Stack_provider():
-    Filename = NewType('Filename', str)
-
-    def combine(names: Stack[Filename]) -> str:
-        return ';'.join(names)
-
-    filenames = [f'file{i}' for i in range(4)]
-    pipeline = sl.Pipeline([combine], params={Stack[Filename]: Stack(filenames)})
-    assert pipeline.compute(str) == ';'.join(filenames)
-
-
-def test_Stack_dependency_maps_provider_over_Stack_provider():
-    Filename = NewType('Filename', str)
-    Image = NewType('Image', float)
-
-    def read(filename: Filename) -> Image:
-        return Image(float(filename[-1]))
-
-    def combine(images: Stack[Image]) -> float:
-        return sum(images)
-
-    filenames = tuple(f'file{i}' for i in range(10))
-    pipeline = sl.Pipeline([read, combine], params={Stack[Filename]: Stack(filenames)})
-    assert pipeline.compute(float) == 45.0
 
 
 @dataclass(frozen=True)
@@ -129,6 +29,13 @@ class Key:
     key: type
     tp: type
     index: int
+
+
+def _make_mapping_provider(values, Value, tp, Index):
+    def provider(*args: Value) -> tp:
+        return tp(dict(zip(values[Index], args)))
+
+    return provider
 
 
 def build(
@@ -144,17 +51,13 @@ def build(
             pass
         elif get_origin(tp) == Map:
             Index, Value = get_args(tp)
-
-            def provider(*values: Value) -> tp:
-                return tp(dict(zip(indices[Index], values)))
-
             size = len(indices[Index])
+            provider = _make_mapping_provider(indices, Value, tp, Index)
             args = [Key(Index, Value, i) for i in range(size)]
             graph[tp] = (provider, *args)
 
             subgraph = build(providers, indices, Value)
             paths = find_all_paths(subgraph, Value, Index)
-            # flatten paths, remove duplicates
             path = set()
             for p in paths:
                 path.update(p)
@@ -196,8 +99,11 @@ def test_Map():
     def image_param(filename: Filename) -> ImageParam:
         return ImageParam(sum(ord(c) for c in filename))
 
-    def clean(x: Image, param: ImageParam) -> CleanedImage:
+    def clean2(x: Image, param: ImageParam) -> CleanedImage:
         return x * param
+
+    def clean(x: Image) -> CleanedImage:
+        return x
 
     def scale(x: CleanedImage, param: Param) -> ScaledImage:
         return x * param
@@ -205,8 +111,6 @@ def test_Map():
     def combine(
         images: Map[Filename, ScaledImage], params: Map[Filename, ImageParam]
     ) -> float:
-        print(list(images.values()))
-        print(list(params.values()))
         return sum(images.values())
 
     def make_int() -> int:
@@ -226,8 +130,6 @@ def test_Map():
         Param: make_param,
         ImageParam: image_param,
     }
-
-    import dask
 
     graph = build(providers, indices, int)
     assert dask.get(graph, int) == 2
