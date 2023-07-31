@@ -219,12 +219,6 @@ class Pipeline:
                 raise AmbiguousProvider("Multiple providers found for type", tp)
         raise UnsatisfiedRequirement("No provider found for type", tp)
 
-    def _make_mapping_provider(self, value_type, mapping_type, index_name):
-        def provider(*args: value_type) -> mapping_type:
-            return mapping_type(dict(zip(self._indices[index_name], args)))
-
-        return provider
-
     def build(self, tp: Type[T], /) -> Graph:
         """
         Return a dict of providers required for building the requested type `tp`.
@@ -247,30 +241,7 @@ class Pipeline:
             if tp in self._indices:
                 continue
             if get_origin(tp) == Map:
-                index_name, value_type = get_args(tp)
-                size = len(self._indices[index_name])
-                provider = self._make_mapping_provider(
-                    value_type=value_type, mapping_type=tp, index_name=index_name
-                )
-                args = [Item(Label(index_name, i), value_type) for i in range(size)]
-                graph[tp] = (provider, args)
-
-                subgraph = self.build(value_type)
-                path = find_nodes_in_paths(subgraph, value_type, index_name)
-                for key, value in subgraph.items():
-                    if key in path:
-                        for i in range(size):
-                            provider, args = value
-                            args = tuple(
-                                _indexed_key(index_name, i, arg) if arg in path else arg
-                                for arg in args
-                            )
-                            graph[_indexed_key(index_name, i, key)] = (provider, args)
-                    else:
-                        graph[key] = value
-                for i in range(len(self._indices[index_name])):
-                    provider, _ = self._get_provider(Label(index_name, i))
-                    graph[Label(index_name, i)] = (provider, ())
+                graph.update(self._build_indexed_subgraph(tp))
                 continue
             provider: Callable[..., T]
             provider, bound = self._get_provider(tp)
@@ -285,6 +256,40 @@ class Pipeline:
                 if arg not in graph:
                     stack.append(arg)
         return graph
+
+    def _build_indexed_subgraph(self, tp: Type[T]) -> Graph:
+        index_name, value_type = get_args(tp)
+        size = len(self._indices[index_name])
+        provider = self._make_mapping_provider(
+            value_type=value_type, mapping_type=tp, index_name=index_name
+        )
+        args = [_indexed_key(index_name, i, value_type) for i in range(size)]
+        graph: Graph = {}
+        graph[tp] = (provider, args)
+
+        subgraph = self.build(value_type)
+        path = find_nodes_in_paths(subgraph, value_type, index_name)
+        for key, value in subgraph.items():
+            if key in path:
+                for i in range(size):
+                    provider, args = value
+                    args = tuple(
+                        _indexed_key(index_name, i, arg) if arg in path else arg
+                        for arg in args
+                    )
+                    graph[_indexed_key(index_name, i, key)] = (provider, args)
+            else:
+                graph[key] = value
+        for i in range(len(self._indices[index_name])):
+            provider, _ = self._get_provider(Label(index_name, i))
+            graph[Label(index_name, i)] = (provider, ())
+        return graph
+
+    def _make_mapping_provider(self, value_type, mapping_type, index_name):
+        def provider(*args: value_type) -> mapping_type:
+            return mapping_type(dict(zip(self._indices[index_name], args)))
+
+        return provider
 
     @overload
     def compute(self, tp: Type[T]) -> T:
