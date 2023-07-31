@@ -16,9 +16,11 @@ from .pipeline import (
     UnboundTypeVar,
     UnsatisfiedRequirement,
 )
+from .variadic import Map
 
 __all__ = [
     "AmbiguousProvider",
+    "Map",
     "Pipeline",
     "Scope",
     "UnboundTypeVar",

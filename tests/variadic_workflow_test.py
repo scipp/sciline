@@ -38,10 +38,7 @@ def _make_mapping_provider(values, Value, tp, Index):
 
 
 def _make_instance_provider(value):
-    def provider() -> type(value):
-        return value
-
-    return provider
+    return lambda: value
 
 
 def build(

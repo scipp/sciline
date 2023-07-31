@@ -1,9 +1,9 @@
-from typing import List
+from typing import List, TypeVar
 
-from sciline.pipeline import Key
+T = TypeVar("T")
 
 
-def find_path(graph, start, end) -> List[Key]:
+def find_path(graph, start: T, end: T) -> List[T]:
     """Find a path from start to end in a DAG."""
     if start == end:
         return [start]
@@ -14,7 +14,7 @@ def find_path(graph, start, end) -> List[Key]:
     return []
 
 
-def find_unique_path(graph, start, end) -> List[Key]:
+def find_unique_path(graph, start: T, end: T) -> List[T]:
     """Find a path from start to end in a DAG.
 
     Like find_path, but raises if more than one path found
@@ -33,7 +33,7 @@ def find_unique_path(graph, start, end) -> List[Key]:
     return paths[0] if paths else []
 
 
-def find_all_paths(graph, start, end) -> List[Key]:
+def find_all_paths(graph, start: T, end: T) -> List[List[T]]:
     """Find all paths from start to end in a DAG."""
     if start == end:
         return [[start]]
@@ -47,7 +47,7 @@ def find_all_paths(graph, start, end) -> List[Key]:
     return paths
 
 
-def find_nodes_in_paths(graph, start: Key, end: Key) -> List[Key]:
+def find_nodes_in_paths(graph, start: T, end: T) -> List[T]:
     paths = find_all_paths(graph, start, end)
     nodes = set()
     for path in paths:

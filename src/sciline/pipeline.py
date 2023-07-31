@@ -2,10 +2,12 @@
 # Copyright (c) 2023 Scipp contributors (https://github.com/scipp)
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import (
     Any,
     Callable,
     Dict,
+    Iterable,
     List,
     Optional,
     Tuple,
@@ -20,7 +22,9 @@ from typing import (
 from sciline.task_graph import TaskGraph
 
 from .domain import Scope
+from .graph import find_nodes_in_paths
 from .scheduler import Graph, Scheduler
+from .variadic import Map
 
 T = TypeVar('T')
 
@@ -74,6 +78,23 @@ def _bind_free_typevars(tp: TypeVar | Key, bound: Dict[TypeVar, Key]) -> Key:
         return tp
 
 
+@dataclass(frozen=True)
+class Label:
+    tp: type
+    index: int
+
+
+@dataclass(frozen=True)
+class Item:
+    label: label
+    tp: type
+
+
+def _indexed_key(index_name, i, value_name):
+    label = Label(index_name, i)
+    return label if index_name == value_name else Item(label, value_name)
+
+
 class Pipeline:
     """A container for providers that can be assembled into a task graph."""
 
@@ -96,6 +117,7 @@ class Pipeline:
         """
         self._providers: Dict[Key, Provider] = {}
         self._subproviders: Dict[type, Dict[Tuple[Key | TypeVar, ...], Provider]] = {}
+        self._indices: Dict[Key, Iterable[Any]] = {}
         for provider in providers or []:
             self.insert(provider)
         for tp, param in (params or {}).items():
@@ -153,6 +175,11 @@ class Pipeline:
             )
         self._set_provider(key, lambda: param)
 
+    def set_index(self, key: Type[T], index: Iterable[T]) -> None:
+        self._indices[key] = index
+        for i, label in enumerate(index):
+            self._set_provider(Label(tp=key, index=i), lambda label=label: label)
+
     def _set_provider(self, key: Type[T], provider: Callable[..., T]) -> None:
         # isinstance does not work here and types.NoneType available only in 3.10+
         if key == type(None):  # noqa: E721
@@ -192,6 +219,12 @@ class Pipeline:
                 raise AmbiguousProvider("Multiple providers found for type", tp)
         raise UnsatisfiedRequirement("No provider found for type", tp)
 
+    def _make_mapping_provider(self, value_type, mapping_type, index_name):
+        def provider(*args: value_type) -> mapping_type:
+            return mapping_type(dict(zip(self._indices[index_name], args)))
+
+        return provider
+
     def build(self, tp: Type[T], /) -> Graph:
         """
         Return a dict of providers required for building the requested type `tp`.
@@ -211,6 +244,34 @@ class Pipeline:
         stack: List[Type[T]] = [tp]
         while stack:
             tp = stack.pop()
+            if tp in self._indices:
+                continue
+            if get_origin(tp) == Map:
+                index_name, value_type = get_args(tp)
+                size = len(self._indices[index_name])
+                provider = self._make_mapping_provider(
+                    value_type=value_type, mapping_type=tp, index_name=index_name
+                )
+                args = [Item(Label(index_name, i), value_type) for i in range(size)]
+                graph[tp] = (provider, args)
+
+                subgraph = self.build(value_type)
+                path = find_nodes_in_paths(subgraph, value_type, index_name)
+                for key, value in subgraph.items():
+                    if key in path:
+                        for i in range(size):
+                            provider, args = value
+                            args = tuple(
+                                _indexed_key(index_name, i, arg) if arg in path else arg
+                                for arg in args
+                            )
+                            graph[_indexed_key(index_name, i, key)] = (provider, args)
+                    else:
+                        graph[key] = value
+                for i in range(len(self._indices[index_name])):
+                    provider, _ = self._get_provider(Label(index_name, i))
+                    graph[Label(index_name, i)] = (provider, ())
+                continue
             provider: Callable[..., T]
             provider, bound = self._get_provider(tp)
             tps = get_type_hints(provider)
