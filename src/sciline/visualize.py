@@ -1,9 +1,10 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright (c) 2023 Scipp contributors (https://github.com/scipp)
-from typing import Any, Callable, Dict, List, Tuple, get_args, get_origin
+from typing import Any, Callable, Dict, List, Tuple, Union, get_args, get_origin
 
 from graphviz import Digraph
 
+from .pipeline import Item, Label
 from .scheduler import Graph
 
 
@@ -20,18 +21,26 @@ def to_graphviz(graph: Graph, **kwargs: Any) -> Digraph:
     """
     dot = Digraph(strict=True, **kwargs)
     for p, (p_name, args, ret) in _format_graph(graph).items():
-        dot.node(ret, ret, shape='rectangle')
+        shape = 'rectangle' if '(' not in ret else 'box3d'
+        dot.node(ret, ret, shape=shape)
         # Do not draw dummy providers created by Pipeline when setting instances
         if p_name in (
             'Pipeline.__setitem__.<locals>.<lambda>',
             'Pipeline.set_index.<locals>.<lambda>',
         ):
             continue
-        dot.node(p, p_name, shape='ellipse')
-        for arg in args:
-            dot.node(arg, arg, shape='rectangle')
-            dot.edge(arg, p)
-        dot.edge(p, ret)
+        if p_name.startswith('Pipeline._make_mapping_provider.'):
+            for arg in args:
+                shape = 'rectangle' if '(' not in arg else 'box3d'
+                dot.node(arg, arg, shape=shape)
+                dot.edge(arg, ret)
+        else:
+            dot.node(p, p_name, shape='ellipse')
+            for arg in args:
+                shape = 'rectangle' if '(' not in arg else 'box3d'
+                dot.node(arg, arg, shape=shape)
+                dot.edge(arg, p)
+            dot.edge(p, ret)
     return dot
 
 
@@ -50,6 +59,16 @@ def _format_provider(provider: Callable[..., Any], ret: type) -> str:
     return f'{provider.__qualname__}_{_format_type(ret)}'
 
 
+def _extract_type_and_labels(key: Union[Item, type]) -> Tuple[type, List[type]]:
+    if isinstance(key, Item):
+        tp, labels = _extract_type_and_labels(key.tp)
+        return tp, [key.label.tp] + labels
+    if isinstance(key, Label):
+        tp, labels = _extract_type_and_labels(key.tp)
+        return tp, [key.tp] + labels
+    return key, []
+
+
 def _format_type(tp: type) -> str:
     """
     Helper for _format_graph.
@@ -59,12 +78,19 @@ def _format_type(tp: type) -> str:
     We may make this configurable in the future.
     """
 
+    print(_extract_type_and_labels(tp))
+    tp, labels = _extract_type_and_labels(tp)
+
     def get_base(tp: type) -> str:
-        return tp.__name__ if hasattr(tp, '__name__') else str(tp)
         return tp.__name__ if hasattr(tp, '__name__') else str(tp).split('.')[-1]
+
+    def with_labels(base: str) -> str:
+        if labels:
+            return f'{base}({", ".join([get_base(l) for l in labels])})'
+        return base
 
     if (origin := get_origin(tp)) is not None:
         params = [_format_type(param) for param in get_args(tp)]
-        return f'{get_base(origin)}[{", ".join(params)}]'
+        return with_labels(f'{get_base(origin)}[{", ".join(params)}]')
     else:
-        return get_base(tp)
+        return with_labels(get_base(tp))

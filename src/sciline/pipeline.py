@@ -83,18 +83,11 @@ class Label:
     tp: type
     index: int
 
-    def __str__(self) -> str:
-        return f'{self.tp.__name__}[{self.index}]'
-
 
 @dataclass(frozen=True)
 class Item:
     label: label
     tp: type
-
-    def __str__(self) -> str:
-        name = self.tp.__name__ if hasattr(self.tp, '__name__') else str(self.tp)
-        return f'{name}[{self.label}]'
 
 
 def _indexed_key(index_name, i, value_name):
