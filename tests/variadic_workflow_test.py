@@ -1,97 +1,8 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright (c) 2023 Scipp contributors (https://github.com/scipp)
-from dataclasses import dataclass
-from typing import (
-    Any,
-    Callable,
-    Dict,
-    Iterable,
-    List,
-    NewType,
-    Tuple,
-    Type,
-    TypeVar,
-    get_args,
-    get_origin,
-    get_type_hints,
-)
+from typing import NewType
 
-from sciline.graph import find_nodes_in_paths
-from sciline.task_graph import TaskGraph
-from sciline.variadic import Map
-
-T = TypeVar('T')
-
-
-@dataclass(frozen=True)
-class Key:
-    label: type
-    tp: type
-    index: int
-
-
-def _make_mapping_provider(values, Value, tp, Index):
-    def provider(*args: Value) -> tp:
-        return tp(dict(zip(values[Index], args)))
-
-    return provider
-
-
-def _make_instance_provider(value):
-    return lambda: value
-
-
-def build(
-    providers: Dict[type, Callable[..., Any]],
-    indices: Dict[type, Iterable],
-    tp: Type[T],
-) -> Dict[type, Tuple[Callable[..., Any], ...]]:
-    graph = {}
-    stack: List[Type[T]] = [tp]
-    while stack:
-        tp = stack.pop()
-        if tp in indices:
-            pass
-        elif get_origin(tp) == Map:
-            Label, Value = get_args(tp)
-            size = len(indices[Label])
-            provider = _make_mapping_provider(indices, Value, tp, Label)
-            args = [Key(Label, Value, i) for i in range(size)]
-            graph[tp] = (provider, args)
-
-            subgraph = build(providers, indices, Value)
-            path = find_nodes_in_paths(subgraph, Value, Label)
-            for key, value in subgraph.items():
-                if key in path:
-                    for i in range(size):
-                        provider, args = value
-                        args = [
-                            Key(Label, arg, i) if arg in path else arg for arg in args
-                        ]
-                        graph[Key(Label, key, i)] = (provider, args)
-                else:
-                    graph[key] = value
-            for i, label in enumerate(indices[Label]):
-                graph[Key(Label, Label, i)] = (_make_instance_provider(label), ())
-        elif (provider := providers.get(tp)) is not None:
-            args = get_type_hints(provider)
-            del args['return']
-            graph[tp] = (provider, tuple(args.values()))
-            for arg in args.values():
-                if arg not in graph:
-                    stack.append(arg)
-        else:
-            raise RuntimeError(f'No provider for {tp}')
-    return graph
-
-
-def get(
-    providers: Dict[type, Callable[..., Any]],
-    indices: Dict[type, Iterable],
-    tp: Type[T],
-) -> TaskGraph:
-    graph = build(providers, indices, tp)
-    return TaskGraph(graph=graph, keys=tp)
+import sciline as sl
 
 
 def test_Map():
@@ -120,14 +31,14 @@ def test_Map():
         return x * param + config
 
     def combine_old(
-        images: Map[Filename, ScaledImage], params: Map[Filename, ImageParam]
+        images: sl.Map[Filename, ScaledImage], params: sl.Map[Filename, ImageParam]
     ) -> float:
         return sum(images.values())
 
-    def combine(images: Map[Filename, ScaledImage]) -> float:
+    def combine(images: sl.Map[Filename, ScaledImage]) -> float:
         return sum(images.values())
 
-    def combine_configs(x: Map[Config, float]) -> Result:
+    def combine_configs(x: sl.Map[Config, float]) -> Result:
         return Result(sum(x.values()))
 
     def make_int() -> int:
@@ -138,21 +49,24 @@ def test_Map():
 
     filenames = tuple(f'file{i}' for i in range(6))
     configs = tuple(range(2))
-    indices = {Filename: filenames, Config: configs}
-    providers = {
-        Image: read,
-        CleanedImage: clean,
-        ScaledImage: scale,
-        float: combine,
-        int: make_int,
-        Param: make_param,
-        ImageParam: image_param,
-        Result: combine_configs,
-    }
+    pipeline = sl.Pipeline(
+        [
+            read,
+            clean,
+            scale,
+            combine,
+            combine_configs,
+            make_int,
+            make_param,
+            image_param,
+        ]
+    )
+    pipeline.set_index(Filename, filenames)
+    pipeline.set_index(Config, configs)
 
-    graph = get(providers, indices, int)
+    graph = pipeline.get(int)
     assert graph.compute() == 2
-    graph = get(providers, indices, Result)
+    graph = pipeline.get(Result)
     assert graph.compute() == 66.0
     # graph.visualize().render('graph', format='png')
     from dask.delayed import Delayed
