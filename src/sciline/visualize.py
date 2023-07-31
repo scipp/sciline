@@ -22,7 +22,10 @@ def to_graphviz(graph: Graph, **kwargs: Any) -> Digraph:
     for p, (p_name, args, ret) in _format_graph(graph).items():
         dot.node(ret, ret, shape='rectangle')
         # Do not draw dummy providers created by Pipeline when setting instances
-        if p_name == 'Pipeline.__setitem__.<locals>.<lambda>':
+        if p_name in (
+            'Pipeline.__setitem__.<locals>.<lambda>',
+            'Pipeline.set_index.<locals>.<lambda>',
+        ):
             continue
         dot.node(p, p_name, shape='ellipse')
         for arg in args:
@@ -57,6 +60,7 @@ def _format_type(tp: type) -> str:
     """
 
     def get_base(tp: type) -> str:
+        return tp.__name__ if hasattr(tp, '__name__') else str(tp)
         return tp.__name__ if hasattr(tp, '__name__') else str(tp).split('.')[-1]
 
     if (origin := get_origin(tp)) is not None:
