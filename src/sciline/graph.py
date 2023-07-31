@@ -40,7 +40,16 @@ def find_all_paths(graph, start, end) -> List[Key]:
     if start not in graph:
         return []
     paths = []
-    for node in graph[start]:
+    # 0 is the provider, 1 is the args
+    for node in graph[start][1]:
         for path in find_all_paths(graph, node, end):
             paths.append([start] + path)
     return paths
+
+
+def find_nodes_in_paths(graph, start: Key, end: Key) -> List[Key]:
+    paths = find_all_paths(graph, start, end)
+    nodes = set()
+    for path in paths:
+        nodes.update(path)
+    return list(nodes)

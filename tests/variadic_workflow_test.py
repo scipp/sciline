@@ -16,9 +16,8 @@ from typing import (
     get_type_hints,
 )
 
-import dask
-
-from sciline.graph import find_all_paths
+from sciline.graph import find_nodes_in_paths
+from sciline.task_graph import TaskGraph
 from sciline.variadic import Map
 
 T = TypeVar('T')
@@ -26,7 +25,7 @@ T = TypeVar('T')
 
 @dataclass(frozen=True)
 class Key:
-    key: type
+    label: type
     tp: type
     index: int
 
@@ -34,6 +33,13 @@ class Key:
 def _make_mapping_provider(values, Value, tp, Index):
     def provider(*args: Value) -> tp:
         return tp(dict(zip(values[Index], args)))
+
+    return provider
+
+
+def _make_instance_provider(value):
+    def provider() -> type(value):
+        return value
 
     return provider
 
@@ -50,39 +56,45 @@ def build(
         if tp in indices:
             pass
         elif get_origin(tp) == Map:
-            Index, Value = get_args(tp)
-            size = len(indices[Index])
-            provider = _make_mapping_provider(indices, Value, tp, Index)
-            args = [Key(Index, Value, i) for i in range(size)]
-            graph[tp] = (provider, *args)
+            Label, Value = get_args(tp)
+            size = len(indices[Label])
+            provider = _make_mapping_provider(indices, Value, tp, Label)
+            args = [Key(Label, Value, i) for i in range(size)]
+            graph[tp] = (provider, args)
 
             subgraph = build(providers, indices, Value)
-            paths = find_all_paths(subgraph, Value, Index)
-            path = set()
-            for p in paths:
-                path.update(p)
+            path = find_nodes_in_paths(subgraph, Value, Label)
             for key, value in subgraph.items():
                 if key in path:
                     for i in range(size):
-                        provider, *args = value
+                        provider, args = value
                         args = [
-                            Key(Index, arg, i) if arg in path else arg for arg in args
+                            Key(Label, arg, i) if arg in path else arg for arg in args
                         ]
-                        graph[Key(Index, key, i)] = (provider, *args)
+                        graph[Key(Label, key, i)] = (provider, args)
                 else:
                     graph[key] = value
-            for i, index in enumerate(indices[Index]):
-                graph[Key(Index, Index, i)] = index
+            for i, label in enumerate(indices[Label]):
+                graph[Key(Label, Label, i)] = (_make_instance_provider(label), ())
         elif (provider := providers.get(tp)) is not None:
             args = get_type_hints(provider)
             del args['return']
-            graph[tp] = (provider, *args.values())
+            graph[tp] = (provider, tuple(args.values()))
             for arg in args.values():
                 if arg not in graph:
                     stack.append(arg)
         else:
             raise RuntimeError(f'No provider for {tp}')
     return graph
+
+
+def get(
+    providers: Dict[type, Callable[..., Any]],
+    indices: Dict[type, Iterable],
+    tp: Type[T],
+) -> TaskGraph:
+    graph = build(providers, indices, tp)
+    return TaskGraph(graph=graph, keys=tp)
 
 
 def test_Map():
@@ -141,10 +153,11 @@ def test_Map():
         Result: combine_configs,
     }
 
-    graph = build(providers, indices, int)
-    assert dask.get(graph, int) == 2
-    graph = build(providers, indices, Result)
+    graph = get(providers, indices, int)
+    assert graph.compute() == 2
+    graph = get(providers, indices, Result)
+    assert graph.compute() == 66.0
+    # graph.visualize().render('graph', format='png')
     from dask.delayed import Delayed
 
-    Delayed(Result, graph).visualize(filename='graph.png')
-    assert dask.get(graph, Result) == 66.0
+    Delayed(Result, graph._graph).visualize(filename='graph.png')
