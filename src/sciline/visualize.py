@@ -36,7 +36,7 @@ def _format_graph(graph: Graph) -> Dict[str, Tuple[str, List[str], str]]:
     return {
         _format_provider(provider, ret): (
             provider.__qualname__,
-            [_format_type(a) for a in args.values()],
+            [_format_type(a) for a in args],
             _format_type(ret),
         )
         for ret, (provider, args) in graph.items()

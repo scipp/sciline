@@ -214,13 +214,13 @@ class Pipeline:
             provider: Callable[..., T]
             provider, bound = self._get_provider(tp)
             tps = get_type_hints(provider)
-            args = {
-                name: _bind_free_typevars(t, bound=bound)
+            args = tuple(
+                _bind_free_typevars(t, bound=bound)
                 for name, t in tps.items()
                 if name != 'return'
-            }
+            )
             graph[tp] = (provider, args)
-            for arg in args.values():
+            for arg in args:
                 if arg not in graph:
                     stack.append(arg)
         return graph
