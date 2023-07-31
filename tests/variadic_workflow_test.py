@@ -87,11 +87,13 @@ def build(
 
 def test_Map():
     Filename = NewType('Filename', str)
+    Config = NewType('Config', int)
     Image = NewType('Image', float)
     CleanedImage = NewType('CleanedImage', float)
     ScaledImage = NewType('ScaledImage', float)
     Param = NewType('Param', float)
     ImageParam = NewType('ImageParam', float)
+    Result = NewType('Result', float)
 
     def read(filename: Filename) -> Image:
         return Image(float(filename[-1]))
@@ -105,13 +107,19 @@ def test_Map():
     def clean(x: Image) -> CleanedImage:
         return x
 
-    def scale(x: CleanedImage, param: Param) -> ScaledImage:
-        return x * param
+    def scale(x: CleanedImage, param: Param, config: Config) -> ScaledImage:
+        return x * param + config
 
-    def combine(
+    def combine_old(
         images: Map[Filename, ScaledImage], params: Map[Filename, ImageParam]
     ) -> float:
         return sum(images.values())
+
+    def combine(images: Map[Filename, ScaledImage]) -> float:
+        return sum(images.values())
+
+    def combine_configs(x: Map[Config, float]) -> Result:
+        return Result(sum(x.values()))
 
     def make_int() -> int:
         return 2
@@ -120,7 +128,8 @@ def test_Map():
         return 2.0
 
     filenames = tuple(f'file{i}' for i in range(6))
-    indices = {Filename: filenames}
+    configs = tuple(range(2))
+    indices = {Filename: filenames, Config: configs}
     providers = {
         Image: read,
         CleanedImage: clean,
@@ -129,12 +138,13 @@ def test_Map():
         int: make_int,
         Param: make_param,
         ImageParam: image_param,
+        Result: combine_configs,
     }
 
     graph = build(providers, indices, int)
     assert dask.get(graph, int) == 2
-    graph = build(providers, indices, float)
+    graph = build(providers, indices, Result)
     from dask.delayed import Delayed
 
-    Delayed(float, graph).visualize(filename='graph.png')
-    assert dask.get(graph, float) == 30.0
+    Delayed(Result, graph).visualize(filename='graph.png')
+    assert dask.get(graph, Result) == 66.0
