@@ -21,24 +21,24 @@ def to_graphviz(graph: Graph, **kwargs: Any) -> Digraph:
     """
     dot = Digraph(strict=True, **kwargs)
     for p, (p_name, args, ret) in _format_graph(graph).items():
-        shape = 'rectangle' if '(' not in ret else 'box3d'
-        dot.node(ret, ret, shape=shape)
+        if '(' in ret:
+            dot.node(ret, ret, shape='box3d')
+        else:
+            dot.node(ret, ret, shape='rectangle')
         # Do not draw dummy providers created by Pipeline when setting instances
         if p_name in (
             'Pipeline.__setitem__.<locals>.<lambda>',
             'Pipeline.set_index.<locals>.<lambda>',
         ):
             continue
+        # Do not draw the internal provider gathering index-dependent results into
+        # a dict
         if p_name.startswith('Pipeline._make_mapping_provider.'):
             for arg in args:
-                shape = 'rectangle' if '(' not in arg else 'box3d'
-                dot.node(arg, arg, shape=shape)
                 dot.edge(arg, ret)
         else:
             dot.node(p, p_name, shape='ellipse')
             for arg in args:
-                shape = 'rectangle' if '(' not in arg else 'box3d'
-                dot.node(arg, arg, shape=shape)
                 dot.edge(arg, p)
             dot.edge(p, ret)
     return dot
@@ -78,7 +78,6 @@ def _format_type(tp: type) -> str:
     We may make this configurable in the future.
     """
 
-    print(_extract_type_and_labels(tp))
     tp, labels = _extract_type_and_labels(tp)
 
     def get_base(tp: type) -> str:

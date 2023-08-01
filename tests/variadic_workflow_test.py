@@ -5,7 +5,7 @@ from typing import NewType
 import sciline as sl
 
 
-def test_Map():
+def test_Map() -> None:
     Filename = NewType('Filename', str)
     Config = NewType('Config', int)
     Image = NewType('Image', float)
