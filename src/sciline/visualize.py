@@ -59,10 +59,10 @@ def _format_provider(provider: Callable[..., Any], ret: type) -> str:
     return f'{provider.__qualname__}_{_format_type(ret)}'
 
 
-def _extract_type_and_labels(key: Union[Item, type]) -> Tuple[type, List[type]]:
+def _extract_type_and_labels(key: Union[Item, Label, type]) -> Tuple[type, List[type]]:
     if isinstance(key, Item):
-        tp, labels = _extract_type_and_labels(key.tp)
-        return tp, [key.label.tp] + labels
+        label = key.label
+        return key.tp, [lb.tp for lb in label]
     if isinstance(key, Label):
         tp, labels = _extract_type_and_labels(key.tp)
         return tp, [key.tp] + labels

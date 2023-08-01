@@ -2,14 +2,14 @@
 # Copyright (c) 2023 Scipp contributors (https://github.com/scipp)
 from __future__ import annotations
 
-from collections.abc import Mapping
-from typing import Iterator, TypeVar
+from collections import abc
+from typing import Generic, Iterator, Mapping, TypeVar
 
 Key = TypeVar('Key')
 Value = TypeVar('Value')
 
 
-class Map(Mapping[Key, Value]):
+class Map(abc.Mapping, Generic[Key, Value]):
     def __init__(self, values: Mapping[Key, Value]) -> None:
         self._map: Mapping[Key, Value] = values
 

@@ -6,13 +6,15 @@ from dataclasses import dataclass
 from typing import (
     Any,
     Callable,
+    Collection,
     Dict,
-    Iterable,
+    Generic,
     List,
     Optional,
     Tuple,
     Type,
     TypeVar,
+    Union,
     get_args,
     get_origin,
     get_type_hints,
@@ -43,8 +45,30 @@ class AmbiguousProvider(Exception):
     """Raised when multiple providers are found for a type."""
 
 
+@dataclass(frozen=True)
+class Label(Generic[T]):
+    tp: Type[T]
+    index: int
+
+
+@dataclass(frozen=True)
+class Item(Generic[T]):
+    label: Tuple[Label[T], ...]
+    tp: type
+
+
+def _indexed_key(index_name: Any, i: int, value_name: Any) -> Union[Label, Item]:
+    if index_name == value_name:
+        return Label(index_name, i)
+    label = Label(index_name, i)
+    if isinstance(value_name, Item):
+        return Item(value_name.label + (label,), value_name.tp)
+    else:
+        return Item((label,), value_name)
+
+
 Provider = Callable[..., Any]
-Key = type
+Key = Union[type, Label, Item]
 
 
 def _is_compatible_type_tuple(
@@ -78,23 +102,6 @@ def _bind_free_typevars(tp: TypeVar | Key, bound: Dict[TypeVar, Key]) -> Key:
         return tp
 
 
-@dataclass(frozen=True)
-class Label:
-    tp: type
-    index: int
-
-
-@dataclass(frozen=True)
-class Item:
-    label: label
-    tp: type
-
-
-def _indexed_key(index_name, i, value_name):
-    label = Label(index_name, i)
-    return label if index_name == value_name else Item(label, value_name)
-
-
 class Pipeline:
     """A container for providers that can be assembled into a task graph."""
 
@@ -117,7 +124,7 @@ class Pipeline:
         """
         self._providers: Dict[Key, Provider] = {}
         self._subproviders: Dict[type, Dict[Tuple[Key | TypeVar, ...], Provider]] = {}
-        self._indices: Dict[Key, Iterable[Any]] = {}
+        self._indices: Dict[Key, Collection[Any]] = {}
         for provider in providers or []:
             self.insert(provider)
         for tp, param in (params or {}).items():
@@ -137,7 +144,7 @@ class Pipeline:
             raise ValueError(f'Provider {provider} lacks type-hint for return value')
         self._set_provider(key, provider)
 
-    def __setitem__(self, key: Type[T], param: T) -> None:
+    def __setitem__(self, key: Union[Type[T], Label[T]], param: T) -> None:
         """
         Provide a concrete value for a type.
 
@@ -175,12 +182,14 @@ class Pipeline:
             )
         self._set_provider(key, lambda: param)
 
-    def set_index(self, key: Type[T], index: Iterable[T]) -> None:
+    def set_index(self, key: Type[T], index: Collection[T]) -> None:
         self._indices[key] = index
         for i, label in enumerate(index):
             self._set_provider(Label(tp=key, index=i), lambda label=label: label)
 
-    def _set_provider(self, key: Type[T], provider: Callable[..., T]) -> None:
+    def _set_provider(
+        self, key: Union[Type[T], Label[T]], provider: Callable[..., T]
+    ) -> None:
         # isinstance does not work here and types.NoneType available only in 3.10+
         if key == type(None):  # noqa: E721
             raise ValueError(f'Provider {provider} returning `None` is not allowed')
@@ -195,7 +204,9 @@ class Pipeline:
                 raise ValueError(f'Provider for {key} already exists')
             self._providers[key] = provider
 
-    def _get_provider(self, tp: Type[T]) -> Tuple[Callable[..., T], Dict[TypeVar, Key]]:
+    def _get_provider(
+        self, tp: Union[Type[T], Label[T], Item]
+    ) -> Tuple[Callable[..., T], Dict[TypeVar, Key]]:
         if (provider := self._providers.get(tp)) is not None:
             return provider, {}
         elif (origin := get_origin(tp)) is not None and (
@@ -235,7 +246,7 @@ class Pipeline:
             Type to build the graph for.
         """
         graph: Graph = {}
-        stack: List[Type[T]] = [tp]
+        stack: List[Union[Type[T], Label[T]]] = [tp]
         while stack:
             tp = stack.pop()
             if tp in self._indices:
@@ -273,11 +284,14 @@ class Pipeline:
             if key in path:
                 for i in range(size):
                     provider, args = value
-                    args = tuple(
+                    args_with_index = tuple(
                         _indexed_key(index_name, i, arg) if arg in path else arg
                         for arg in args
                     )
-                    graph[_indexed_key(index_name, i, key)] = (provider, args)
+                    graph[_indexed_key(index_name, i, key)] = (
+                        provider,
+                        args_with_index,
+                    )
             else:
                 graph[key] = value
         for i in range(len(self._indices[index_name])):
@@ -285,8 +299,10 @@ class Pipeline:
             graph[Label(index_name, i)] = (provider, ())
         return graph
 
-    def _make_mapping_provider(self, value_type, mapping_type, index_name):
-        def provider(*args: value_type) -> mapping_type:
+    def _make_mapping_provider(
+        self, value_type: type, mapping_type: type, index_name: type
+    ) -> Callable[..., Any]:
+        def provider(*args):  # type: ignore[no-untyped-def]
             return mapping_type(dict(zip(self._indices[index_name], args)))
 
         return provider
