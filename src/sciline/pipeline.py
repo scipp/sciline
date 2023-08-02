@@ -105,6 +105,8 @@ def _bind_free_typevars(tp: TypeVar | Key, bound: Dict[TypeVar, Key]) -> Key:
 class Pipeline:
     """A container for providers that can be assembled into a task graph."""
 
+    _param_sentinel = object()
+
     def __init__(
         self,
         providers: Optional[List[Provider]] = None,
@@ -125,6 +127,7 @@ class Pipeline:
         self._providers: Dict[Key, Provider] = {}
         self._subproviders: Dict[type, Dict[Tuple[Key | TypeVar, ...], Provider]] = {}
         self._indices: Dict[Key, Collection[Any]] = {}
+        self._param_series: Dict[Key, Key] = {}
         for provider in providers or []:
             self.insert(provider)
         for tp, param in (params or {}).items():
@@ -186,6 +189,19 @@ class Pipeline:
         self._indices[key] = index
         for i, label in enumerate(index):
             self._set_provider(Label(tp=key, index=i), lambda label=label: label)
+
+    def set_param_table(
+        self, key: Type[T], value_series: Dict[type, Collection]
+    ) -> None:
+        self._indices[key] = list(range(len(next(iter(value_series.values())))))
+        for param_type in value_series:
+            self._param_series[param_type] = key
+        for param_type, values in value_series.items():
+            for i, label in enumerate(values):
+                self._set_provider(
+                    Item((Label(tp=key, index=i),), param_type),
+                    lambda label=label: label,
+                )
 
     def _set_provider(
         self, key: Union[Type[T], Label[T]], provider: Callable[..., T]
@@ -249,7 +265,8 @@ class Pipeline:
         stack: List[Union[Type[T], Label[T]]] = [tp]
         while stack:
             tp = stack.pop()
-            if tp in self._indices:
+            if tp in self._param_series:
+                graph[tp] = (self._param_sentinel, ())
                 continue
             if get_origin(tp) == Map:
                 graph.update(self._build_indexed_subgraph(tp))
@@ -279,11 +296,23 @@ class Pipeline:
         graph[tp] = (provider, args)
 
         subgraph = self.build(value_type)
-        path = find_nodes_in_paths(subgraph, value_type, index_name)
+        param_name = None
+        for k, (provider, _) in subgraph.items():
+            if provider == self._param_sentinel:
+                if param_name is not None:
+                    raise ValueError(
+                        f'Found multiple param names in subgraph: {param_name}, {k}'
+                    )
+                param_name = k
+        path = find_nodes_in_paths(subgraph, value_type, param_name)
         for key, value in subgraph.items():
             if key in path:
                 for i in range(size):
                     provider, args = value
+                    if provider == self._param_sentinel:
+                        provider, _ = self._get_provider(
+                            _indexed_key(index_name, i, key)
+                        )
                     args_with_index = tuple(
                         _indexed_key(index_name, i, arg) if arg in path else arg
                         for arg in args
@@ -294,9 +323,6 @@ class Pipeline:
                     )
             else:
                 graph[key] = value
-        for i in range(len(self._indices[index_name])):
-            provider, _ = self._get_provider(Label(index_name, i))
-            graph[Label(index_name, i)] = (provider, ())
         return graph
 
     def _make_mapping_provider(
