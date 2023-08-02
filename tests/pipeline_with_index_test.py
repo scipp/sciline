@@ -8,7 +8,7 @@ from sciline.pipeline import Item, Label
 
 def test_can_get_elements_of_param_table() -> None:
     pl = sl.Pipeline()
-    pl.set_param_table(int, {float: [1.0, 2.0, 3.0]})
+    pl.set_param_table(sl.ParamTable(int, {float: [1.0, 2.0, 3.0]}))
     assert pl.compute(Item((Label(int, 1),), float)) == 2.0
 
 
@@ -17,7 +17,7 @@ def test_can_depend_on_elements_of_param_table() -> None:
         return str(x)
 
     pl = sl.Pipeline([use_elem])
-    pl.set_param_table(int, {float: [1.0, 2.0, 3.0]})
+    pl.set_param_table(sl.ParamTable(int, {float: [1.0, 2.0, 3.0]}))
     assert pl.compute(str) == "2.0"
 
 
@@ -32,7 +32,7 @@ def test_can_gather_index() -> None:
         return float(x)
 
     pl = sl.Pipeline([gather, make_float])
-    pl.set_param_table(Name, {str: ["1.0", "2.0", "3.0"]})
+    pl.set_param_table(sl.ParamTable(Name, {str: ["1.0", "2.0", "3.0"]}))
     assert pl.compute(Sum) == 6.0
 
 
@@ -49,7 +49,7 @@ def test_can_zip() -> None:
         return Str(x)
 
     pl = sl.Pipeline([gather_zip, use_str])
-    pl.set_param_table(Run, {str: ['a', 'a', 'ccc'], int: [1, 2, 3]})
+    pl.set_param_table(sl.ParamTable(Run, {str: ['a', 'a', 'ccc'], int: [1, 2, 3]}))
 
     assert pl.compute(Sum) == "['a1', 'a2', 'ccc3']"
 
@@ -69,6 +69,6 @@ def test_diamond_dependency_pulls_values_from_columns_in_same_param_table() -> N
         return x / y
 
     pl = sl.Pipeline([gather, join])
-    pl.set_param_table(Row, {Param1: [1, 4, 9], Param2: [1, 2, 3]})
+    pl.set_param_table(sl.ParamTable(Row, {Param1: [1, 4, 9], Param2: [1, 2, 3]}))
 
     assert pl.compute(Sum) == 6

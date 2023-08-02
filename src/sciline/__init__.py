@@ -10,6 +10,7 @@ except importlib.metadata.PackageNotFoundError:
     __version__ = "0.0.0"
 
 from .domain import Scope
+from .param_table import ParamTable
 from .pipeline import (
     AmbiguousProvider,
     Pipeline,
@@ -21,6 +22,7 @@ from .variadic import Map
 __all__ = [
     "AmbiguousProvider",
     "Map",
+    "ParamTable",
     "Pipeline",
     "Scope",
     "UnboundTypeVar",

@@ -6,7 +6,6 @@ from dataclasses import dataclass
 from typing import (
     Any,
     Callable,
-    Collection,
     Dict,
     Generic,
     List,
@@ -25,6 +24,7 @@ from sciline.task_graph import TaskGraph
 
 from .domain import Scope
 from .graph import find_nodes_in_paths
+from .param_table import ParamTable
 from .scheduler import Graph, Scheduler
 from .variadic import Map
 
@@ -126,7 +126,7 @@ class Pipeline:
         """
         self._providers: Dict[Key, Provider] = {}
         self._subproviders: Dict[type, Dict[Tuple[Key | TypeVar, ...], Provider]] = {}
-        self._indices: Dict[Key, Collection[Any]] = {}
+        self._param_tables: Dict[Key, ParamTable] = {}
         self._param_series: Dict[Key, Key] = {}
         for provider in providers or []:
             self.insert(provider)
@@ -185,16 +185,14 @@ class Pipeline:
             )
         self._set_provider(key, lambda: param)
 
-    def set_param_table(
-        self, key: Type[T], value_series: Dict[type, Collection]
-    ) -> None:
-        self._indices[key] = list(range(len(next(iter(value_series.values())))))
-        for param_type in value_series:
-            self._param_series[param_type] = key
-        for param_type, values in value_series.items():
+    def set_param_table(self, params: ParamTable) -> None:
+        self._param_tables[params.row_dim] = params
+        for param_type in params:
+            self._param_series[param_type] = params.row_dim
+        for param_type, values in params.items():
             for i, label in enumerate(values):
                 self._set_provider(
-                    Item((Label(tp=key, index=i),), param_type),
+                    Item((Label(tp=params.row_dim, index=i),), param_type),
                     lambda label=label: label,
                 )
 
@@ -282,7 +280,7 @@ class Pipeline:
 
     def _build_indexed_subgraph(self, tp: Type[T]) -> Graph:
         index_name, value_type = get_args(tp)
-        size = len(self._indices[index_name])
+        size = len(self._param_tables[index_name].index)
         provider = self._make_mapping_provider(
             value_type=value_type, mapping_type=tp, index_name=index_name
         )
@@ -313,7 +311,7 @@ class Pipeline:
         self, value_type: type, mapping_type: type, index_name: type
     ) -> Callable[..., Any]:
         def provider(*args):  # type: ignore[no-untyped-def]
-            return mapping_type(dict(zip(self._indices[index_name], args)))
+            return mapping_type(dict(zip(self._param_tables[index_name].index, args)))
 
         return provider
 
