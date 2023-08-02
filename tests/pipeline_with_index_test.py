@@ -39,11 +39,26 @@ def test_can_depend_on_elements_of_param_table() -> None:
     assert pl.compute(str) == "2.0"
 
 
+def test_can_compute_map_of_param_values() -> None:
+    pl = sl.Pipeline()
+    pl.set_param_table(sl.ParamTable(int, {float: [1.0, 2.0, 3.0]}))
+    assert pl.compute(sl.Series[int, float]) == {0: 1.0, 1: 2.0, 2: 3.0}
+
+
+def test_can_compute_map_of_derived_values() -> None:
+    def process(x: float) -> str:
+        return str(x)
+
+    pl = sl.Pipeline([process])
+    pl.set_param_table(sl.ParamTable(int, {float: [1.0, 2.0, 3.0]}))
+    assert pl.compute(sl.Series[int, str]) == {0: "1.0", 1: "2.0", 2: "3.0"}
+
+
 def test_can_gather_index() -> None:
     Sum = NewType("Sum", float)
     Name = NewType("Name", str)
 
-    def gather(x: sl.Map[Name, float]) -> Sum:
+    def gather(x: sl.Series[Name, float]) -> Sum:
         return Sum(sum(x.values()))
 
     def make_float(x: str) -> float:
@@ -59,7 +74,7 @@ def test_can_zip() -> None:
     Str = NewType("Str", str)
     Run = NewType("Run", int)
 
-    def gather_zip(x: sl.Map[Run, Str], y: sl.Map[Run, int]) -> Sum:
+    def gather_zip(x: sl.Series[Run, Str], y: sl.Series[Run, int]) -> Sum:
         z = [f'{x_}{y_}' for x_, y_ in zip(x.values(), y.values())]
         return Sum(str(z))
 
@@ -79,7 +94,7 @@ def test_diamond_dependency_pulls_values_from_columns_in_same_param_table() -> N
     Row = NewType("Run", int)
 
     def gather(
-        x: sl.Map[Row, float],
+        x: sl.Series[Row, float],
     ) -> Sum:
         return Sum(sum(x.values()))
 

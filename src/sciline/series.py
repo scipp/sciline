@@ -9,7 +9,7 @@ Key = TypeVar('Key')
 Value = TypeVar('Value')
 
 
-class Map(abc.Mapping, Generic[Key, Value]):
+class Series(abc.Mapping, Generic[Key, Value]):
     def __init__(self, values: Mapping[Key, Value]) -> None:
         self._map: Mapping[Key, Value] = values
 

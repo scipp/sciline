@@ -33,14 +33,14 @@ def test_Map() -> None:
         return x * param + config
 
     def combine_old(
-        images: sl.Map[Run, ScaledImage], params: sl.Map[Run, ImageParam]
+        images: sl.Series[Run, ScaledImage], params: sl.Series[Run, ImageParam]
     ) -> float:
         return sum(images.values())
 
-    def combine(images: sl.Map[Run, ScaledImage]) -> float:
+    def combine(images: sl.Series[Run, ScaledImage]) -> float:
         return sum(images.values())
 
-    def combine_configs(x: sl.Map[Setting, float]) -> Result:
+    def combine_configs(x: sl.Series[Setting, float]) -> Result:
         return Result(sum(x.values()))
 
     def make_int() -> int:

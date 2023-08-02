@@ -26,7 +26,7 @@ from .domain import Scope
 from .graph import find_nodes_in_paths
 from .param_table import ParamTable
 from .scheduler import Graph, Scheduler
-from .variadic import Map
+from .series import Series
 
 T = TypeVar('T')
 KeyType = TypeVar('KeyType')
@@ -272,7 +272,7 @@ class Pipeline:
             if tp in self._param_series:
                 graph[tp] = (self._param_sentinel, (self._param_series[tp],))
                 continue
-            if get_origin(tp) == Map:
+            if get_origin(tp) == Series:
                 graph.update(self._build_indexed_subgraph(tp))
                 continue
             provider: Callable[..., T]
@@ -289,7 +289,7 @@ class Pipeline:
                     stack.append(arg)
         return graph
 
-    def _build_indexed_subgraph(self, tp: Type[Map[KeyType, ValueType]]) -> Graph:
+    def _build_indexed_subgraph(self, tp: Type[Series[KeyType, ValueType]]) -> Graph:
         index_name: Type[KeyType]
         value_type: Type[ValueType]
         index_name, value_type = get_args(tp)
@@ -297,7 +297,7 @@ class Pipeline:
         size = len(index)
         args = [_indexed_key(index_name, i, value_type) for i in range(size)]
         graph: Graph = {}
-        graph[tp] = (lambda *values: Map(dict(zip(index, values))), args)
+        graph[tp] = (lambda *values: Series(dict(zip(index, values))), args)
 
         subgraph = self.build(value_type)
         path = find_nodes_in_paths(subgraph, value_type, index_name)
