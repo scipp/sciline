@@ -250,7 +250,7 @@ class Pipeline:
                 raise AmbiguousProvider("Multiple providers found for type", tp)
         raise UnsatisfiedRequirement("No provider found for type", tp)
 
-    def build(self, tp: Type[T], /) -> Graph:
+    def build(self, tp: Type[T], /, search_param_tables: bool = False) -> Graph:
         """
         Return a dict of providers required for building the requested type `tp`.
 
@@ -269,7 +269,7 @@ class Pipeline:
         stack: List[Union[Type[T], Label[T]]] = [tp]
         while stack:
             tp = stack.pop()
-            if tp in self._param_series:
+            if search_param_tables and tp in self._param_series:
                 graph[tp] = (self._param_sentinel, (self._param_series[tp],))
                 continue
             if get_origin(tp) == Series:
@@ -299,7 +299,7 @@ class Pipeline:
         graph: Graph = {}
         graph[tp] = (lambda *values: Series(dict(zip(index, values))), args)
 
-        subgraph = self.build(value_type)
+        subgraph = self.build(value_type, search_param_tables=True)
         path = find_nodes_in_paths(subgraph, value_type, index_name)
         for key, value in subgraph.items():
             if key in path:

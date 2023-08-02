@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright (c) 2023 Scipp contributors (https://github.com/scipp)
-from typing import NewType
+from typing import NewType, TypeVar
 
 import pytest
 
@@ -125,11 +125,11 @@ def test_dependencies_on_different_param_tables_broadcast() -> None:
     Param2 = NewType("Param2", int)
     Product = NewType("Product", str)
 
-    def gather(x: sl.Series[Row1, Param1], y: sl.Series[Row2, Param2]) -> Product:
+    def gather_both(x: sl.Series[Row1, Param1], y: sl.Series[Row2, Param2]) -> Product:
         broadcast = [[x_, y_] for x_ in x.values() for y_ in y.values()]
         return str(broadcast)
 
-    pl = sl.Pipeline([gather])
+    pl = sl.Pipeline([gather_both])
     pl.set_param_table(sl.ParamTable(Row1, {Param1: [1, 2, 3]}))
     pl.set_param_table(sl.ParamTable(Row2, {Param2: [4, 5]}))
     assert pl.compute(Product) == "[[1, 4], [1, 5], [2, 4], [2, 5], [3, 4], [3, 5]]"
@@ -143,13 +143,13 @@ def test_dependency_on_other_param_table_in_parent_broadcasts_branch() -> None:
     Summed2 = NewType("Summed2", int)
     Product = NewType("Product", str)
 
-    def gather2(x: Param1, y: sl.Series[Row2, Param2]) -> Summed2:
+    def gather2_and_combine(x: Param1, y: sl.Series[Row2, Param2]) -> Summed2:
         return Summed2(x * sum(y.values()))
 
     def gather1(x: sl.Series[Row1, Summed2]) -> Product:
         return str(list(x.values()))
 
-    pl = sl.Pipeline([gather1, gather2])
+    pl = sl.Pipeline([gather1, gather2_and_combine])
     pl.set_param_table(sl.ParamTable(Row1, {Param1: [1, 2, 3]}))
     pl.set_param_table(sl.ParamTable(Row2, {Param2: [4, 5]}))
     assert pl.compute(Product) == "[9, 18, 27]"
@@ -177,3 +177,48 @@ def test_dependency_on_other_param_table_in_grandparent_broadcasts_branch() -> N
     pl.set_param_table(sl.ParamTable(Row1, {Param1: [1, 2, 3]}))
     pl.set_param_table(sl.ParamTable(Row2, {Param2: [4, 5]}))
     assert pl.compute(Product) == "[9, 18, 27]"
+
+
+def test_generic_providers_work_with_param_tables() -> None:
+    Param = TypeVar('Param')
+    Row = NewType("Row", int)
+
+    class Str(sl.Scope[Param, str], str):
+        ...
+
+    def parametrized(x: Param) -> Str[Param]:
+        return Str(f'{x}')
+
+    def make_float() -> float:
+        return 1.5
+
+    pipeline = sl.Pipeline([make_float, parametrized])
+    pipeline.set_param_table(sl.ParamTable(Row, {int: [1, 2, 3]}))
+
+    assert pipeline.compute(Str[float]) == Str[float]('1.5')
+    with pytest.raises(sl.UnsatisfiedRequirement):
+        pipeline.compute(Str[int])
+    assert pipeline.compute(sl.Series[Row, Str[int]]) == {
+        0: Str[int]('1'),
+        1: Str[int]('2'),
+        2: Str[int]('3'),
+    }
+
+
+def test_generic_provider_can_depend_on_param_series() -> None:
+    Param = TypeVar('Param')
+    Row = NewType("Row", int)
+
+    class Str(sl.Scope[Param, str], str):
+        ...
+
+    def parametrized_gather(x: sl.Series[Row, Param]) -> Str[Param]:
+        return Str(f'{list(x.values())}')
+
+    pipeline = sl.Pipeline([parametrized_gather])
+    pipeline.set_param_table(
+        sl.ParamTable(Row, {int: [1, 2, 3], float: [1.5, 2.5, 3.5]})
+    )
+
+    assert pipeline.compute(Str[int]) == Str[int]('[1, 2, 3]')
+    assert pipeline.compute(Str[float]) == Str[float]('[1.5, 2.5, 3.5]')
