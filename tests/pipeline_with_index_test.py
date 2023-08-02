@@ -222,3 +222,44 @@ def test_generic_provider_can_depend_on_param_series() -> None:
 
     assert pipeline.compute(Str[int]) == Str[int]('[1, 2, 3]')
     assert pipeline.compute(Str[float]) == Str[float]('[1.5, 2.5, 3.5]')
+
+
+def test_generic_provider_can_depend_on_derived_param_series() -> None:
+    T = TypeVar('T')
+    Row = NewType("Row", int)
+
+    class Str(sl.Scope[T, str], str):
+        ...
+
+    def use_param(x: int) -> float:
+        return x + 0.5
+
+    def parametrized_gather(x: sl.Series[Row, T]) -> Str[T]:
+        return Str(f'{list(x.values())}')
+
+    pipeline = sl.Pipeline([parametrized_gather, use_param])
+    pipeline.set_param_table(sl.ParamTable(Row, {int: [1, 2, 3]}))
+
+    assert pipeline.compute(Str[float]) == Str[float]('[1.5, 2.5, 3.5]')
+
+
+def test_params_in_table_can_be_generic() -> None:
+    T = TypeVar('T')
+    Row = NewType("Row", int)
+
+    class Str(sl.Scope[T, str], str):
+        ...
+
+    class Param(sl.Scope[T, str], str):
+        ...
+
+    def parametrized_gather(x: sl.Series[Row, Param[T]]) -> Str[T]:
+        return Str(','.join(x.values()))
+
+    pipeline = sl.Pipeline([parametrized_gather])
+    pipeline.set_param_table(
+        sl.ParamTable(Row, {Param[int]: ["1", "2"], Param[float]: ["1.5", "2.5"]})
+    )
+
+    assert pipeline.compute(Str[int]) == Str[int]('1,2')
+    assert pipeline.compute(Str[float]) == Str[float]('1.5,2.5')
