@@ -39,19 +39,30 @@ def test_can_depend_on_elements_of_param_table() -> None:
     assert pl.compute(str) == "2.0"
 
 
-def test_can_compute_map_of_param_values() -> None:
+def test_can_compute_series_of_param_values() -> None:
     pl = sl.Pipeline()
     pl.set_param_table(sl.ParamTable(int, {float: [1.0, 2.0, 3.0]}))
     assert pl.compute(sl.Series[int, float]) == {0: 1.0, 1: 2.0, 2: 3.0}
 
 
-def test_can_compute_map_of_derived_values() -> None:
+def test_can_compute_series_of_derived_values() -> None:
     def process(x: float) -> str:
         return str(x)
 
     pl = sl.Pipeline([process])
     pl.set_param_table(sl.ParamTable(int, {float: [1.0, 2.0, 3.0]}))
     assert pl.compute(sl.Series[int, str]) == {0: "1.0", 1: "2.0", 2: "3.0"}
+
+
+def test_explicit_index_of_param_table_is_forwarded_correctly() -> None:
+    def process(x: float) -> int:
+        return int(x)
+
+    pl = sl.Pipeline([process])
+    pl.set_param_table(
+        sl.ParamTable(str, {float: [1.0, 2.0, 3.0]}, index=['a', 'b', 'c'])
+    )
+    assert pl.compute(sl.Series[str, int]) == {'a': 1, 'b': 2, 'c': 3}
 
 
 def test_can_gather_index() -> None:
@@ -105,3 +116,64 @@ def test_diamond_dependency_pulls_values_from_columns_in_same_param_table() -> N
     pl.set_param_table(sl.ParamTable(Row, {Param1: [1, 4, 9], Param2: [1, 2, 3]}))
 
     assert pl.compute(Sum) == 6
+
+
+def test_dependencies_on_different_param_tables_broadcast() -> None:
+    Row1 = NewType("Row1", int)
+    Row2 = NewType("Row2", int)
+    Param1 = NewType("Param1", int)
+    Param2 = NewType("Param2", int)
+    Product = NewType("Product", str)
+
+    def gather(x: sl.Series[Row1, Param1], y: sl.Series[Row2, Param2]) -> Product:
+        broadcast = [[x_, y_] for x_ in x.values() for y_ in y.values()]
+        return str(broadcast)
+
+    pl = sl.Pipeline([gather])
+    pl.set_param_table(sl.ParamTable(Row1, {Param1: [1, 2, 3]}))
+    pl.set_param_table(sl.ParamTable(Row2, {Param2: [4, 5]}))
+    assert pl.compute(Product) == "[[1, 4], [1, 5], [2, 4], [2, 5], [3, 4], [3, 5]]"
+
+
+def test_dependency_on_other_param_table_in_parent_broadcasts_branch() -> None:
+    Row1 = NewType("Row1", int)
+    Row2 = NewType("Row2", int)
+    Param1 = NewType("Param1", int)
+    Param2 = NewType("Param2", int)
+    Summed2 = NewType("Summed2", int)
+    Product = NewType("Product", str)
+
+    def gather2(x: Param1, y: sl.Series[Row2, Param2]) -> Summed2:
+        return Summed2(x * sum(y.values()))
+
+    def gather1(x: sl.Series[Row1, Summed2]) -> Product:
+        return str(list(x.values()))
+
+    pl = sl.Pipeline([gather1, gather2])
+    pl.set_param_table(sl.ParamTable(Row1, {Param1: [1, 2, 3]}))
+    pl.set_param_table(sl.ParamTable(Row2, {Param2: [4, 5]}))
+    assert pl.compute(Product) == "[9, 18, 27]"
+
+
+def test_dependency_on_other_param_table_in_grandparent_broadcasts_branch() -> None:
+    Row1 = NewType("Row1", int)
+    Row2 = NewType("Row2", int)
+    Param1 = NewType("Param1", int)
+    Param2 = NewType("Param2", int)
+    Summed2 = NewType("Summed2", int)
+    Combined = NewType("Combined", int)
+    Product = NewType("Product", str)
+
+    def gather2(x: sl.Series[Row2, Param2]) -> Summed2:
+        return Summed2(sum(x.values()))
+
+    def combine(x: Param1, y: Summed2) -> Combined:
+        return Combined(x * y)
+
+    def gather1(x: sl.Series[Row1, Combined]) -> Product:
+        return str(list(x.values()))
+
+    pl = sl.Pipeline([gather1, gather2, combine])
+    pl.set_param_table(sl.ParamTable(Row1, {Param1: [1, 2, 3]}))
+    pl.set_param_table(sl.ParamTable(Row2, {Param2: [4, 5]}))
+    assert pl.compute(Product) == "[9, 18, 27]"
