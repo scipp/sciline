@@ -7,7 +7,6 @@ from typing import (
     Any,
     Callable,
     Dict,
-    Generic,
     List,
     Optional,
     Tuple,
@@ -48,14 +47,14 @@ class AmbiguousProvider(Exception):
 
 
 @dataclass(frozen=True)
-class Label(Generic[T]):
-    tp: Type[T]
+class Label:
+    tp: type
     index: int
 
 
 @dataclass(frozen=True)
-class Item(Generic[T]):
-    label: Tuple[Label[T], ...]
+class Item:
+    label: Tuple[Label, ...]
     tp: type
 
 
@@ -291,7 +290,7 @@ class Pipeline:
         size = len(index)
         args = [_indexed_key(index_name, i, value_type) for i in range(size)]
         graph: Graph = {}
-        graph[tp] = (lambda *values: Series(dict(zip(index, values))), args)
+        graph[tp] = (lambda *values: Series(index_name, dict(zip(index, values))), args)
 
         subgraph = self.build(value_type, search_param_tables=True)
         path = find_nodes_in_paths(subgraph, value_type, index_name)

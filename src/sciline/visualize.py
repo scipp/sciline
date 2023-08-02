@@ -35,7 +35,7 @@ def to_graphviz(graph: Graph, **kwargs: Any) -> Digraph:
         # a dict
         if p_name.startswith('Pipeline._build_indexed_subgraph.'):
             for arg in args:
-                dot.edge(arg, ret)
+                dot.edge(arg, ret, style='dashed')
         else:
             dot.node(p, p_name, shape='ellipse')
             for arg in args:

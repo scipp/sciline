@@ -108,9 +108,7 @@ def test_diamond_dependency_pulls_values_from_columns_in_same_param_table() -> N
     Param2 = NewType("Param2", int)
     Row = NewType("Run", int)
 
-    def gather(
-        x: sl.Series[Row, float],
-    ) -> Sum:
+    def gather(x: sl.Series[Row, float]) -> Sum:
         return Sum(sum(x.values()))
 
     def join(x: Param1, y: Param2) -> float:
@@ -120,6 +118,31 @@ def test_diamond_dependency_pulls_values_from_columns_in_same_param_table() -> N
     pl.set_param_table(sl.ParamTable(Row, {Param1: [1, 4, 9], Param2: [1, 2, 3]}))
 
     assert pl.compute(Sum) == 6
+
+
+def test_diamond_dependency_on_same_column() -> None:
+    Sum = NewType("Sum", float)
+    Param = NewType("Param", int)
+    Param1 = NewType("Param1", int)
+    Param2 = NewType("Param2", int)
+    Row = NewType("Run", int)
+
+    def gather(x: sl.Series[Row, float]) -> Sum:
+        return Sum(sum(x.values()))
+
+    def to_param1(x: Param) -> Param1:
+        return Param1(x)
+
+    def to_param2(x: Param) -> Param2:
+        return Param2(x)
+
+    def join(x: Param1, y: Param2) -> float:
+        return x / y
+
+    pl = sl.Pipeline([gather, join, to_param1, to_param2])
+    pl.set_param_table(sl.ParamTable(Row, {Param: [1, 2, 3]}))
+
+    assert pl.compute(Sum) == 3
 
 
 def test_dependencies_on_different_param_tables_broadcast() -> None:
