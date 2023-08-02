@@ -289,13 +289,11 @@ class Pipeline:
 
     def _build_indexed_subgraph(self, tp: Type[T]) -> Graph:
         index_name, value_type = get_args(tp)
-        size = len(self._param_tables[index_name].index)
-        provider = self._make_mapping_provider(
-            value_type=value_type, mapping_type=tp, index_name=index_name
-        )
+        index = self._param_tables[index_name].index
+        size = len(index)
         args = [_indexed_key(index_name, i, value_type) for i in range(size)]
         graph: Graph = {}
-        graph[tp] = (provider, args)
+        graph[tp] = (lambda *values: Map(dict(zip(index, values))), args)
 
         subgraph = self.build(value_type)
         path = find_nodes_in_paths(subgraph, value_type, index_name)
@@ -315,14 +313,6 @@ class Pipeline:
             else:
                 graph[key] = value
         return graph
-
-    def _make_mapping_provider(
-        self, value_type: type, mapping_type: type, index_name: type
-    ) -> Callable[..., Any]:
-        def provider(*args):  # type: ignore[no-untyped-def]
-            return mapping_type(dict(zip(self._param_tables[index_name].index, args)))
-
-        return provider
 
     @overload
     def compute(self, tp: Type[T]) -> T:
