@@ -2,8 +2,26 @@
 # Copyright (c) 2023 Scipp contributors (https://github.com/scipp)
 from typing import NewType
 
+import pytest
+
 import sciline as sl
 from sciline.pipeline import Item, Label
+
+
+def test_set_param_table_raises_if_param_names_are_duplicate():
+    pl = sl.Pipeline()
+    pl.set_param_table(sl.ParamTable(int, {float: [1.0, 2.0, 3.0]}))
+    with pytest.raises(ValueError):
+        pl.set_param_table(sl.ParamTable(str, {float: [1.0, 2.0, 3.0]}))
+    assert str not in pl.param_tables
+
+
+def test_set_param_table_raises_if_row_dim_is_duplicate():
+    pl = sl.Pipeline()
+    pl.set_param_table(sl.ParamTable(int, {float: [1.0, 2.0, 3.0]}))
+    with pytest.raises(ValueError):
+        pl.set_param_table(sl.ParamTable(int, {str: ['a', 'b', 'c']}))
+    assert pl.param_tables[int] == sl.ParamTable(int, {float: [1.0, 2.0, 3.0]})
 
 
 def test_can_get_elements_of_param_table() -> None:

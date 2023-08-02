@@ -185,14 +185,23 @@ class Pipeline:
             )
         self._set_provider(key, lambda: param)
 
+    @property
+    def param_tables(self) -> Dict[Key, ParamTable]:
+        return dict(self._param_tables)
+
     def set_param_table(self, params: ParamTable) -> None:
+        if params.row_dim in self._param_tables:
+            raise ValueError(f'Parameter table for {params.row_dim} already set')
+        for param_name in params:
+            if param_name in self._param_series:
+                raise ValueError(f'Parameter {param_name} already set')
         self._param_tables[params.row_dim] = params
-        for param_type in params:
-            self._param_series[param_type] = params.row_dim
-        for param_type, values in params.items():
+        for param_name in params:
+            self._param_series[param_name] = params.row_dim
+        for param_name, values in params.items():
             for i, label in enumerate(values):
                 self._set_provider(
-                    Item((Label(tp=params.row_dim, index=i),), param_type),
+                    Item((Label(tp=params.row_dim, index=i),), param_name),
                     lambda label=label: label,
                 )
 
