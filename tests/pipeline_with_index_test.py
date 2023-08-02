@@ -12,8 +12,10 @@ def test_set_param_table_raises_if_param_names_are_duplicate():
     pl = sl.Pipeline()
     pl.set_param_table(sl.ParamTable(int, {float: [1.0, 2.0, 3.0]}))
     with pytest.raises(ValueError):
-        pl.set_param_table(sl.ParamTable(str, {float: [1.0, 2.0, 3.0]}))
-    assert str not in pl.param_tables
+        pl.set_param_table(sl.ParamTable(str, {float: [4.0, 5.0, 6.0]}))
+    assert pl.compute(Item((Label(int, 1),), float)) == 2.0
+    with pytest.raises(sl.UnsatisfiedRequirement):
+        pl.compute(Item((Label(str, 1),), float))
 
 
 def test_set_param_table_raises_if_row_dim_is_duplicate():
@@ -21,7 +23,9 @@ def test_set_param_table_raises_if_row_dim_is_duplicate():
     pl.set_param_table(sl.ParamTable(int, {float: [1.0, 2.0, 3.0]}))
     with pytest.raises(ValueError):
         pl.set_param_table(sl.ParamTable(int, {str: ['a', 'b', 'c']}))
-    assert pl.param_tables[int] == sl.ParamTable(int, {float: [1.0, 2.0, 3.0]})
+    assert pl.compute(Item((Label(int, 1),), float)) == 2.0
+    with pytest.raises(sl.UnsatisfiedRequirement):
+        pl.compute(Item((Label(int, 1),), str))
 
 
 def test_can_get_elements_of_param_table() -> None:

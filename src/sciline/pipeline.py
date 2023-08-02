@@ -59,9 +59,7 @@ class Item(Generic[T]):
     tp: type
 
 
-def _indexed_key(index_name: Any, i: int, value_name: Any) -> Union[Label, Item]:
-    if index_name == value_name:
-        return Label(index_name, i)
+def _indexed_key(index_name: Any, i: int, value_name: Any) -> Item:
     label = Label(index_name, i)
     if isinstance(value_name, Item):
         return Item(value_name.label + (label,), value_name.tp)
@@ -70,7 +68,7 @@ def _indexed_key(index_name: Any, i: int, value_name: Any) -> Union[Label, Item]
 
 
 Provider = Callable[..., Any]
-Key = Union[type, Label, Item]
+Key = Union[type, Item]
 
 
 def _is_compatible_type_tuple(
@@ -149,7 +147,7 @@ class Pipeline:
             raise ValueError(f'Provider {provider} lacks type-hint for return value')
         self._set_provider(key, provider)
 
-    def __setitem__(self, key: Union[Type[T], Label[T]], param: T) -> None:
+    def __setitem__(self, key: Type[T], param: T) -> None:
         """
         Provide a concrete value for a type.
 
@@ -187,10 +185,6 @@ class Pipeline:
             )
         self._set_provider(key, lambda: param)
 
-    @property
-    def param_tables(self) -> Dict[Key, ParamTable]:
-        return dict(self._param_tables)
-
     def set_param_table(self, params: ParamTable) -> None:
         if params.row_dim in self._param_tables:
             raise ValueError(f'Parameter table for {params.row_dim} already set')
@@ -208,7 +202,7 @@ class Pipeline:
                 )
 
     def _set_provider(
-        self, key: Union[Type[T], Label[T]], provider: Callable[..., T]
+        self, key: Union[Type[T], Item[T]], provider: Callable[..., T]
     ) -> None:
         # isinstance does not work here and types.NoneType available only in 3.10+
         if key == type(None):  # noqa: E721
@@ -225,7 +219,7 @@ class Pipeline:
             self._providers[key] = provider
 
     def _get_provider(
-        self, tp: Union[Type[T], Label[T], Item]
+        self, tp: Union[Type[T], Item]
     ) -> Tuple[Callable[..., T], Dict[TypeVar, Key]]:
         if (provider := self._providers.get(tp)) is not None:
             return provider, {}
