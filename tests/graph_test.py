@@ -3,7 +3,7 @@
 from sciline.graph import find_all_paths
 
 
-def test_find_all_paths():
+def test_find_all_paths() -> None:
     graph = {"D": ["B", "C"], "C": ["A"], "B": ["A"]}
     assert find_all_paths(graph, "D", "A") == [["D", "B", "A"], ["D", "C", "A"]]
     assert find_all_paths(graph, "B", "C") == []

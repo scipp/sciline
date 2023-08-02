@@ -20,7 +20,7 @@ class ParamTable(abc.Mapping):
                 f"Columns in param table must all have same size, got {sizes}"
             )
         size = sizes.pop()
-        if index is not None and len(index) != sizes:
+        if index is not None and len(index) != size:
             raise ValueError(
                 f"Index and columns must have same size, got {len(index)} and {size}"
             )
@@ -36,11 +36,11 @@ class ParamTable(abc.Mapping):
     def index(self) -> Collection[Any]:
         return self._index
 
-    def __contains__(self, __key: object) -> bool:
-        return self._columns.__contains__(__key)
+    def __contains__(self, key: Any) -> bool:
+        return self._columns.__contains__(key)
 
-    def __getitem__(self, __key: object) -> Any:
-        return self._columns.__getitem__(__key)
+    def __getitem__(self, key: Any) -> Any:
+        return self._columns.__getitem__(key)
 
     def __iter__(self) -> Any:
         return self._columns.__iter__()
@@ -49,4 +49,4 @@ class ParamTable(abc.Mapping):
         return self._columns.__len__()
 
     def __repr__(self) -> str:
-        return f"ParamTable(row_dim={self.row_dim}, columns={self.columns})"
+        return f"ParamTable(row_dim={self.row_dim}, columns={self._columns})"
