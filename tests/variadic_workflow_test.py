@@ -70,7 +70,7 @@ def test_Map() -> None:
     assert graph.compute() == 2
     graph = pipeline.get(Result)
     assert graph.compute() == 66.0
-    graph.visualize().render('graph', format='png')
+    # graph.visualize().render('graph', format='png')
     # from dask.delayed import Delayed
     # dsk = {key: (value, *args) for key, (value, args) in graph._graph.items()}
     # Delayed(Result, dsk).visualize(filename='graph.png')
