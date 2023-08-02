@@ -3,24 +3,22 @@
 from typing import NewType
 
 import sciline as sl
-from sciline.pipeline import Label
+from sciline.pipeline import Item, Label
 
 
-def test_set_index_sets_up_providers_with_indexable_instances() -> None:
+def test_can_get_elements_of_param_table() -> None:
     pl = sl.Pipeline()
-    pl.set_index(float, [1.0, 2.0, 3.0])
-    assert pl.compute(Label(float, 0)) == 1.0
-    assert pl.compute(Label(float, 1)) == 2.0
-    assert pl.compute(Label(float, 2)) == 3.0
+    pl.set_param_table(int, {float: [1.0, 2.0, 3.0]})
+    assert pl.compute(Item((Label(int, 1),), float)) == 2.0
 
 
-def test_can_depend_on_index_elements() -> None:
-    def use_index_elem(x: Label(float, 1)) -> int:
-        return int(x)
+def test_can_depend_on_elements_of_param_table() -> None:
+    def use_elem(x: Item((Label(int, 1),), float)) -> str:
+        return str(x)
 
-    pl = sl.Pipeline([use_index_elem])
-    pl.set_index(float, [1.0, 2.0, 3.0])
-    assert pl.compute(int) == 2
+    pl = sl.Pipeline([use_elem])
+    pl.set_param_table(int, {float: [1.0, 2.0, 3.0]})
+    assert pl.compute(str) == "2.0"
 
 
 def test_can_gather_index() -> None:
@@ -56,7 +54,7 @@ def test_can_zip() -> None:
     assert pl.compute(Sum) == "['a1', 'a2', 'ccc3']"
 
 
-def test_diamond_dependency_works() -> None:
+def test_diamond_dependency_pulls_values_from_columns_in_same_param_table() -> None:
     Sum = NewType("Sum", float)
     Param1 = NewType("Param1", int)
     Param2 = NewType("Param2", int)

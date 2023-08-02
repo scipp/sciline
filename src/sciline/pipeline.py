@@ -185,11 +185,6 @@ class Pipeline:
             )
         self._set_provider(key, lambda: param)
 
-    def set_index(self, key: Type[T], index: Collection[T]) -> None:
-        self._indices[key] = index
-        for i, label in enumerate(index):
-            self._set_provider(Label(tp=key, index=i), lambda label=label: label)
-
     def set_param_table(
         self, key: Type[T], value_series: Dict[type, Collection]
     ) -> None:
