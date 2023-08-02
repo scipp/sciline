@@ -309,18 +309,14 @@ class Pipeline:
             if key in path:
                 for i in range(size):
                     provider, args = value
+                    subkey = _indexed_key(index_name, i, key)
                     if provider == self._param_sentinel:
-                        provider, _ = self._get_provider(
-                            _indexed_key(index_name, i, key)
-                        )
+                        provider, _ = self._get_provider(subkey)
                     args_with_index = tuple(
                         _indexed_key(index_name, i, arg) if arg in path else arg
                         for arg in args
                     )
-                    graph[_indexed_key(index_name, i, key)] = (
-                        provider,
-                        args_with_index,
-                    )
+                    graph[subkey] = (provider, args_with_index)
             else:
                 graph[key] = value
         return graph
