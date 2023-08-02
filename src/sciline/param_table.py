@@ -19,9 +19,14 @@ class ParamTable(abc.Mapping):
             raise ValueError(
                 f"Columns in param table must all have same size, got {sizes}"
             )
+        size = sizes.pop()
+        if index is not None and len(index) != sizes:
+            raise ValueError(
+                f"Index and columns must have same size, got {len(index)} and {size}"
+            )
         self._row_dim = row_dim
         self._columns = columns
-        self._index = index or list(range(sizes.pop()))
+        self._index = index or list(range(size))
 
     @property
     def row_dim(self) -> type:
