@@ -54,3 +54,23 @@ def test_can_zip() -> None:
     pl.set_param_table(Run, {str: ['a', 'a', 'ccc'], int: [1, 2, 3]})
 
     assert pl.compute(Sum) == "['a1', 'a2', 'ccc3']"
+
+
+def test_diamond_dependency_works() -> None:
+    Sum = NewType("Sum", float)
+    Param1 = NewType("Param1", int)
+    Param2 = NewType("Param2", int)
+    Row = NewType("Run", int)
+
+    def gather(
+        x: sl.Map[Row, float],
+    ) -> Sum:
+        return Sum(sum(x.values()))
+
+    def join(x: Param1, y: Param2) -> float:
+        return x / y
+
+    pl = sl.Pipeline([gather, join])
+    pl.set_param_table(Row, {Param1: [1, 4, 9], Param2: [1, 2, 3]})
+
+    assert pl.compute(Sum) == 6

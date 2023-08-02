@@ -266,7 +266,7 @@ class Pipeline:
         while stack:
             tp = stack.pop()
             if tp in self._param_series:
-                graph[tp] = (self._param_sentinel, ())
+                graph[tp] = (self._param_sentinel, (self._param_series[tp],))
                 continue
             if get_origin(tp) == Map:
                 graph.update(self._build_indexed_subgraph(tp))
@@ -296,15 +296,7 @@ class Pipeline:
         graph[tp] = (provider, args)
 
         subgraph = self.build(value_type)
-        param_name = None
-        for k, (provider, _) in subgraph.items():
-            if provider == self._param_sentinel:
-                if param_name is not None:
-                    raise ValueError(
-                        f'Found multiple param names in subgraph: {param_name}, {k}'
-                    )
-                param_name = k
-        path = find_nodes_in_paths(subgraph, value_type, param_name)
+        path = find_nodes_in_paths(subgraph, value_type, index_name)
         for key, value in subgraph.items():
             if key in path:
                 for i in range(size):
@@ -312,6 +304,7 @@ class Pipeline:
                     subkey = _indexed_key(index_name, i, key)
                     if provider == self._param_sentinel:
                         provider, _ = self._get_provider(subkey)
+                        args = ()
                     args_with_index = tuple(
                         _indexed_key(index_name, i, arg) if arg in path else arg
                         for arg in args
