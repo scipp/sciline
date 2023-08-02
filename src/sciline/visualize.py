@@ -28,12 +28,12 @@ def to_graphviz(graph: Graph, **kwargs: Any) -> Digraph:
         # Do not draw dummy providers created by Pipeline when setting instances
         if p_name in (
             'Pipeline.__setitem__.<locals>.<lambda>',
-            'Pipeline.set_index.<locals>.<lambda>',
+            'Pipeline.set_param_table.<locals>.<lambda>',
         ):
             continue
         # Do not draw the internal provider gathering index-dependent results into
         # a dict
-        if p_name.startswith('Pipeline._make_mapping_provider.'):
+        if p_name.startswith('Pipeline._build_indexed_subgraph.'):
             for arg in args:
                 dot.edge(arg, ret)
         else:

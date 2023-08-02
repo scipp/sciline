@@ -29,6 +29,8 @@ from .scheduler import Graph, Scheduler
 from .variadic import Map
 
 T = TypeVar('T')
+KeyType = TypeVar('KeyType')
+ValueType = TypeVar('ValueType')
 
 
 class UnsatisfiedRequirement(Exception):
@@ -287,7 +289,9 @@ class Pipeline:
                     stack.append(arg)
         return graph
 
-    def _build_indexed_subgraph(self, tp: Type[T]) -> Graph:
+    def _build_indexed_subgraph(self, tp: Type[Map[KeyType, ValueType]]) -> Graph:
+        index_name: Type[KeyType]
+        value_type: Type[ValueType]
         index_name, value_type = get_args(tp)
         index = self._param_tables[index_name].index
         size = len(index)

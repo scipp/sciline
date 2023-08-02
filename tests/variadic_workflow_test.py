@@ -6,6 +6,8 @@ import sciline as sl
 
 
 def test_Map() -> None:
+    Run = NewType('Run', int)
+    Setting = NewType('Setting', int)
     Filename = NewType('Filename', str)
     Config = NewType('Config', int)
     Image = NewType('Image', float)
@@ -31,14 +33,14 @@ def test_Map() -> None:
         return x * param + config
 
     def combine_old(
-        images: sl.Map[Filename, ScaledImage], params: sl.Map[Filename, ImageParam]
+        images: sl.Map[Run, ScaledImage], params: sl.Map[Run, ImageParam]
     ) -> float:
         return sum(images.values())
 
-    def combine(images: sl.Map[Filename, ScaledImage]) -> float:
+    def combine(images: sl.Map[Run, ScaledImage]) -> float:
         return sum(images.values())
 
-    def combine_configs(x: sl.Map[Config, float]) -> Result:
+    def combine_configs(x: sl.Map[Setting, float]) -> Result:
         return Result(sum(x.values()))
 
     def make_int() -> int:
@@ -61,8 +63,8 @@ def test_Map() -> None:
             image_param,
         ]
     )
-    pipeline.set_index(Filename, filenames)
-    pipeline.set_index(Config, configs)
+    pipeline.set_param_table(sl.ParamTable(Run, {Filename: filenames}))
+    pipeline.set_param_table(sl.ParamTable(Setting, {Config: configs}))
 
     graph = pipeline.get(int)
     assert graph.compute() == 2
