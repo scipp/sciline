@@ -206,6 +206,30 @@ def test_dependency_on_other_param_table_in_grandparent_broadcasts_branch() -> N
     assert pl.compute(Product) == "[9, 18, 27]"
 
 
+def test_nested_dependencies_on_different_param_tables() -> None:
+    Row1 = NewType("Row1", int)
+    Row2 = NewType("Row2", int)
+    Param1 = NewType("Param1", int)
+    Param2 = NewType("Param2", int)
+    Combined = NewType("Combined", int)
+
+    def combine(x: Param1, y: Param2) -> Combined:
+        return Combined(x * y)
+
+    pl = sl.Pipeline([combine])
+    pl.set_param_table(sl.ParamTable(Row1, {Param1: [1, 2, 3]}))
+    pl.set_param_table(sl.ParamTable(Row2, {Param2: [4, 5]}))
+    assert pl.compute(sl.Series[Row1, sl.Series[Row2, Combined]]) == {
+        0: {0: 4, 1: 5},
+        1: {0: 8, 1: 10},
+        2: {0: 12, 1: 15},
+    }
+    assert pl.compute(sl.Series[Row2, sl.Series[Row1, Combined]]) == {
+        0: {0: 4, 1: 8, 2: 12},
+        1: {0: 5, 1: 10, 2: 15},
+    }
+
+
 def test_generic_providers_work_with_param_tables() -> None:
     Param = TypeVar('Param')
     Row = NewType("Row", int)
