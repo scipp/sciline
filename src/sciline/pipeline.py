@@ -2,6 +2,7 @@
 # Copyright (c) 2023 Scipp contributors (https://github.com/scipp)
 from __future__ import annotations
 
+from collections import defaultdict
 from dataclasses import dataclass
 from typing import (
     Any,
@@ -283,28 +284,55 @@ class Pipeline:
         return graph
 
     def _build_series(self, tp: Type[Series[KeyType, ValueType]]) -> Graph:
-        index_name: Type[KeyType]
+        label_name: Type[KeyType]
         value_type: Type[ValueType]
-        index_name, value_type = get_args(tp)
-        index = self._param_tables[index_name].index
+        label_name, value_type = get_args(tp)
+        if label_name in self._param_tables:
+            index = self._param_tables[label_name].index
+            index_name = None
+        elif (index_name := self._param_series.get(label_name)) is not None:
+            indices = self._param_tables[index_name].index
+            labels = self._param_tables[index_name][label_name]
+            groups = defaultdict(list)
+            for i, label in zip(indices, labels):
+                groups[label].append(i)
+            index = list(groups)
+
         size = len(index)
-        args = [_indexed_key(index_name, i, value_type) for i in range(size)]
+        args = [_indexed_key(label_name, i, value_type) for i in range(size)]
         graph: Graph = {}
-        graph[tp] = (lambda *values: Series(index_name, dict(zip(index, values))), args)
+        graph[tp] = (lambda *values: Series(label_name, dict(zip(index, values))), args)
 
         subgraph = self.build(value_type, search_param_tables=True)
-        path = find_nodes_in_paths(subgraph, value_type, index_name)
+        if index_name is None:
+            path_end = label_name
+        else:
+            for key in subgraph:
+                if get_origin(key) == Series and get_args(key)[0] == index_name:
+                    path_end = key
+        path = find_nodes_in_paths(subgraph, value_type, path_end)
         for key, value in subgraph.items():
             if key in path:
+
+                def _in_group(arg, group_index: int):
+                    if len(arg.label) != 1:
+                        raise ValueError(
+                            f'Cannot build series with multi-index label {arg.label}'
+                        )
+                    return arg.label[0].index in groups[index[group_index]]
+
+                in_group = _in_group if key == path_end else lambda *_: True
+
                 for i in range(size):
                     provider, args = value
-                    subkey = _indexed_key(index_name, i, key)
+                    subkey = _indexed_key(label_name, i, key)
                     if provider == self._param_sentinel:
                         provider, _ = self._get_provider(subkey)
                         args = ()
                     args_with_index = tuple(
-                        _indexed_key(index_name, i, arg) if arg in path else arg
+                        _indexed_key(label_name, i, arg) if arg in path else arg
                         for arg in args
+                        if in_group(arg, i)
                     )
                     graph[subkey] = (provider, args_with_index)
             else:

@@ -262,6 +262,31 @@ def test_poor_mans_groupby_over_param_table() -> None:
     assert result == {'a': [1, 2], 'b': [3]}
 
 
+def test_groupby_over_param_table() -> None:
+    Index = NewType("Index", int)
+    Label = NewType("Label", str)
+    Param = NewType("Param", int)
+    ProcessedParam = NewType("ProcessedParam", int)
+    SummedGroup = NewType("SummedGroup", int)
+    ProcessedGroup = NewType("ProcessedGroup", int)
+
+    def process_param(x: Param) -> ProcessedParam:
+        return ProcessedParam(x + 1)
+
+    def sum_group(group: sl.Series[Index, ProcessedParam]) -> SummedGroup:
+        return SummedGroup(sum(group.values()))
+
+    def process(x: SummedGroup) -> ProcessedGroup:
+        return ProcessedGroup(2 * x)
+
+    params = sl.ParamTable(Index, {Param: [1, 2, 3], Label: ['a', 'a', 'b']})
+    pl = sl.Pipeline([process_param, sum_group, process])
+    pl.set_param_table(params)
+
+    graph = pl.get(sl.Series[Label, ProcessedGroup])
+    assert graph.compute() == {'a': 10, 'b': 8}
+
+
 def test_generic_providers_work_with_param_tables() -> None:
     Param = TypeVar('Param')
     Row = NewType("Row", int)
