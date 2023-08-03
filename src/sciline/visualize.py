@@ -33,7 +33,7 @@ def to_graphviz(graph: Graph, **kwargs: Any) -> Digraph:
             continue
         # Do not draw the internal provider gathering index-dependent results into
         # a dict
-        if p_name.startswith('Pipeline._build_indexed_subgraph.'):
+        if p_name.startswith('Pipeline._build_series.'):
             for arg in args:
                 dot.edge(arg, ret, style='dashed')
         else:

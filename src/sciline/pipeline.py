@@ -266,7 +266,7 @@ class Pipeline:
                 graph[tp] = (self._param_sentinel, (self._param_series[tp],))
                 continue
             if get_origin(tp) == Series:
-                graph.update(self._build_indexed_subgraph(tp))
+                graph.update(self._build_series(tp))
                 continue
             provider: Callable[..., T]
             provider, bound = self._get_provider(tp)
@@ -282,7 +282,7 @@ class Pipeline:
                     stack.append(arg)
         return graph
 
-    def _build_indexed_subgraph(self, tp: Type[Series[KeyType, ValueType]]) -> Graph:
+    def _build_series(self, tp: Type[Series[KeyType, ValueType]]) -> Graph:
         index_name: Type[KeyType]
         value_type: Type[ValueType]
         index_name, value_type = get_args(tp)
