@@ -5,7 +5,7 @@ from typing import NewType, TypeVar
 import pytest
 
 import sciline as sl
-from sciline.pipeline import Item, Label
+from sciline.pipeline import Dict, Item, Label
 
 
 def test_set_param_table_raises_if_param_names_are_duplicate():
@@ -228,6 +228,38 @@ def test_nested_dependencies_on_different_param_tables() -> None:
         0: {0: 4, 1: 8, 2: 12},
         1: {0: 5, 1: 10, 2: 15},
     }
+
+
+def test_poor_mans_groupby_over_param_table() -> None:
+    Index = NewType("Index", str)
+    Label = NewType("Label", str)
+    Group = NewType("Group", str)
+    Param = NewType("Param", int)
+    GroupedParam = NewType("GroupedParam", int)
+
+    from collections import defaultdict
+
+    # Note that this creates a synchronization point, i.e., at this point all
+    # intermediate results must be computed, before branching out again to groups.
+    # I think there is probably no way around this, without explicit support
+    # from Pipeline.
+    def groupby_label(
+        x: sl.Series[Index, Param], labels: sl.Series[Index, Label]
+    ) -> Dict[Label, GroupedParam]:
+        groups = defaultdict(list)
+        for label, param in zip(labels.values(), x.values()):
+            groups[label].append(param)
+        return groups
+
+    def get_group(group: Group, param: Dict[Label, GroupedParam]) -> GroupedParam:
+        return param[group]
+
+    pl = sl.Pipeline([groupby_label, get_group])
+    pl.set_param_table(sl.ParamTable(Index, {Param: [1, 2, 3], Label: ['a', 'a', 'b']}))
+    groups = ['a', 'b']
+    pl.set_param_table(sl.ParamTable(Label, {Group: groups}, index=groups))
+    result = pl.compute(sl.Series[Label, GroupedParam])
+    assert result == {'a': [1, 2], 'b': [3]}
 
 
 def test_generic_providers_work_with_param_tables() -> None:
