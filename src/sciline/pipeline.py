@@ -287,36 +287,43 @@ class Pipeline:
         label_name: Type[KeyType]
         value_type: Type[ValueType]
         label_name, value_type = get_args(tp)
+        subgraph = self.build(value_type, search_param_tables=True)
         if (params := self._param_tables.get(label_name)) is not None:
             index = params.index
-            index_name = None
-        elif (index_name := self._param_series.get(label_name)) is not None:
-            labels = self._param_tables[index_name][label_name]
-            groups = defaultdict(list)
+            path = find_nodes_in_paths(subgraph, value_type, label_name)
+
+            def in_group(*_) -> bool:
+                return True
+
+        elif ((index_name := self._param_series.get(label_name)) is not None) and (
+            (labels := self._param_tables[index_name].get(label_name)) is not None
+        ):
+            index = defaultdict(list)
             for i, label in enumerate(labels):
-                groups[label].append(i)
-            index = list(groups)
+                index[label].append(i)
+            groups = list(index.values())
+            end = self._find_grouping_node(index_name, subgraph)
+            path = find_nodes_in_paths(subgraph, value_type, end)
+
+            def in_group(arg, group_index: int, key: type):
+                if key != end:
+                    return True
+                if len(arg.label) != 1:
+                    raise ValueError(f'Cannot group with multi-index label {arg.label}')
+                return arg.label[0].index in groups[group_index]
+
+        else:
+            raise UnsatisfiedRequirement(
+                f'No parameter table found for label {label_name}'
+            )
 
         size = len(index)
         args = [_indexed_key(label_name, i, value_type) for i in range(size)]
         graph: Graph = {}
         graph[tp] = (lambda *values: Series(label_name, dict(zip(index, values))), args)
 
-        def _in_group(arg, group_index: int):
-            if len(arg.label) != 1:
-                raise ValueError(f'Cannot group with multi-index label {arg.label}')
-            return arg.label[0].index in groups[index[group_index]]
-
-        subgraph = self.build(value_type, search_param_tables=True)
-        path_end = (
-            label_name
-            if index_name is None
-            else self._find_grouping_node(index_name, subgraph)
-        )
-        path = find_nodes_in_paths(subgraph, value_type, path_end)
         for key, value in subgraph.items():
             if key in path:
-                in_group = _in_group if key == path_end else lambda *_: True
                 for i in range(size):
                     provider, args = value
                     subkey = _indexed_key(label_name, i, key)
@@ -326,7 +333,7 @@ class Pipeline:
                     args_with_index = tuple(
                         _indexed_key(label_name, i, arg) if arg in path else arg
                         for arg in args
-                        if in_group(arg, i)
+                        if in_group(arg, i, key)
                     )
                     graph[subkey] = (provider, args_with_index)
             else:
