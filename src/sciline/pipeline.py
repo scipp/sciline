@@ -287,14 +287,13 @@ class Pipeline:
         label_name: Type[KeyType]
         value_type: Type[ValueType]
         label_name, value_type = get_args(tp)
-        if label_name in self._param_tables:
-            index = self._param_tables[label_name].index
+        if (params := self._param_tables.get(label_name)) is not None:
+            index = params.index
             index_name = None
         elif (index_name := self._param_series.get(label_name)) is not None:
-            indices = self._param_tables[index_name].index
             labels = self._param_tables[index_name][label_name]
             groups = defaultdict(list)
-            for i, label in zip(indices, labels):
+            for i, label in enumerate(labels):
                 groups[label].append(i)
             index = list(groups)
 
@@ -303,26 +302,21 @@ class Pipeline:
         graph: Graph = {}
         graph[tp] = (lambda *values: Series(label_name, dict(zip(index, values))), args)
 
+        def _in_group(arg, group_index: int):
+            if len(arg.label) != 1:
+                raise ValueError(f'Cannot group with multi-index label {arg.label}')
+            return arg.label[0].index in groups[index[group_index]]
+
         subgraph = self.build(value_type, search_param_tables=True)
-        if index_name is None:
-            path_end = label_name
-        else:
-            for key in subgraph:
-                if get_origin(key) == Series and get_args(key)[0] == index_name:
-                    path_end = key
+        path_end = (
+            label_name
+            if index_name is None
+            else self._find_grouping_node(index_name, subgraph)
+        )
         path = find_nodes_in_paths(subgraph, value_type, path_end)
         for key, value in subgraph.items():
             if key in path:
-
-                def _in_group(arg, group_index: int):
-                    if len(arg.label) != 1:
-                        raise ValueError(
-                            f'Cannot build series with multi-index label {arg.label}'
-                        )
-                    return arg.label[0].index in groups[index[group_index]]
-
                 in_group = _in_group if key == path_end else lambda *_: True
-
                 for i in range(size):
                     provider, args = value
                     subkey = _indexed_key(label_name, i, key)
@@ -338,6 +332,15 @@ class Pipeline:
             else:
                 graph[key] = value
         return graph
+
+    def _find_grouping_node(self, index_name: type, subgraph: Graph) -> type:
+        ends = []
+        for key in subgraph:
+            if get_origin(key) == Series and get_args(key)[0] == index_name:
+                ends.append(key)
+        if len(ends) == 1:
+            return ends[0]
+        raise ValueError(f"Could not find unique grouping node, found {ends}")
 
     @overload
     def compute(self, tp: Type[T]) -> T:

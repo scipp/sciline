@@ -262,7 +262,8 @@ def test_poor_mans_groupby_over_param_table() -> None:
     assert result == {'a': [1, 2], 'b': [3]}
 
 
-def test_groupby_over_param_table() -> None:
+@pytest.mark.parametrize("index", [None, [4, 5, 6]])
+def test_groupby_over_param_table(index) -> None:
     Index = NewType("Index", int)
     Label = NewType("Label", str)
     Param = NewType("Param", int)
@@ -279,7 +280,9 @@ def test_groupby_over_param_table() -> None:
     def process(x: SummedGroup) -> ProcessedGroup:
         return ProcessedGroup(2 * x)
 
-    params = sl.ParamTable(Index, {Param: [1, 2, 3], Label: ['a', 'a', 'b']})
+    params = sl.ParamTable(
+        Index, {Param: [1, 2, 3], Label: ['a', 'a', 'b']}, index=index
+    )
     pl = sl.Pipeline([process_param, sum_group, process])
     pl.set_param_table(params)
 
