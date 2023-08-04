@@ -285,6 +285,21 @@ def test_can_groupby_by_requesting_series_of_series() -> None:
     }
 
 
+def test_groupby_by_requesting_series_of_series_preserves_indices() -> None:
+    Row = NewType("Row", int)
+    Param1 = NewType("Param1", int)
+    Param2 = NewType("Param2", int)
+
+    pl = sl.Pipeline()
+    pl.set_param_table(
+        sl.ParamTable(Row, {Param1: [1, 1, 3], Param2: [4, 5, 6]}, index=[11, 12, 13])
+    )
+    assert pl.compute(sl.Series[Param1, sl.Series[Row, Param2]]) == {
+        1: {11: 4, 12: 5},
+        3: {13: 6},
+    }
+
+
 def test_multi_level_groupby_raises_with_params_from_same_table() -> None:
     Row = NewType("Row", int)
     Param1 = NewType("Param1", int)
@@ -312,13 +327,29 @@ def test_multi_level_groupby_with_params_from_different_table() -> None:
     grouping2 = sl.ParamTable(Param2, {Param1: [1, 1, 3]})
     pl.set_param_table(grouping1)
     pl.set_param_table(grouping2)
-    # pl.compute(sl.Series[Param2, sl.Series[Row, Param3]])
     assert pl.compute(sl.Series[Param1, sl.Series[Param2, sl.Series[Row, Param3]]]) == {
-        1: {4: {0: 7}, 5: {0: 8, 1: 9}},
-        3: {6: {0: 10}},
+        1: {4: {0: 7}, 5: {1: 8, 2: 9}},
+        3: {6: {3: 10}},
     }
-    # with pytest.raises(ValueError, match='Could not find unique grouping node'):
-    #    pl.compute(sl.Series[Param1, sl.Series[Param2, sl.Series[Row, Param3]]])
+
+
+def test_multi_level_groupby_with_params_from_different_table_preserves_index() -> None:
+    Row = NewType("Row", int)
+    Param1 = NewType("Param1", int)
+    Param2 = NewType("Param2", int)
+    Param3 = NewType("Param3", int)
+
+    pl = sl.Pipeline()
+    grouping1 = sl.ParamTable(
+        Row, {Param2: [4, 5, 5, 6], Param3: [7, 8, 9, 10]}, index=[100, 200, 300, 400]
+    )
+    grouping2 = sl.ParamTable(Param2, {Param1: [1, 1, 3]})
+    pl.set_param_table(grouping1)
+    pl.set_param_table(grouping2)
+    assert pl.compute(sl.Series[Param1, sl.Series[Param2, sl.Series[Row, Param3]]]) == {
+        1: {4: {100: 7}, 5: {200: 8, 300: 9}},
+        3: {6: {400: 10}},
+    }
 
 
 @pytest.mark.parametrize("index", [None, [4, 5, 6]])

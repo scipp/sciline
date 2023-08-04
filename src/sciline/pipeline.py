@@ -125,6 +125,11 @@ class Grouper:
     def __call__(self, key: Any) -> Any:
         return self.in_group if key == self.grouping_node else self.yes
 
+    def get_grouping(self, key: Any, group: int) -> Optional[List[int]]:
+        if key != self.grouping_node:
+            return None
+        return self.groups[group]
+
     def in_group(self, arg, group_index: int) -> bool:
         if len(arg.label) != 1:
             raise ValueError(f'Cannot group with multi-index label {arg.label}')
@@ -132,6 +137,21 @@ class Grouper:
 
     def yes(self, *_: Any) -> Literal[True]:
         return True
+
+
+class SeriesProducer:
+    def __init__(self, labels: List[Any], row_dim: type) -> None:
+        self._labels = labels
+        self._row_dim = row_dim
+
+    def __call__(self, *vals: Any) -> Series:
+        return Series(self._row_dim, dict(zip(self._labels, vals)))
+
+    def restrict(self, indices: Optional[List[int]]) -> SeriesProducer:
+        if indices is None:
+            return self
+        labels = [self._labels[i] for i in indices]
+        return SeriesProducer(labels, self._row_dim)
 
 
 class Pipeline:
@@ -320,12 +340,14 @@ class Pipeline:
         value_type: Type[ValueType]
         label_name, value_type = get_args(tp)
         subgraph = self.build(value_type, search_param_tables=True)
-        if (params := self._param_tables.get(label_name)) is not None:
+        if (
+            label_name not in self._param_series
+            and (params := self._param_tables.get(label_name)) is not None
+        ):
             path = find_nodes_in_paths(subgraph, value_type, label_name)
             grouper = Grouper(index=params.index)
-        elif ((index_name := self._param_series.get(label_name)) is not None) and (
-            (labels := self._param_tables[index_name].get(label_name)) is not None
-        ):
+        elif (index_name := self._param_series.get(label_name)) is not None:
+            labels = self._param_tables[index_name][label_name]
             grouping_node = self._find_grouping_node(index_name, subgraph)
             path = find_nodes_in_paths(subgraph, value_type, grouping_node)
             grouper = Grouper(index=labels, grouping_node=grouping_node)
@@ -334,9 +356,7 @@ class Pipeline:
 
         args = [_indexed_key(label_name, i, value_type) for i in range(grouper.size)]
         graph: Graph = {}
-        # This is wrong: We duplicate and select a group below,
-        # but zip from the beginning. Need to zip with correct group!
-        graph[tp] = (lambda *vals: Series(label_name, dict(zip(grouper, vals))), args)
+        graph[tp] = (SeriesProducer(list(grouper), label_name), args)
 
         for key, value in subgraph.items():
             if key in path:
@@ -352,6 +372,8 @@ class Pipeline:
                         for arg in args
                         if in_group(arg, i)
                     )
+                    if isinstance(provider, SeriesProducer):
+                        provider = provider.restrict(grouper.get_grouping(key, i))
                     graph[subkey] = (provider, args_with_index)
             else:
                 graph[key] = value
