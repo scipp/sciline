@@ -334,6 +334,8 @@ class Pipeline:
 
         args = [_indexed_key(label_name, i, value_type) for i in range(grouper.size)]
         graph: Graph = {}
+        # This is wrong: We duplicate and select a group below,
+        # but zip from the beginning. Need to zip with correct group!
         graph[tp] = (lambda *vals: Series(label_name, dict(zip(grouper, vals))), args)
 
         for key, value in subgraph.items():
