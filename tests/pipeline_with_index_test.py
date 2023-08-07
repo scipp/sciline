@@ -28,16 +28,6 @@ def test_set_param_table_raises_if_row_dim_is_duplicate():
         pl.compute(Item((Label(int, 1),), str))
 
 
-@pytest.mark.skip(reason="TODO: Should we allow this?")
-def test_non_unique_index_raises():
-    pl = sl.Pipeline()
-    pl.set_param_table(sl.ParamTable(int, {float: [1.0, 2.0, 3.0]}, index=[1, 1, 2]))
-    # TODO Should we raise in ParamTable, or change Series?
-    assert pl.compute(sl.Series[int, float]) == {1: 2.0, 2: 3.0}
-    with pytest.raises(ValueError):
-        pl.compute(sl.Series[int, float])
-
-
 def test_can_get_elements_of_param_table() -> None:
     pl = sl.Pipeline()
     pl.set_param_table(sl.ParamTable(int, {float: [1.0, 2.0, 3.0]}))
