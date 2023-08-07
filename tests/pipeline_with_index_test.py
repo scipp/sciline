@@ -8,7 +8,7 @@ import sciline as sl
 from sciline.pipeline import Item, Label
 
 
-def test_set_param_table_raises_if_param_names_are_duplicate():
+def test_set_param_table_raises_if_param_names_are_duplicate() -> None:
     pl = sl.Pipeline()
     pl.set_param_table(sl.ParamTable(int, {float: [1.0, 2.0, 3.0]}))
     with pytest.raises(ValueError):
@@ -18,7 +18,7 @@ def test_set_param_table_raises_if_param_names_are_duplicate():
         pl.compute(Item((Label(str, 1),), float))
 
 
-def test_set_param_table_raises_if_row_dim_is_duplicate():
+def test_set_param_table_raises_if_row_dim_is_duplicate() -> None:
     pl = sl.Pipeline()
     pl.set_param_table(sl.ParamTable(int, {float: [1.0, 2.0, 3.0]}))
     with pytest.raises(ValueError):
@@ -41,7 +41,8 @@ def test_can_get_elements_of_param_table_with_explicit_index() -> None:
 
 
 def test_can_depend_on_elements_of_param_table() -> None:
-    def use_elem(x: Item((Label(int, 1),), float)) -> str:
+    # This is not a valid type annotation, notsure why it works with get_type_hints
+    def use_elem(x: Item((Label(int, 1),), float)) -> str:  # type: ignore[valid-type]
         return str(x)
 
     pl = sl.Pipeline([use_elem])
@@ -52,7 +53,7 @@ def test_can_depend_on_elements_of_param_table() -> None:
 def test_can_compute_series_of_param_values() -> None:
     pl = sl.Pipeline()
     pl.set_param_table(sl.ParamTable(int, {float: [1.0, 2.0, 3.0]}))
-    assert pl.compute(sl.Series[int, float]) == {0: 1.0, 1: 2.0, 2: 3.0}
+    assert pl.compute(sl.Series[int, float]) == sl.Series(int, {0: 1.0, 1: 2.0, 2: 3.0})
 
 
 def test_can_compute_series_of_derived_values() -> None:
@@ -61,7 +62,9 @@ def test_can_compute_series_of_derived_values() -> None:
 
     pl = sl.Pipeline([process])
     pl.set_param_table(sl.ParamTable(int, {float: [1.0, 2.0, 3.0]}))
-    assert pl.compute(sl.Series[int, str]) == {0: "1.0", 1: "2.0", 2: "3.0"}
+    assert pl.compute(sl.Series[int, str]) == sl.Series(
+        int, {0: "1.0", 1: "2.0", 2: "3.0"}
+    )
 
 
 def test_explicit_index_of_param_table_is_forwarded_correctly() -> None:
@@ -72,7 +75,7 @@ def test_explicit_index_of_param_table_is_forwarded_correctly() -> None:
     pl.set_param_table(
         sl.ParamTable(str, {float: [1.0, 2.0, 3.0]}, index=['a', 'b', 'c'])
     )
-    assert pl.compute(sl.Series[str, int]) == {'a': 1, 'b': 2, 'c': 3}
+    assert pl.compute(sl.Series[str, int]) == sl.Series(str, {'a': 1, 'b': 2, 'c': 3})
 
 
 def test_can_gather_index() -> None:
@@ -225,15 +228,21 @@ def test_nested_dependencies_on_different_param_tables() -> None:
     pl = sl.Pipeline([combine])
     pl.set_param_table(sl.ParamTable(Row1, {Param1: [1, 2, 3]}))
     pl.set_param_table(sl.ParamTable(Row2, {Param2: [4, 5]}))
-    assert pl.compute(sl.Series[Row1, sl.Series[Row2, Combined]]) == {
-        0: {0: 4, 1: 5},
-        1: {0: 8, 1: 10},
-        2: {0: 12, 1: 15},
-    }
-    assert pl.compute(sl.Series[Row2, sl.Series[Row1, Combined]]) == {
-        0: {0: 4, 1: 8, 2: 12},
-        1: {0: 5, 1: 10, 2: 15},
-    }
+    assert pl.compute(sl.Series[Row1, sl.Series[Row2, Combined]]) == sl.Series(
+        Row1,
+        {
+            0: sl.Series(Row2, {0: 4, 1: 5}),
+            1: sl.Series(Row2, {0: 8, 1: 10}),
+            2: sl.Series(Row2, {0: 12, 1: 15}),
+        },
+    )
+    assert pl.compute(sl.Series[Row2, sl.Series[Row1, Combined]]) == sl.Series(
+        Row2,
+        {
+            0: sl.Series(Row1, {0: 4, 1: 8, 2: 12}),
+            1: sl.Series(Row1, {0: 5, 1: 10, 2: 15}),
+        },
+    )
 
 
 def test_can_groupby_by_requesting_series_of_series() -> None:
@@ -243,10 +252,11 @@ def test_can_groupby_by_requesting_series_of_series() -> None:
 
     pl = sl.Pipeline()
     pl.set_param_table(sl.ParamTable(Row, {Param1: [1, 1, 3], Param2: [4, 5, 6]}))
-    assert pl.compute(sl.Series[Param1, sl.Series[Row, Param2]]) == {
-        1: {0: 4, 1: 5},
-        3: {2: 6},
-    }
+    expected = sl.Series(
+        Param1,
+        {1: sl.Series(Row, {0: 4, 1: 5}), 3: sl.Series(Row, {2: 6})},
+    )
+    assert pl.compute(sl.Series[Param1, sl.Series[Row, Param2]]) == expected
 
 
 def test_groupby_by_requesting_series_of_series_preserves_indices() -> None:
@@ -258,10 +268,9 @@ def test_groupby_by_requesting_series_of_series_preserves_indices() -> None:
     pl.set_param_table(
         sl.ParamTable(Row, {Param1: [1, 1, 3], Param2: [4, 5, 6]}, index=[11, 12, 13])
     )
-    assert pl.compute(sl.Series[Param1, sl.Series[Row, Param2]]) == {
-        1: {11: 4, 12: 5},
-        3: {13: 6},
-    }
+    assert pl.compute(sl.Series[Param1, sl.Series[Row, Param2]]) == sl.Series(
+        Param1, {1: sl.Series(Row, {11: 4, 12: 5}), 3: sl.Series(Row, {13: 6})}
+    )
 
 
 def test_multi_level_groupby_raises_with_params_from_same_table() -> None:
@@ -293,10 +302,17 @@ def test_multi_level_groupby_with_params_from_different_table() -> None:
     grouping2 = sl.ParamTable(Param2, {Param1: [1, 1, 3]})
     pl.set_param_table(grouping1)
     pl.set_param_table(grouping2)
-    assert pl.compute(sl.Series[Param1, sl.Series[Param2, sl.Series[Row, Param3]]]) == {
-        1: {0: {0: 7}, 1: {1: 8, 2: 9}},
-        3: {2: {3: 10}},
-    }
+    assert pl.compute(
+        sl.Series[Param1, sl.Series[Param2, sl.Series[Row, Param3]]]
+    ) == sl.Series(
+        Param1,
+        {
+            1: sl.Series(
+                Param2, {0: sl.Series(Row, {0: 7}), 1: sl.Series(Row, {1: 8, 2: 9})}
+            ),
+            3: sl.Series(Param2, {2: sl.Series(Row, {3: 10})}),
+        },
+    )
 
 
 def test_multi_level_groupby_with_params_from_different_table_can_select() -> None:
@@ -311,9 +327,16 @@ def test_multi_level_groupby_with_params_from_different_table_can_select() -> No
     grouping2 = sl.ParamTable(Param2, {Param1: [1, 1]}, index=[4, 5])
     pl.set_param_table(grouping1)
     pl.set_param_table(grouping2)
-    assert pl.compute(sl.Series[Param1, sl.Series[Param2, sl.Series[Row, Param3]]]) == {
-        1: {4: {0: 7}, 5: {1: 8, 2: 9}}
-    }
+    assert pl.compute(
+        sl.Series[Param1, sl.Series[Param2, sl.Series[Row, Param3]]]
+    ) == sl.Series(
+        Param1,
+        {
+            1: sl.Series(
+                Param2, {4: sl.Series(Row, {0: 7}), 5: sl.Series(Row, {1: 8, 2: 9})}
+            )
+        },
+    )
 
 
 def test_multi_level_groupby_with_params_from_different_table_preserves_index() -> None:
@@ -329,10 +352,18 @@ def test_multi_level_groupby_with_params_from_different_table_preserves_index() 
     grouping2 = sl.ParamTable(Param2, {Param1: [1, 1, 3]}, index=[4, 5, 6])
     pl.set_param_table(grouping1)
     pl.set_param_table(grouping2)
-    assert pl.compute(sl.Series[Param1, sl.Series[Param2, sl.Series[Row, Param3]]]) == {
-        1: {4: {100: 7}, 5: {200: 8, 300: 9}},
-        3: {6: {400: 10}},
-    }
+    assert pl.compute(
+        sl.Series[Param1, sl.Series[Param2, sl.Series[Row, Param3]]]
+    ) == sl.Series(
+        Param1,
+        {
+            1: sl.Series(
+                Param2,
+                {4: sl.Series(Row, {100: 7}), 5: sl.Series(Row, {200: 8, 300: 9})},
+            ),
+            3: sl.Series(Param2, {6: sl.Series(Row, {400: 10})}),
+        },
+    )
 
 
 def test_multi_level_groupby_with_params_from_different_table_can_reorder() -> None:
@@ -348,10 +379,18 @@ def test_multi_level_groupby_with_params_from_different_table_can_reorder() -> N
     grouping2 = sl.ParamTable(Param2, {Param1: [1, 1, 3]}, index=[6, 5, 4])
     pl.set_param_table(grouping1)
     pl.set_param_table(grouping2)
-    assert pl.compute(sl.Series[Param1, sl.Series[Param2, sl.Series[Row, Param3]]]) == {
-        1: {6: {400: 10}, 5: {200: 8, 300: 9}},
-        3: {4: {100: 7}},
-    }
+    assert pl.compute(
+        sl.Series[Param1, sl.Series[Param2, sl.Series[Row, Param3]]]
+    ) == sl.Series(
+        Param1,
+        {
+            1: sl.Series(
+                Param2,
+                {6: sl.Series(Row, {400: 10}), 5: sl.Series(Row, {200: 8, 300: 9})},
+            ),
+            3: sl.Series(Param2, {4: sl.Series(Row, {100: 7})}),
+        },
+    )
 
 
 @pytest.mark.parametrize("index", [None, [4, 5, 7]])
@@ -397,7 +436,7 @@ def test_groupby_over_param_table(index) -> None:
     pl.set_param_table(params)
 
     graph = pl.get(sl.Series[Name, ProcessedGroup])
-    assert graph.compute() == {'a': 10, 'b': 8}
+    assert graph.compute() == sl.Series(Name, {'a': 10, 'b': 8})
 
 
 def test_requesting_series_index_that_is_not_in_param_table_raises() -> None:
@@ -442,11 +481,14 @@ def test_generic_providers_work_with_param_tables() -> None:
     assert pipeline.compute(Str[float]) == Str[float]('1.5')
     with pytest.raises(sl.UnsatisfiedRequirement):
         pipeline.compute(Str[int])
-    assert pipeline.compute(sl.Series[Row, Str[int]]) == {
-        0: Str[int]('1'),
-        1: Str[int]('2'),
-        2: Str[int]('3'),
-    }
+    assert pipeline.compute(sl.Series[Row, Str[int]]) == sl.Series(
+        Row,
+        {
+            0: Str[int]('1'),
+            1: Str[int]('2'),
+            2: Str[int]('3'),
+        },
+    )
 
 
 def test_generic_provider_can_depend_on_param_series() -> None:

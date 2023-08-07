@@ -61,9 +61,9 @@ class Label:
 
 
 @dataclass(frozen=True)
-class Item:
+class Item(Generic[T]):
     label: Tuple[Label, ...]
-    tp: type
+    tp: Type[T]
 
 
 def _indexed_key(index_name: Any, i: int, value_name: Any) -> Item:
@@ -201,7 +201,7 @@ class Pipeline:
         self,
         providers: Optional[List[Provider]] = None,
         *,
-        params: Optional[Dict[Key, Any]] = None,
+        params: Optional[Dict[type, Any]] = None,
     ):
         """
         Setup a Pipeline from a list providers
@@ -359,7 +359,7 @@ class Pipeline:
                 graph[tp] = (self._param_sentinel, (self._param_series[tp],))
                 continue
             if get_origin(tp) == Series:
-                graph.update(self._build_series(tp))
+                graph.update(self._build_series(tp))  # type: ignore[arg-type]
                 continue
             provider: Callable[..., T]
             provider, bound = self._get_provider(tp)
@@ -442,7 +442,11 @@ class Pipeline:
     def compute(self, tp: Tuple[Type[T], ...]) -> Tuple[T, ...]:
         ...
 
-    def compute(self, tp: type | Tuple[type, ...]) -> Any:
+    @overload
+    def compute(self, tp: Item[T]) -> T:
+        ...
+
+    def compute(self, tp: type | Tuple[type, ...] | Item[T]) -> Any:
         """
         Compute result for the given keys.
 

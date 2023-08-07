@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 from collections import abc
-from typing import Generic, Iterator, Mapping, Type, TypeVar
+from typing import Iterator, Mapping, Type, TypeVar
 
 Key = TypeVar('Key')
 Value = TypeVar('Value')
 
 
-class Series(abc.Mapping, Generic[Key, Value]):
+class Series(abc.Mapping[Key, Value]):
     def __init__(self, row_dim: Type[Key], values: Mapping[Key, Value]) -> None:
         self._row_dim = row_dim
         self._map: Mapping[Key, Value] = values
@@ -41,3 +41,8 @@ class Series(abc.Mapping, Generic[Key, Value]):
             )
             + "</table>"
         )
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, Series):
+            return NotImplemented
+        return self.row_dim == other.row_dim and self._map == other._map

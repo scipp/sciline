@@ -6,7 +6,7 @@ from collections import abc
 from typing import Any, Collection, Dict, Optional
 
 
-class ParamTable(abc.Mapping):
+class ParamTable(abc.Mapping[type, Collection[Any]]):
     def __init__(
         self,
         row_dim: type,

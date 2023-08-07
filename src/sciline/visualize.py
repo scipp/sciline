@@ -44,7 +44,7 @@ def to_graphviz(graph: Graph, **kwargs: Any) -> Digraph:
     return dot
 
 
-def _qualname(obj: Any) -> str:
+def _qualname(obj: Any) -> Any:
     return (
         obj.__qualname__ if hasattr(obj, '__qualname__') else obj.__class__.__qualname__
     )
