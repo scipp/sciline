@@ -8,6 +8,7 @@ from typing import (
     Any,
     Callable,
     Dict,
+    Iterable,
     Iterator,
     List,
     Literal,
@@ -104,36 +105,52 @@ def _bind_free_typevars(tp: TypeVar | Key, bound: Dict[TypeVar, Key]) -> Key:
         return tp
 
 
+def _yes(*_: Any) -> Literal[True]:
+    return True
+
+
+class NoGrouping:
+    def __init__(self, index: Iterable[Any]) -> None:
+        self._index = index
+
+    def __iter__(self) -> Iterator[Any]:
+        return iter(self._index)
+
+    def __call__(self, key: Any) -> Callable[..., bool]:
+        return _yes
+
+    def get_grouping(self, key: Any, group: int) -> None:
+        return None
+
+
 class Grouper:
     def __init__(
-        self, grouping_node: Optional[type] = None, index=None, labels=None
+        self,
+        *,
+        grouping_node: type,
+        index: Iterable[Any],
+        labels: Iterable[Any],
     ) -> None:
         self.grouping_node = grouping_node
-        if grouping_node is None:
-            self.index = index
-        else:
-            self.index = defaultdict(list)
-            for idx, label in zip(index, labels):
-                self.index[label].append(idx)
+        self._index = defaultdict(list)
+        for idx, label in zip(index, labels):
+            self._index[label].append(idx)
 
-    def __iter__(self) -> Iterator:
-        return iter(self.index)
+    def __iter__(self) -> Iterator[Any]:
+        return iter(self._index)
 
     def __call__(self, key: Any) -> Any:
-        return self.in_group if key == self.grouping_node else self.yes
+        return self.in_group if key == self.grouping_node else _yes
 
     def get_grouping(self, key: Any, group: int) -> Optional[List[int]]:
         if key != self.grouping_node:
             return None
-        return self.index[group]
+        return self._index[group]
 
     def in_group(self, arg, group_index: Any) -> bool:
         if len(arg.label) != 1:
             raise ValueError(f'Cannot group with multi-index label {arg.label}')
-        return arg.label[0].index in self.index[group_index]
-
-    def yes(self, *_: Any) -> Literal[True]:
-        return True
+        return arg.label[0].index in self._index[group_index]
 
 
 class SeriesProducer:
@@ -254,7 +271,7 @@ class Pipeline:
                 )
 
     def _set_provider(
-        self, key: Union[Type[T], Item[T]], provider: Callable[..., T]
+        self, key: Union[Type[T], Item], provider: Callable[..., T]
     ) -> None:
         # isinstance does not work here and types.NoneType available only in 3.10+
         if key == type(None):  # noqa: E721
@@ -312,7 +329,7 @@ class Pipeline:
             Type to build the graph for.
         """
         graph: Graph = {}
-        stack: List[Union[Type[T], Label[T]]] = [tp]
+        stack: List[Union[Type[T], Item]] = [tp]
         while stack:
             tp = stack.pop()
             if search_param_tables and tp in self._param_series:
@@ -345,7 +362,7 @@ class Pipeline:
             and (params := self._param_tables.get(label_name)) is not None
         ):
             path = find_nodes_in_paths(subgraph, value_type, label_name)
-            grouper = Grouper(index=params.index)
+            grouper = NoGrouping(index=params.index)
         elif (index_name := self._param_series.get(label_name)) is not None:
             params = self._param_tables[index_name]
             labels = params[label_name]
@@ -357,7 +374,7 @@ class Pipeline:
         else:
             raise KeyError(f'No parameter table found for label {label_name}')
 
-        args = [_indexed_key(label_name, index, value_type) for index in grouper]
+        args = tuple(_indexed_key(label_name, index, value_type) for index in grouper)
         graph: Graph = {}
         graph[tp] = (SeriesProducer(list(grouper), label_name), args)
 
@@ -382,7 +399,7 @@ class Pipeline:
                 graph[key] = value
         return graph
 
-    def _find_grouping_node(self, index_name: type, subgraph: Graph) -> type:
+    def _find_grouping_node(self, index_name: Key, subgraph: Graph) -> type:
         ends = []
         for key in subgraph:
             if get_origin(key) == Series and get_args(key)[0] == index_name:

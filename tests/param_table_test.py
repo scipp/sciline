@@ -20,7 +20,7 @@ def test_raises_with_inconsistent_index_length() -> None:
         sl.ParamTable(row_dim=int, columns={float: [1.0, 2.0]}, index=[1, 2, 3])
 
 
-def test_raises_with_non_unique_index():
+def test_raises_with_non_unique_index() -> None:
     with pytest.raises(ValueError):
         sl.ParamTable(int, {float: [1.0, 2.0, 3.0]}, index=[1, 1, 2])
 
