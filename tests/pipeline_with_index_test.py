@@ -5,7 +5,7 @@ from typing import NewType, TypeVar
 import pytest
 
 import sciline as sl
-from sciline.pipeline import Dict, Item, Label
+from sciline.pipeline import Item, Label
 
 
 def test_set_param_table_raises_if_param_names_are_duplicate():
@@ -42,6 +42,12 @@ def test_can_get_elements_of_param_table() -> None:
     pl = sl.Pipeline()
     pl.set_param_table(sl.ParamTable(int, {float: [1.0, 2.0, 3.0]}))
     assert pl.compute(Item((Label(int, 1),), float)) == 2.0
+
+
+def test_can_get_elements_of_param_table_with_explicit_index() -> None:
+    pl = sl.Pipeline()
+    pl.set_param_table(sl.ParamTable(int, {float: [1.0, 2.0, 3.0]}, index=[11, 12, 13]))
+    assert pl.compute(Item((Label(int, 12),), float)) == 2.0
 
 
 def test_can_depend_on_elements_of_param_table() -> None:
@@ -240,38 +246,6 @@ def test_nested_dependencies_on_different_param_tables() -> None:
     }
 
 
-def test_poor_mans_groupby_over_param_table() -> None:
-    Index = NewType("Index", str)
-    Label = NewType("Label", str)
-    Group = NewType("Group", str)
-    Param = NewType("Param", int)
-    GroupedParam = NewType("GroupedParam", int)
-
-    from collections import defaultdict
-
-    # Note that this creates a synchronization point, i.e., at this point all
-    # intermediate results must be computed, before branching out again to groups.
-    # I think there is probably no way around this, without explicit support
-    # from Pipeline.
-    def groupby_label(
-        x: sl.Series[Index, Param], labels: sl.Series[Index, Label]
-    ) -> Dict[Label, GroupedParam]:
-        groups = defaultdict(list)
-        for label, param in zip(labels.values(), x.values()):
-            groups[label].append(param)
-        return groups
-
-    def get_group(group: Group, param: Dict[Label, GroupedParam]) -> GroupedParam:
-        return param[group]
-
-    pl = sl.Pipeline([groupby_label, get_group])
-    pl.set_param_table(sl.ParamTable(Index, {Param: [1, 2, 3], Label: ['a', 'a', 'b']}))
-    groups = ['a', 'b']
-    pl.set_param_table(sl.ParamTable(Label, {Group: groups}, index=groups))
-    result = pl.compute(sl.Series[Label, GroupedParam])
-    assert result == {'a': [1, 2], 'b': [3]}
-
-
 def test_can_groupby_by_requesting_series_of_series() -> None:
     Row = NewType("Row", int)
     Param1 = NewType("Param1", int)
@@ -323,13 +297,32 @@ def test_multi_level_groupby_with_params_from_different_table() -> None:
     Param3 = NewType("Param3", int)
 
     pl = sl.Pipeline()
-    grouping1 = sl.ParamTable(Row, {Param2: [4, 5, 5, 6], Param3: [7, 8, 9, 10]})
+    grouping1 = sl.ParamTable(Row, {Param2: [0, 1, 1, 2], Param3: [7, 8, 9, 10]})
+    # We are not providing an explicit index here, so this only happens to work because
+    # the values of Param2 match range(2).
     grouping2 = sl.ParamTable(Param2, {Param1: [1, 1, 3]})
     pl.set_param_table(grouping1)
     pl.set_param_table(grouping2)
     assert pl.compute(sl.Series[Param1, sl.Series[Param2, sl.Series[Row, Param3]]]) == {
-        1: {4: {0: 7}, 5: {1: 8, 2: 9}},
-        3: {6: {3: 10}},
+        1: {0: {0: 7}, 1: {1: 8, 2: 9}},
+        3: {2: {3: 10}},
+    }
+
+
+def test_multi_level_groupby_with_params_from_different_table_can_select() -> None:
+    Row = NewType("Row", int)
+    Param1 = NewType("Param1", int)
+    Param2 = NewType("Param2", int)
+    Param3 = NewType("Param3", int)
+
+    pl = sl.Pipeline()
+    grouping1 = sl.ParamTable(Row, {Param2: [4, 5, 5, 6], Param3: [7, 8, 9, 10]})
+    # Note the missing index "6" here.
+    grouping2 = sl.ParamTable(Param2, {Param1: [1, 1]}, index=[4, 5])
+    pl.set_param_table(grouping1)
+    pl.set_param_table(grouping2)
+    assert pl.compute(sl.Series[Param1, sl.Series[Param2, sl.Series[Row, Param3]]]) == {
+        1: {4: {0: 7}, 5: {1: 8, 2: 9}}
     }
 
 
@@ -343,13 +336,50 @@ def test_multi_level_groupby_with_params_from_different_table_preserves_index() 
     grouping1 = sl.ParamTable(
         Row, {Param2: [4, 5, 5, 6], Param3: [7, 8, 9, 10]}, index=[100, 200, 300, 400]
     )
-    grouping2 = sl.ParamTable(Param2, {Param1: [1, 1, 3]})
+    grouping2 = sl.ParamTable(Param2, {Param1: [1, 1, 3]}, index=[4, 5, 6])
     pl.set_param_table(grouping1)
     pl.set_param_table(grouping2)
     assert pl.compute(sl.Series[Param1, sl.Series[Param2, sl.Series[Row, Param3]]]) == {
         1: {4: {100: 7}, 5: {200: 8, 300: 9}},
         3: {6: {400: 10}},
     }
+
+
+def test_multi_level_groupby_with_params_from_different_table_can_reorder() -> None:
+    Row = NewType("Row", int)
+    Param1 = NewType("Param1", int)
+    Param2 = NewType("Param2", int)
+    Param3 = NewType("Param3", int)
+
+    pl = sl.Pipeline()
+    grouping1 = sl.ParamTable(
+        Row, {Param2: [4, 5, 5, 6], Param3: [7, 8, 9, 10]}, index=[100, 200, 300, 400]
+    )
+    grouping2 = sl.ParamTable(Param2, {Param1: [1, 1, 3]}, index=[6, 5, 4])
+    pl.set_param_table(grouping1)
+    pl.set_param_table(grouping2)
+    assert pl.compute(sl.Series[Param1, sl.Series[Param2, sl.Series[Row, Param3]]]) == {
+        1: {6: {400: 10}, 5: {200: 8, 300: 9}},
+        3: {4: {100: 7}},
+    }
+
+
+@pytest.mark.parametrize("index", [None, [4, 5, 7]])
+def test_multi_level_groupby_raises_on_index_mismatch(index) -> None:
+    Row = NewType("Row", int)
+    Param1 = NewType("Param1", int)
+    Param2 = NewType("Param2", int)
+    Param3 = NewType("Param3", int)
+
+    pl = sl.Pipeline()
+    grouping1 = sl.ParamTable(
+        Row, {Param2: [4, 5, 5, 6], Param3: [7, 8, 9, 10]}, index=[100, 200, 300, 400]
+    )
+    grouping2 = sl.ParamTable(Param2, {Param1: [1, 1, 3]}, index=index)
+    pl.set_param_table(grouping1)
+    pl.set_param_table(grouping2)
+    with pytest.raises(ValueError):
+        pl.compute(sl.Series[Param1, sl.Series[Param2, sl.Series[Row, Param3]]])
 
 
 @pytest.mark.parametrize("index", [None, [4, 5, 6]])

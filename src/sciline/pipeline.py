@@ -105,19 +105,16 @@ def _bind_free_typevars(tp: TypeVar | Key, bound: Dict[TypeVar, Key]) -> Key:
 
 
 class Grouper:
-    def __init__(self, grouping_node: Optional[type] = None, index=None) -> None:
+    def __init__(
+        self, grouping_node: Optional[type] = None, index=None, labels=None
+    ) -> None:
         self.grouping_node = grouping_node
         if grouping_node is None:
             self.index = index
         else:
             self.index = defaultdict(list)
-            for i, label in enumerate(index):
-                self.index[label].append(i)
-            self.groups = list(self.index.values())
-
-    @property
-    def size(self) -> int:
-        return len(self.index)
+            for idx, label in zip(index, labels):
+                self.index[label].append(idx)
 
     def __iter__(self) -> Iterator:
         return iter(self.index)
@@ -128,12 +125,12 @@ class Grouper:
     def get_grouping(self, key: Any, group: int) -> Optional[List[int]]:
         if key != self.grouping_node:
             return None
-        return self.groups[group]
+        return self.index[group]
 
-    def in_group(self, arg, group_index: int) -> bool:
+    def in_group(self, arg, group_index: Any) -> bool:
         if len(arg.label) != 1:
             raise ValueError(f'Cannot group with multi-index label {arg.label}')
-        return arg.label[0].index in self.groups[group_index]
+        return arg.label[0].index in self.index[group_index]
 
     def yes(self, *_: Any) -> Literal[True]:
         return True
@@ -147,10 +144,13 @@ class SeriesProducer:
     def __call__(self, *vals: Any) -> Series:
         return Series(self._row_dim, dict(zip(self._labels, vals)))
 
-    def restrict(self, indices: Optional[List[int]]) -> SeriesProducer:
-        if indices is None:
+    def restrict(self, labels: Optional[List[int]]) -> SeriesProducer:
+        if labels is None:
             return self
-        labels = [self._labels[i] for i in indices]
+        if set(labels) - set(self._labels):
+            raise ValueError(f'{labels} is not a subset of {self._labels}')
+        # Ensure that labels are in the same order as in the original series
+        labels = [label for label in self._labels if label in labels]
         return SeriesProducer(labels, self._row_dim)
 
 
@@ -247,9 +247,9 @@ class Pipeline:
         for param_name in params:
             self._param_series[param_name] = params.row_dim
         for param_name, values in params.items():
-            for i, label in enumerate(values):
+            for index, label in zip(params.index, values):
                 self._set_provider(
-                    Item((Label(tp=params.row_dim, index=i),), param_name),
+                    Item((Label(tp=params.row_dim, index=index),), param_name),
                     lambda label=label: label,
                 )
 
@@ -347,33 +347,36 @@ class Pipeline:
             path = find_nodes_in_paths(subgraph, value_type, label_name)
             grouper = Grouper(index=params.index)
         elif (index_name := self._param_series.get(label_name)) is not None:
-            labels = self._param_tables[index_name][label_name]
+            params = self._param_tables[index_name]
+            labels = params[label_name]
             grouping_node = self._find_grouping_node(index_name, subgraph)
             path = find_nodes_in_paths(subgraph, value_type, grouping_node)
-            grouper = Grouper(index=labels, grouping_node=grouping_node)
+            grouper = Grouper(
+                index=params.index, labels=labels, grouping_node=grouping_node
+            )
         else:
             raise KeyError(f'No parameter table found for label {label_name}')
 
-        args = [_indexed_key(label_name, i, value_type) for i in range(grouper.size)]
+        args = [_indexed_key(label_name, index, value_type) for index in grouper]
         graph: Graph = {}
         graph[tp] = (SeriesProducer(list(grouper), label_name), args)
 
         for key, value in subgraph.items():
             if key in path:
                 in_group = grouper(key)
-                for i in range(grouper.size):
+                for index in grouper:
                     provider, args = value
-                    subkey = _indexed_key(label_name, i, key)
+                    subkey = _indexed_key(label_name, index, key)
                     if provider == self._param_sentinel:
                         provider, _ = self._get_provider(subkey)
                         args = ()
                     args_with_index = tuple(
-                        _indexed_key(label_name, i, arg) if arg in path else arg
+                        _indexed_key(label_name, index, arg) if arg in path else arg
                         for arg in args
-                        if in_group(arg, i)
+                        if in_group(arg, index)
                     )
                     if isinstance(provider, SeriesProducer):
-                        provider = provider.restrict(grouper.get_grouping(key, i))
+                        provider = provider.restrict(grouper.get_grouping(key, index))
                     graph[subkey] = (provider, args_with_index)
             else:
                 graph[key] = value
