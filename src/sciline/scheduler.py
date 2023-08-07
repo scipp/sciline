@@ -1,12 +1,8 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright (c) 2023 Scipp contributors (https://github.com/scipp)
-from typing import Any, Callable, Dict, List, Optional, Protocol, Tuple
+from typing import Any, Callable, Dict, List, Optional, Protocol
 
-Key = type
-Graph = Dict[
-    Key,
-    Tuple[Callable[..., Any], Tuple[Key, ...]],
-]
+from sciline.typing import Graph, Key
 
 
 class CycleError(Exception):
@@ -18,7 +14,7 @@ class Scheduler(Protocol):
     Scheduler interface compatible with :py:class:`sciline.Pipeline`.
     """
 
-    def get(self, graph: Graph, keys: List[type]) -> Any:
+    def get(self, graph: Graph, keys: List[Key]) -> Any:
         """
         Compute the result for given keys from the graph.
 
@@ -37,7 +33,7 @@ class NaiveScheduler:
     :py:class:`DaskScheduler` instead.
     """
 
-    def get(self, graph: Graph, keys: List[type]) -> Any:
+    def get(self, graph: Graph, keys: List[Key]) -> Any:
         import graphlib
 
         dependencies = {tp: args for tp, (_, args) in graph.items()}
@@ -47,7 +43,7 @@ class NaiveScheduler:
             tasks = list(ts.static_order())
         except graphlib.CycleError as e:
             raise CycleError from e
-        results: Dict[type, Any] = {}
+        results: Dict[Key, Any] = {}
         for t in tasks:
             provider, args = graph[t]
             results[t] = provider(*[results[arg] for arg in args])
@@ -76,7 +72,7 @@ class DaskScheduler:
         else:
             self._dask_get = scheduler
 
-    def get(self, graph: Graph, keys: List[type]) -> Any:
+    def get(self, graph: Graph, keys: List[Key]) -> Any:
         dsk = {tp: (provider, *args) for tp, (provider, args) in graph.items()}
         try:
             return self._dask_get(dsk, keys)

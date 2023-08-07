@@ -2,9 +2,12 @@
 # Copyright (c) 2023 Scipp contributors (https://github.com/scipp)
 from __future__ import annotations
 
-from typing import Any, Optional, Tuple, Union
+from typing import Any, Optional, Tuple, TypeVar, Union
 
-from sciline.scheduler import DaskScheduler, Graph, NaiveScheduler, Scheduler
+from .scheduler import DaskScheduler, NaiveScheduler, Scheduler
+from .typing import Graph, Item
+
+T = TypeVar("T")
 
 
 class TaskGraph:
@@ -19,7 +22,7 @@ class TaskGraph:
         self,
         *,
         graph: Graph,
-        keys: Union[type, Tuple[type, ...]],
+        keys: Union[type, Tuple[type, ...], Item[T], Tuple[Item[T], ...]],
         scheduler: Optional[Scheduler] = None,
     ) -> None:
         self._graph = graph
@@ -31,7 +34,12 @@ class TaskGraph:
                 scheduler = NaiveScheduler()
         self._scheduler = scheduler
 
-    def compute(self, keys: Optional[Union[type, Tuple[type, ...]]] = None) -> Any:
+    def compute(
+        self,
+        keys: Optional[
+            Union[type, Tuple[type, ...], Item[T], Tuple[Item[T], ...]]
+        ] = None,
+    ) -> Any:
         """
         Compute the result of the graph.
 

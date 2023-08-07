@@ -1,11 +1,21 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright (c) 2023 Scipp contributors (https://github.com/scipp)
-from typing import Any, Callable, Dict, List, Tuple, Union, get_args, get_origin
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    List,
+    Tuple,
+    Type,
+    TypeVar,
+    Union,
+    get_args,
+    get_origin,
+)
 
 from graphviz import Digraph
 
-from .pipeline import Item, Label
-from .scheduler import Graph
+from .typing import Graph, Item, Key
 
 
 def to_graphviz(graph: Graph, **kwargs: Any) -> Digraph:
@@ -61,21 +71,23 @@ def _format_graph(graph: Graph) -> Dict[str, Tuple[str, List[str], str]]:
     }
 
 
-def _format_provider(provider: Callable[..., Any], ret: type) -> str:
+def _format_provider(provider: Callable[..., Any], ret: Key) -> str:
     return f'{_qualname(provider)}_{_format_type(ret)}'
 
 
-def _extract_type_and_labels(key: Union[Item, Label, type]) -> Tuple[type, List[type]]:
+T = TypeVar('T')
+
+
+def _extract_type_and_labels(
+    key: Union[Item[T], Type[T]]
+) -> Tuple[Type[T], List[type]]:
     if isinstance(key, Item):
         label = key.label
         return key.tp, [lb.tp for lb in label]
-    if isinstance(key, Label):
-        tp, labels = _extract_type_and_labels(key.tp)
-        return tp, [key.tp] + labels
     return key, []
 
 
-def _format_type(tp: type) -> str:
+def _format_type(tp: Key) -> str:
     """
     Helper for _format_graph.
 

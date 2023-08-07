@@ -3,8 +3,8 @@
 import pytest
 
 import sciline as sl
-from sciline.scheduler import Graph
 from sciline.task_graph import TaskGraph
+from sciline.typing import Graph
 
 
 def as_float(x: int) -> float:

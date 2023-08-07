@@ -1,11 +1,11 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright (c) 2023 Scipp contributors (https://github.com/scipp)
-from typing import NewType, TypeVar
+from typing import List, NewType, Optional, TypeVar
 
 import pytest
 
 import sciline as sl
-from sciline.pipeline import Item, Label
+from sciline.typing import Item, Label
 
 
 def test_set_param_table_raises_if_param_names_are_duplicate() -> None:
@@ -94,7 +94,7 @@ def test_can_gather_index() -> None:
 
 
 def test_can_zip() -> None:
-    Sum = NewType("Sum", float)
+    Sum = NewType("Sum", str)
     Str = NewType("Str", str)
     Run = NewType("Run", int)
 
@@ -115,7 +115,7 @@ def test_diamond_dependency_pulls_values_from_columns_in_same_param_table() -> N
     Sum = NewType("Sum", float)
     Param1 = NewType("Param1", int)
     Param2 = NewType("Param2", int)
-    Row = NewType("Run", int)
+    Row = NewType("Row", int)
 
     def gather(x: sl.Series[Row, float]) -> Sum:
         return Sum(sum(x.values()))
@@ -126,7 +126,7 @@ def test_diamond_dependency_pulls_values_from_columns_in_same_param_table() -> N
     pl = sl.Pipeline([gather, join])
     pl.set_param_table(sl.ParamTable(Row, {Param1: [1, 4, 9], Param2: [1, 2, 3]}))
 
-    assert pl.compute(Sum) == 6
+    assert pl.compute(Sum) == Sum(6)
 
 
 def test_diamond_dependency_on_same_column() -> None:
@@ -134,7 +134,7 @@ def test_diamond_dependency_on_same_column() -> None:
     Param = NewType("Param", int)
     Param1 = NewType("Param1", int)
     Param2 = NewType("Param2", int)
-    Row = NewType("Run", int)
+    Row = NewType("Row", int)
 
     def gather(x: sl.Series[Row, float]) -> Sum:
         return Sum(sum(x.values()))
@@ -151,7 +151,7 @@ def test_diamond_dependency_on_same_column() -> None:
     pl = sl.Pipeline([gather, join, to_param1, to_param2])
     pl.set_param_table(sl.ParamTable(Row, {Param: [1, 2, 3]}))
 
-    assert pl.compute(Sum) == 3
+    assert pl.compute(Sum) == Sum(3)
 
 
 def test_dependencies_on_different_param_tables_broadcast() -> None:
@@ -163,7 +163,7 @@ def test_dependencies_on_different_param_tables_broadcast() -> None:
 
     def gather_both(x: sl.Series[Row1, Param1], y: sl.Series[Row2, Param2]) -> Product:
         broadcast = [[x_, y_] for x_ in x.values() for y_ in y.values()]
-        return str(broadcast)
+        return Product(str(broadcast))
 
     pl = sl.Pipeline([gather_both])
     pl.set_param_table(sl.ParamTable(Row1, {Param1: [1, 2, 3]}))
@@ -183,7 +183,7 @@ def test_dependency_on_other_param_table_in_parent_broadcasts_branch() -> None:
         return Summed2(x * sum(y.values()))
 
     def gather1(x: sl.Series[Row1, Summed2]) -> Product:
-        return str(list(x.values()))
+        return Product(str(list(x.values())))
 
     pl = sl.Pipeline([gather1, gather2_and_combine])
     pl.set_param_table(sl.ParamTable(Row1, {Param1: [1, 2, 3]}))
@@ -207,7 +207,7 @@ def test_dependency_on_other_param_table_in_grandparent_broadcasts_branch() -> N
         return Combined(x * y)
 
     def gather1(x: sl.Series[Row1, Combined]) -> Product:
-        return str(list(x.values()))
+        return Product(str(list(x.values())))
 
     pl = sl.Pipeline([gather1, gather2, combine])
     pl.set_param_table(sl.ParamTable(Row1, {Param1: [1, 2, 3]}))
@@ -394,7 +394,9 @@ def test_multi_level_groupby_with_params_from_different_table_can_reorder() -> N
 
 
 @pytest.mark.parametrize("index", [None, [4, 5, 7]])
-def test_multi_level_groupby_raises_on_index_mismatch(index) -> None:
+def test_multi_level_groupby_raises_on_index_mismatch(
+    index: Optional[List[int]],
+) -> None:
     Row = NewType("Row", int)
     Param1 = NewType("Param1", int)
     Param2 = NewType("Param2", int)
@@ -412,7 +414,7 @@ def test_multi_level_groupby_raises_on_index_mismatch(index) -> None:
 
 
 @pytest.mark.parametrize("index", [None, [4, 5, 6]])
-def test_groupby_over_param_table(index) -> None:
+def test_groupby_over_param_table(index: Optional[List[int]]) -> None:
     Index = NewType("Index", int)
     Name = NewType("Name", str)
     Param = NewType("Param", int)

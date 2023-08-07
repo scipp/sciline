@@ -23,19 +23,11 @@ def test_Map() -> None:
     def image_param(filename: Filename) -> ImageParam:
         return ImageParam(sum(ord(c) for c in filename))
 
-    def clean2(x: Image, param: ImageParam) -> CleanedImage:
-        return x * param
-
     def clean(x: Image) -> CleanedImage:
-        return x
+        return CleanedImage(x)
 
     def scale(x: CleanedImage, param: Param, config: Config) -> ScaledImage:
-        return x * param + config
-
-    def combine_old(
-        images: sl.Series[Run, ScaledImage], params: sl.Series[Run, ImageParam]
-    ) -> float:
-        return sum(images.values())
+        return ScaledImage(x * param + config)
 
     def combine(images: sl.Series[Run, ScaledImage]) -> float:
         return sum(images.values())
@@ -47,7 +39,7 @@ def test_Map() -> None:
         return 2
 
     def make_param() -> Param:
-        return 2.0
+        return Param(2.0)
 
     filenames = tuple(f'file{i}' for i in range(6))
     configs = tuple(range(2))

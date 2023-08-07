@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from dataclasses import dataclass
 from typing import (
     Any,
     Callable,
@@ -32,6 +31,7 @@ from .graph import find_nodes_in_paths
 from .param_table import ParamTable
 from .scheduler import Scheduler
 from .series import Series
+from .typing import Graph, Item, Key, Label
 
 T = TypeVar('T')
 KeyType = TypeVar('KeyType')
@@ -54,19 +54,7 @@ class AmbiguousProvider(Exception):
     """Raised when multiple providers are found for a type."""
 
 
-@dataclass(frozen=True)
-class Label:
-    tp: type
-    index: int
-
-
-@dataclass(frozen=True)
-class Item(Generic[T]):
-    label: Tuple[Label, ...]
-    tp: Type[T]
-
-
-def _indexed_key(index_name: Any, i: int, value_name: Any) -> Item:
+def _indexed_key(index_name: Any, i: int, value_name: Type[T] | Item[T]) -> Item[T]:
     label = Label(index_name, i)
     if isinstance(value_name, Item):
         return Item(value_name.label + (label,), value_name.tp)
@@ -75,11 +63,6 @@ def _indexed_key(index_name: Any, i: int, value_name: Any) -> Item:
 
 
 Provider = Callable[..., Any]
-Key = Union[type, Item]
-Graph = Dict[
-    Key,
-    Tuple[Callable[..., Any], Tuple[Key, ...]],
-]
 
 
 def _is_compatible_type_tuple(
@@ -166,7 +149,7 @@ class GroupBy(Generic[IndexType, LabelType]):
             return None
         return self._index[group]
 
-    def in_group(self, arg: Item, group: LabelType) -> bool:
+    def in_group(self, arg: Item[Any], group: LabelType) -> bool:
         if len(arg.label) != 1:
             raise ValueError(f'Cannot group with multi-index label {arg.label}')
         return arg.label[0].index in self._index[group]
@@ -192,10 +175,12 @@ class SeriesProducer(Generic[KeyType, ValueType]):
         return SeriesProducer(labels, self._row_dim)
 
 
+class _param_sentinel:
+    ...
+
+
 class Pipeline:
     """A container for providers that can be assembled into a task graph."""
-
-    _param_sentinel = object()
 
     def __init__(
         self,
@@ -292,7 +277,7 @@ class Pipeline:
                 )
 
     def _set_provider(
-        self, key: Union[Type[T], Item], provider: Callable[..., T]
+        self, key: Union[Type[T], Item[T]], provider: Callable[..., T]
     ) -> None:
         # isinstance does not work here and types.NoneType available only in 3.10+
         if key == type(None):  # noqa: E721
@@ -309,7 +294,7 @@ class Pipeline:
             self._providers[key] = provider
 
     def _get_provider(
-        self, tp: Union[Type[T], Item]
+        self, tp: Union[Type[T], Item[T]]
     ) -> Tuple[Callable[..., T], Dict[TypeVar, Key]]:
         if (provider := self._providers.get(tp)) is not None:
             return provider, {}
@@ -335,7 +320,7 @@ class Pipeline:
         raise UnsatisfiedRequirement("No provider found for type", tp)
 
     def build(
-        self, tp: Union[Type[T], Item], /, search_param_tables: bool = False
+        self, tp: Union[Type[T], Item[T]], /, search_param_tables: bool = False
     ) -> Graph:
         """
         Return a dict of providers required for building the requested type `tp`.
@@ -352,11 +337,11 @@ class Pipeline:
             Type to build the graph for.
         """
         graph: Graph = {}
-        stack: List[Union[Type[T], Item]] = [tp]
+        stack: List[Union[Type[T], Item[T]]] = [tp]
         while stack:
             tp = stack.pop()
             if search_param_tables and tp in self._param_series:
-                graph[tp] = (self._param_sentinel, (self._param_series[tp],))
+                graph[tp] = (_param_sentinel, (self._param_series[tp],))
                 continue
             if get_origin(tp) == Series:
                 graph.update(self._build_series(tp))  # type: ignore[arg-type]
@@ -410,7 +395,7 @@ class Pipeline:
                 for index in grouper:
                     provider, args = value
                     subkey = _indexed_key(label_name, index, key)
-                    if provider == self._param_sentinel:
+                    if provider == _param_sentinel:
                         provider, _ = self._get_provider(subkey)
                         args = ()
                     args_with_index = tuple(
@@ -477,7 +462,10 @@ class Pipeline:
         return self.get(tp).visualize(**kwargs)
 
     def get(
-        self, keys: type | Tuple[type, ...], *, scheduler: Optional[Scheduler] = None
+        self,
+        keys: type | Tuple[type, ...] | Item[T],
+        *,
+        scheduler: Optional[Scheduler] = None,
     ) -> TaskGraph:
         """
         Return a TaskGraph for the given keys.
