@@ -33,7 +33,7 @@ def to_graphviz(graph: Graph, **kwargs: Any) -> Digraph:
             continue
         # Do not draw the internal provider gathering index-dependent results into
         # a dict
-        if p_name.startswith('Pipeline._build_series.'):
+        if p_name == 'SeriesProducer':
             for arg in args:
                 dot.edge(arg, ret, style='dashed')
         else:
@@ -44,10 +44,16 @@ def to_graphviz(graph: Graph, **kwargs: Any) -> Digraph:
     return dot
 
 
+def _qualname(obj: Any) -> str:
+    return (
+        obj.__qualname__ if hasattr(obj, '__qualname__') else obj.__class__.__qualname__
+    )
+
+
 def _format_graph(graph: Graph) -> Dict[str, Tuple[str, List[str], str]]:
     return {
         _format_provider(provider, ret): (
-            provider.__qualname__,
+            _qualname(provider),
             [_format_type(a) for a in args],
             _format_type(ret),
         )
@@ -56,7 +62,7 @@ def _format_graph(graph: Graph) -> Dict[str, Tuple[str, List[str], str]]:
 
 
 def _format_provider(provider: Callable[..., Any], ret: type) -> str:
-    return f'{provider.__qualname__}_{_format_type(ret)}'
+    return f'{_qualname(provider)}_{_format_type(ret)}'
 
 
 def _extract_type_and_labels(key: Union[Item, Label, type]) -> Tuple[type, List[type]]:
