@@ -8,11 +8,13 @@ from typing import (
     Any,
     Callable,
     Dict,
+    Generic,
     Iterable,
     Iterator,
     List,
     Literal,
     Optional,
+    Protocol,
     Tuple,
     Type,
     TypeVar,
@@ -28,12 +30,14 @@ from sciline.task_graph import TaskGraph
 from .domain import Scope
 from .graph import find_nodes_in_paths
 from .param_table import ParamTable
-from .scheduler import Graph, Scheduler
+from .scheduler import Scheduler
 from .series import Series
 
 T = TypeVar('T')
 KeyType = TypeVar('KeyType')
 ValueType = TypeVar('ValueType')
+IndexType = TypeVar('IndexType')
+LabelType = TypeVar('LabelType')
 
 
 class UnsatisfiedRequirement(Exception):
@@ -72,6 +76,10 @@ def _indexed_key(index_name: Any, i: int, value_name: Any) -> Item:
 
 Provider = Callable[..., Any]
 Key = Union[type, Item]
+Graph = Dict[
+    Key,
+    Tuple[Callable[..., Any], Tuple[Key, ...]],
+]
 
 
 def _is_compatible_type_tuple(
@@ -109,11 +117,22 @@ def _yes(*_: Any) -> Literal[True]:
     return True
 
 
-class NoGrouping:
-    def __init__(self, index: Iterable[Any]) -> None:
+class Grouper(Protocol):
+    def __iter__(self) -> Iterator[Any]:
+        ...
+
+    def __call__(self, key: Any) -> Callable[..., bool]:
+        ...
+
+    def get_grouping(self, key: Any, group: Any) -> Any:
+        ...
+
+
+class NoGrouping(Generic[IndexType]):
+    def __init__(self, index: Iterable[IndexType]) -> None:
         self._index = index
 
-    def __iter__(self) -> Iterator[Any]:
+    def __iter__(self) -> Iterator[IndexType]:
         return iter(self._index)
 
     def __call__(self, key: Any) -> Callable[..., bool]:
@@ -123,45 +142,47 @@ class NoGrouping:
         return None
 
 
-class Grouper:
+class GroupBy(Generic[IndexType, LabelType]):
     def __init__(
         self,
         *,
         grouping_node: type,
-        index: Iterable[Any],
-        labels: Iterable[Any],
+        index: Iterable[IndexType],
+        labels: Iterable[LabelType],
     ) -> None:
         self.grouping_node = grouping_node
-        self._index = defaultdict(list)
+        self._index: Dict[LabelType, List[IndexType]] = defaultdict(list)
         for idx, label in zip(index, labels):
             self._index[label].append(idx)
 
-    def __iter__(self) -> Iterator[Any]:
+    def __iter__(self) -> Iterator[LabelType]:
         return iter(self._index)
 
     def __call__(self, key: Any) -> Any:
         return self.in_group if key == self.grouping_node else _yes
 
-    def get_grouping(self, key: Any, group: int) -> Optional[List[int]]:
+    def get_grouping(self, key: Any, group: LabelType) -> Optional[List[IndexType]]:
         if key != self.grouping_node:
             return None
         return self._index[group]
 
-    def in_group(self, arg, group_index: Any) -> bool:
+    def in_group(self, arg: Item, group: LabelType) -> bool:
         if len(arg.label) != 1:
             raise ValueError(f'Cannot group with multi-index label {arg.label}')
-        return arg.label[0].index in self._index[group_index]
+        return arg.label[0].index in self._index[group]
 
 
-class SeriesProducer:
-    def __init__(self, labels: List[Any], row_dim: type) -> None:
+class SeriesProducer(Generic[KeyType, ValueType]):
+    def __init__(self, labels: Iterable[KeyType], row_dim: type) -> None:
         self._labels = labels
         self._row_dim = row_dim
 
-    def __call__(self, *vals: Any) -> Series:
+    def __call__(self, *vals: ValueType) -> Series[KeyType, ValueType]:
         return Series(self._row_dim, dict(zip(self._labels, vals)))
 
-    def restrict(self, labels: Optional[List[int]]) -> SeriesProducer:
+    def restrict(
+        self, labels: Optional[Iterable[KeyType]]
+    ) -> SeriesProducer[KeyType, ValueType]:
         if labels is None:
             return self
         if set(labels) - set(self._labels):
@@ -313,7 +334,9 @@ class Pipeline:
                 raise AmbiguousProvider("Multiple providers found for type", tp)
         raise UnsatisfiedRequirement("No provider found for type", tp)
 
-    def build(self, tp: Type[T], /, search_param_tables: bool = False) -> Graph:
+    def build(
+        self, tp: Union[Type[T], Item], /, search_param_tables: bool = False
+    ) -> Graph:
         """
         Return a dict of providers required for building the requested type `tp`.
 
@@ -357,6 +380,7 @@ class Pipeline:
         value_type: Type[ValueType]
         label_name, value_type = get_args(tp)
         subgraph = self.build(value_type, search_param_tables=True)
+        grouper: Grouper
         if (
             label_name not in self._param_series
             and (params := self._param_tables.get(label_name)) is not None
@@ -368,15 +392,17 @@ class Pipeline:
             labels = params[label_name]
             grouping_node = self._find_grouping_node(index_name, subgraph)
             path = find_nodes_in_paths(subgraph, value_type, grouping_node)
-            grouper = Grouper(
+            grouper = GroupBy(
                 index=params.index, labels=labels, grouping_node=grouping_node
             )
         else:
             raise KeyError(f'No parameter table found for label {label_name}')
 
-        args = tuple(_indexed_key(label_name, index, value_type) for index in grouper)
         graph: Graph = {}
-        graph[tp] = (SeriesProducer(list(grouper), label_name), args)
+        graph[tp] = (
+            SeriesProducer(list(grouper), label_name),
+            tuple(_indexed_key(label_name, index, value_type) for index in grouper),
+        )
 
         for key, value in subgraph.items():
             if key in path:

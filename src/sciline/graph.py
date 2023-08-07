@@ -1,4 +1,4 @@
-from typing import Callable, Collection, List, Mapping, Tuple, TypeVar
+from typing import Any, Callable, Collection, List, Mapping, Tuple, TypeVar
 
 T = TypeVar("T")
 
@@ -17,7 +17,7 @@ def find_all_paths(graph: Mapping[T, Collection[T]], start: T, end: T) -> List[L
 
 
 def find_nodes_in_paths(
-    graph: Mapping[T, Tuple[Callable[..., T], Collection[T]]], start: T, end: T
+    graph: Mapping[T, Tuple[Callable[..., Any], Collection[T]]], start: T, end: T
 ) -> List[T]:
     # 0 is the provider, 1 is the args
     dependencies = {k: v[1] for k, v in graph.items()}
