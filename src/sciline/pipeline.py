@@ -430,7 +430,7 @@ class Pipeline:
         # Step 2:
         # Identify nodes in the graph that need to be duplicated as they lie in the
         # path to a parameter from a table. In the case of grouping, note that the
-        # ungrouped graph (including duplicate of nodes) will have been built by a
+        # ungrouped graph (including duplication of nodes) will have been built by a
         # prior call to _build_series, so instead of duplicated everything until the
         # param table is reached, we only duplicate until the node that is performing
         # the grouping.
