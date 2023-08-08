@@ -19,8 +19,8 @@ class Item(Generic[T]):
     tp: Type[T]
 
 
+Provider = Callable[..., Any]
+
+
 Key = Union[type, Item]
-Graph = Dict[
-    Key,
-    Tuple[Callable[..., Any], Tuple[Key, ...]],
-]
+Graph = Dict[Key, Tuple[Provider, Tuple[Key, ...]]]

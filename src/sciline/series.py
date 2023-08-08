@@ -2,14 +2,13 @@
 # Copyright (c) 2023 Scipp contributors (https://github.com/scipp)
 from __future__ import annotations
 
-from collections import abc
 from typing import Iterator, Mapping, Type, TypeVar
 
 Key = TypeVar('Key')
 Value = TypeVar('Value')
 
 
-class Series(abc.Mapping[Key, Value]):
+class Series(Mapping[Key, Value]):
     def __init__(self, row_dim: Type[Key], values: Mapping[Key, Value]) -> None:
         self._row_dim = row_dim
         self._map: Mapping[Key, Value] = values

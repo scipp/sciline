@@ -2,11 +2,10 @@
 # Copyright (c) 2023 Scipp contributors (https://github.com/scipp)
 from __future__ import annotations
 
-from collections import abc
-from typing import Any, Collection, Dict, Optional
+from typing import Any, Collection, Dict, Mapping, Optional
 
 
-class ParamTable(abc.Mapping[type, Collection[Any]]):
+class ParamTable(Mapping[type, Collection[Any]]):
     def __init__(
         self,
         row_dim: type,

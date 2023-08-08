@@ -31,7 +31,7 @@ from .graph import find_nodes_in_paths
 from .param_table import ParamTable
 from .scheduler import Scheduler
 from .series import Series
-from .typing import Graph, Item, Key, Label
+from .typing import Graph, Item, Key, Label, Provider
 
 T = TypeVar('T')
 KeyType = TypeVar('KeyType')
@@ -60,9 +60,6 @@ def _indexed_key(index_name: Any, i: int, value_name: Type[T] | Item[T]) -> Item
         return Item(value_name.label + (label,), value_name.tp)
     else:
         return Item((label,), value_name)
-
-
-Provider = Callable[..., Any]
 
 
 def _is_compatible_type_tuple(
@@ -404,17 +401,22 @@ class Pipeline:
                         if in_group(arg, index)
                     )
                     if isinstance(provider, SeriesProducer):
-                        provider = provider.restrict(grouper.get_grouping(key, index))
+                        # For some reason mypy does not detect that SeriesProducer is
+                        # Callable?
+                        provider = provider.restrict(  # type: ignore[unreachable]
+                            grouper.get_grouping(key, index)
+                        )
                     graph[subkey] = (provider, args_with_index)
             else:
                 graph[key] = value
         return graph
 
     def _find_grouping_node(self, index_name: Key, subgraph: Graph) -> type:
-        ends = []
+        ends: List[type] = []
         for key in subgraph:
             if get_origin(key) == Series and get_args(key)[0] == index_name:
-                ends.append(key)
+                # Because if the succeeded get_origin we know it is a type
+                ends.append(key)  # type: ignore[arg-type]
         if len(ends) == 1:
             return ends[0]
         raise ValueError(f"Could not find unique grouping node, found {ends}")
