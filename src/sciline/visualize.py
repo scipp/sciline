@@ -35,7 +35,7 @@ def to_graphviz(graph: Graph, compact: bool = False, **kwargs: Any) -> Digraph:
     """
     dot = Digraph(strict=True, **kwargs)
     for p, (p_name, args, ret) in _format_graph(graph, compact=compact).items():
-        if '(' in ret:
+        if '(' in ret and '=' not in ret:
             dot.node(ret, ret, shape='box3d')
         else:
             dot.node(ret, ret, shape='rectangle')
