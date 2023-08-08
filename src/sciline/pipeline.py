@@ -389,6 +389,8 @@ class Pipeline:
         ----------
         tp:
             Type to build the graph for.
+        search_param_tables:
+            Whether to search parameter tables for concrete keys.
         """
         graph: Graph = {}
         stack: List[Union[Type[T], Item[T]]] = [tp]
@@ -418,7 +420,20 @@ class Pipeline:
         label_name: Type[KeyType]
         value_type: Type[ValueType]
         label_name, value_type = get_args(tp)
+        # Step 1:
+        # Build a graph that can compute the value type. As we are building
+        # a Series, this will terminate when it reaches a parameter that is not a
+        # single provided value but a collection of values from a parameter table
+        # column. Instead of single value (which does not exist), a sentinel is
+        # used to mark this, for processing below.
         subgraph = self.build(value_type, search_param_tables=True)
+        # Step 2:
+        # Identify nodes in the graph that need to be duplicated as they lie in the
+        # path to a parameter from a table. In the case of grouping, note that the
+        # ungrouped graph (including duplicate of nodes) will have been built by a
+        # prior call to _build_series, so instead of duplicated everything until the
+        # param table is reached, we only duplicate until the node that is performing
+        # the grouping.
         grouper: Grouper
         if (
             label_name not in self._param_series
@@ -443,6 +458,8 @@ class Pipeline:
             tuple(_indexed_key(label_name, index, value_type) for index in grouper),
         )
 
+        # Step 3:
+        # Duplicate nodes, replacing keys with indexed keys.
         for key, value in subgraph.items():
             if key in path:
                 in_group = grouper(key)
