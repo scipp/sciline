@@ -55,7 +55,9 @@ class AmbiguousProvider(Exception):
     """Raised when multiple providers are found for a type."""
 
 
-def _indexed_key(index_name: Any, i: int, value_name: Type[T] | Item[T]) -> Item[T]:
+def _indexed_key(
+    index_name: Any, i: int, value_name: Union[Type[T], Item[T]]
+) -> Item[T]:
     label = Label(index_name, i)
     if isinstance(value_name, Item):
         return Item(value_name.label + (label,), value_name.tp)
