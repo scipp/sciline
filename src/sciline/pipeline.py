@@ -115,8 +115,8 @@ def _find_nodes_in_paths(
     graph: Mapping[T, Tuple[Callable[..., Any], Collection[T]]], start: T, end: T
 ) -> List[T]:
     """
-    Find all nodes that need to be duplicated since they depend on a value from a
-    param table.
+    Helper for Pipeline. Finds all nodes that need to be duplicated since they depend
+    on a value from a param table.
     """
     # 0 is the provider, 1 is the args
     dependencies = {k: v[1] for k, v in graph.items()}
