@@ -340,7 +340,7 @@ class Pipeline:
             raise ValueError(
                 f'Provider {provider} returning a sciline.Series is not allowed. '
                 'Series is a special container reserved for use in conjunction with '
-                'sciline.ParamTable and may not be provided directly.'
+                'sciline.ParamTable and must not be provided directly.'
             )
         if (origin := get_origin(key)) is not None:
             subproviders = self._subproviders.setdefault(origin, {})
@@ -437,7 +437,7 @@ class Pipeline:
         # Identify nodes in the graph that need to be duplicated as they lie in the
         # path to a parameter from a table. In the case of grouping, note that the
         # ungrouped graph (including duplication of nodes) will have been built by a
-        # prior call to _build_series, so instead of duplicated everything until the
+        # prior call to _build_series, so instead of duplicating everything until the
         # param table is reached, we only duplicate until the node that is performing
         # the grouping.
         grouper: Grouper
