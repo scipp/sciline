@@ -84,7 +84,7 @@ T = TypeVar('T')
 
 def _extract_type_and_labels(
     key: Union[Item[T], Type[T]], compact: bool
-) -> Tuple[Type[T], List[type]]:
+) -> Tuple[Type[T], List[Union[type, Tuple[type, Any]]]]:
     if isinstance(key, Item):
         label = key.label
         return key.tp, [lb.tp if compact else (lb.tp, lb.index) for lb in label]
@@ -105,7 +105,7 @@ def _format_type(tp: Key, compact: bool = False) -> str:
     def get_base(tp: type) -> str:
         return tp.__name__ if hasattr(tp, '__name__') else str(tp).split('.')[-1]
 
-    def format_label(label):
+    def format_label(label: Union[type, Tuple[type, Any]]) -> str:
         if isinstance(label, tuple):
             tp, index = label
             return f'{get_base(tp)}={index}'
