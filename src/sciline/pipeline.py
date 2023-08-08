@@ -97,16 +97,16 @@ def _bind_free_typevars(tp: TypeVar | Key, bound: Dict[TypeVar, Key]) -> Key:
 
 
 def _find_all_paths(
-    graph: Mapping[T, Collection[T]], start: T, end: T
+    dependencies: Mapping[T, Collection[T]], start: T, end: T
 ) -> List[List[T]]:
     """Find all paths from start to end in a DAG."""
     if start == end:
         return [[start]]
-    if start not in graph:
+    if start not in dependencies:
         return []
     paths = []
-    for node in graph[start]:
-        for path in _find_all_paths(graph, node, end):
+    for node in dependencies[start]:
+        for path in _find_all_paths(dependencies, node, end):
             paths.append([start] + path)
     return paths
 
