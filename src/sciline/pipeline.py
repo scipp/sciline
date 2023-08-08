@@ -244,7 +244,7 @@ class Pipeline:
         self._providers: Dict[Key, Provider] = {}
         self._subproviders: Dict[type, Dict[Tuple[Key | TypeVar, ...], Provider]] = {}
         self._param_tables: Dict[Key, ParamTable] = {}
-        self._param_series: Dict[Key, Key] = {}
+        self._param_index_name: Dict[Key, Key] = {}
         for provider in providers or []:
             self.insert(provider)
         for tp, param in (params or {}).items():
@@ -320,11 +320,11 @@ class Pipeline:
         if params.row_dim in self._param_tables:
             raise ValueError(f'Parameter table for {params.row_dim} already set')
         for param_name in params:
-            if param_name in self._param_series:
+            if param_name in self._param_index_name:
                 raise ValueError(f'Parameter {param_name} already set')
         self._param_tables[params.row_dim] = params
         for param_name in params:
-            self._param_series[param_name] = params.row_dim
+            self._param_index_name[param_name] = params.row_dim
         for param_name, values in params.items():
             for index, label in zip(params.index, values):
                 self._set_provider(
@@ -404,8 +404,8 @@ class Pipeline:
         stack: List[Union[Type[T], Item[T]]] = [tp]
         while stack:
             tp = stack.pop()
-            if search_param_tables and tp in self._param_series:
-                graph[tp] = (_param_sentinel, (self._param_series[tp],))
+            if search_param_tables and tp in self._param_index_name:
+                graph[tp] = (_param_sentinel, (self._param_index_name[tp],))
                 continue
             if get_origin(tp) == Series:
                 graph.update(self._build_series(tp))  # type: ignore[arg-type]
@@ -444,12 +444,12 @@ class Pipeline:
         # the grouping.
         grouper: Grouper
         if (
-            label_name not in self._param_series
+            label_name not in self._param_index_name
             and (params := self._param_tables.get(label_name)) is not None
         ):
             path = _find_nodes_in_paths(subgraph, value_type, label_name)
             grouper = NoGrouping(index=params.index)
-        elif (index_name := self._param_series.get(label_name)) is not None:
+        elif (index_name := self._param_index_name.get(label_name)) is not None:
             params = self._param_tables[index_name]
             labels = params[label_name]
             grouping_node = self._find_grouping_node(index_name, subgraph)
