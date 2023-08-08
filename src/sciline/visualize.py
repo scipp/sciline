@@ -15,6 +15,7 @@ from typing import (
 
 from graphviz import Digraph
 
+from .pipeline import Pipeline, SeriesProvider
 from .typing import Graph, Item, Key
 
 
@@ -37,13 +38,13 @@ def to_graphviz(graph: Graph, **kwargs: Any) -> Digraph:
             dot.node(ret, ret, shape='rectangle')
         # Do not draw dummy providers created by Pipeline when setting instances
         if p_name in (
-            'Pipeline.__setitem__.<locals>.<lambda>',
-            'Pipeline.set_param_table.<locals>.<lambda>',
+            f'{_qualname(Pipeline.__setitem__)}.<locals>.<lambda>',
+            f'{_qualname(Pipeline.set_param_table)}.<locals>.<lambda>',
         ):
             continue
         # Do not draw the internal provider gathering index-dependent results into
         # a dict
-        if p_name == 'SeriesProducer':
+        if p_name == _qualname(SeriesProvider):
             for arg in args:
                 dot.edge(arg, ret, style='dashed')
         else:
