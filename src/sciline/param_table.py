@@ -72,3 +72,15 @@ class ParamTable(Mapping[type, Collection[Any]]):
 
     def __repr__(self) -> str:
         return f"ParamTable(row_dim={self.row_dim}, columns={self._columns})"
+
+    def _repr_html_(self) -> str:
+        return (
+            f"<table><tr><th>{self.row_dim.__name__}</th>"
+            + "".join(f"<th>{k.__name__}</th>" for k in self._columns.keys())
+            + "</tr>"
+            + "".join(
+                f"<tr><td>{idx}</td>" + "".join(f"<td>{v}</td>" for v in row) + "</tr>"
+                for idx, row in zip(self.index, zip(*self._columns.values()))
+            )
+            + "</table>"
+        )

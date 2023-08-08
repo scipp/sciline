@@ -19,7 +19,7 @@ from .pipeline import Pipeline, SeriesProvider
 from .typing import Graph, Item, Key
 
 
-def to_graphviz(graph: Graph, **kwargs: Any) -> Digraph:
+def to_graphviz(graph: Graph, compact: bool = False, **kwargs: Any) -> Digraph:
     """
     Convert output of :py:class:`sciline.Pipeline.get_graph` to a graphviz graph.
 
@@ -27,11 +27,14 @@ def to_graphviz(graph: Graph, **kwargs: Any) -> Digraph:
     ----------
     graph:
         Output of :py:class:`sciline.Pipeline.get_graph`.
+    compact:
+        If True, parameter-table-dependent branches are collapsed into a single copy
+        of the branch. Recommendend for large graphs with long parameter tables.
     kwargs:
         Keyword arguments passed to :py:class:`graphviz.Digraph`.
     """
     dot = Digraph(strict=True, **kwargs)
-    for p, (p_name, args, ret) in _format_graph(graph).items():
+    for p, (p_name, args, ret) in _format_graph(graph, compact=compact).items():
         if '(' in ret:
             dot.node(ret, ret, shape='box3d')
         else:
@@ -61,34 +64,34 @@ def _qualname(obj: Any) -> Any:
     )
 
 
-def _format_graph(graph: Graph) -> Dict[str, Tuple[str, List[str], str]]:
+def _format_graph(graph: Graph, compact: bool) -> Dict[str, Tuple[str, List[str], str]]:
     return {
-        _format_provider(provider, ret): (
+        _format_provider(provider, ret, compact=compact): (
             _qualname(provider),
-            [_format_type(a) for a in args],
-            _format_type(ret),
+            [_format_type(a, compact=compact) for a in args],
+            _format_type(ret, compact=compact),
         )
         for ret, (provider, args) in graph.items()
     }
 
 
-def _format_provider(provider: Callable[..., Any], ret: Key) -> str:
-    return f'{_qualname(provider)}_{_format_type(ret)}'
+def _format_provider(provider: Callable[..., Any], ret: Key, compact: bool) -> str:
+    return f'{_qualname(provider)}_{_format_type(ret, compact=compact)}'
 
 
 T = TypeVar('T')
 
 
 def _extract_type_and_labels(
-    key: Union[Item[T], Type[T]]
+    key: Union[Item[T], Type[T]], compact: bool
 ) -> Tuple[Type[T], List[type]]:
     if isinstance(key, Item):
         label = key.label
-        return key.tp, [lb.tp for lb in label]
+        return key.tp, [lb.tp if compact else (lb.tp, lb.index) for lb in label]
     return key, []
 
 
-def _format_type(tp: Key) -> str:
+def _format_type(tp: Key, compact: bool = False) -> str:
     """
     Helper for _format_graph.
 
@@ -97,14 +100,20 @@ def _format_type(tp: Key) -> str:
     We may make this configurable in the future.
     """
 
-    tp, labels = _extract_type_and_labels(tp)
+    tp, labels = _extract_type_and_labels(tp, compact=compact)
 
     def get_base(tp: type) -> str:
         return tp.__name__ if hasattr(tp, '__name__') else str(tp).split('.')[-1]
 
+    def format_label(label):
+        if isinstance(label, tuple):
+            tp, index = label
+            return f'{get_base(tp)}={index}'
+        return get_base(label)
+
     def with_labels(base: str) -> str:
         if labels:
-            return f'{base}({", ".join([get_base(l) for l in labels])})'
+            return f'{base}({", ".join([format_label(l) for l in labels])})'
         return base
 
     if (origin := get_origin(tp)) is not None:
