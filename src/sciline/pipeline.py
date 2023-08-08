@@ -112,6 +112,10 @@ def _find_all_paths(
 def _find_nodes_in_paths(
     graph: Mapping[T, Tuple[Callable[..., Any], Collection[T]]], start: T, end: T
 ) -> List[T]:
+    """
+    Find all nodes that need to be duplicated since they depend on a value from a
+    param table.
+    """
     # 0 is the provider, 1 is the args
     dependencies = {k: v[1] for k, v in graph.items()}
     paths = _find_all_paths(dependencies, start, end)
@@ -126,6 +130,8 @@ def _yes(*_: Any) -> Literal[True]:
 
 
 class Grouper(Protocol):
+    """Helper protocol for rewriting graphs."""
+
     def __iter__(self) -> Iterator[Any]:
         ...
 
@@ -137,6 +143,8 @@ class Grouper(Protocol):
 
 
 class NoGrouping(Generic[IndexType]):
+    """Helper for rewriting the graph to map over a given index."""
+
     def __init__(self, index: Iterable[IndexType]) -> None:
         self._index = index
 
@@ -151,6 +159,8 @@ class NoGrouping(Generic[IndexType]):
 
 
 class GroupBy(Generic[IndexType, LabelType]):
+    """Helper for rewriting the graph to group by a given index."""
+
     def __init__(
         self,
         *,
@@ -180,7 +190,12 @@ class GroupBy(Generic[IndexType, LabelType]):
         return arg.label[0].index in self._index[group]
 
 
-class SeriesProducer(Generic[KeyType, ValueType]):
+class SeriesProvider(Generic[KeyType, ValueType]):
+    """
+    Internal provider for combining results obtained based on different rows in a
+    param table into a single object.
+    """
+
     def __init__(self, labels: Iterable[KeyType], row_dim: type) -> None:
         self._labels = labels
         self._row_dim = row_dim
@@ -190,14 +205,14 @@ class SeriesProducer(Generic[KeyType, ValueType]):
 
     def restrict(
         self, labels: Optional[Iterable[KeyType]]
-    ) -> SeriesProducer[KeyType, ValueType]:
+    ) -> SeriesProvider[KeyType, ValueType]:
         if labels is None:
             return self
         if set(labels) - set(self._labels):
             raise ValueError(f'{labels} is not a subset of {self._labels}')
         # Ensure that labels are in the same order as in the original series
         labels = [label for label in self._labels if label in labels]
-        return SeriesProducer(labels, self._row_dim)
+        return SeriesProvider(labels, self._row_dim)
 
 
 class _param_sentinel:
@@ -286,6 +301,20 @@ class Pipeline:
         self._set_provider(key, lambda: param)
 
     def set_param_table(self, params: ParamTable) -> None:
+        """
+        Set a parameter table for a row dimension.
+
+        Values in the parameter table provide concrete values for a type given by the
+        respective column header.
+
+        A pipeline can have multiple parameter tables, but only one per row dimension.
+        Column names must be unique across all parameter tables.
+
+        Parameters
+        ----------
+        params:
+            Parameter table to set.
+        """
         if params.row_dim in self._param_tables:
             raise ValueError(f'Parameter table for {params.row_dim} already set')
         for param_name in params:
@@ -410,7 +439,7 @@ class Pipeline:
 
         graph: Graph = {}
         graph[tp] = (
-            SeriesProducer(list(grouper), label_name),
+            SeriesProvider(list(grouper), label_name),
             tuple(_indexed_key(label_name, index, value_type) for index in grouper),
         )
 
@@ -428,7 +457,7 @@ class Pipeline:
                         for arg in args
                         if in_group(arg, index)
                     )
-                    if isinstance(provider, SeriesProducer):
+                    if isinstance(provider, SeriesProvider):
                         # For some reason mypy does not detect that SeriesProducer is
                         # Callable?
                         provider = provider.restrict(  # type: ignore[unreachable]

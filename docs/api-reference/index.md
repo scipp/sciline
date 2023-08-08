@@ -10,8 +10,10 @@
    :template: class-template.rst
    :recursive:
 
+   ParamTable
    Pipeline
    Scope
+   Series
    scheduler.Scheduler
    scheduler.DaskScheduler
    scheduler.NaiveScheduler
