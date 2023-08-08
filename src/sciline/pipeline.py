@@ -475,8 +475,7 @@ class Pipeline:
                         if in_group(arg, index)
                     )
                     if isinstance(provider, SeriesProvider):
-                        # For some reason mypy does not detect that SeriesProducer is
-                        # Callable?
+                        # mypy does not detect that SeriesProducer is Callable?
                         provider = provider.restrict(  # type: ignore[unreachable]
                             grouper.get_grouping(key, index)
                         )
@@ -489,7 +488,7 @@ class Pipeline:
         ends: List[type] = []
         for key in subgraph:
             if get_origin(key) == Series and get_args(key)[0] == index_name:
-                # Because if the succeeded get_origin we know it is a type
+                # Because of the succeeded get_origin we know it is a type
                 ends.append(key)  # type: ignore[arg-type]
         if len(ends) == 1:
             return ends[0]
