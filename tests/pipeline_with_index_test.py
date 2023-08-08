@@ -67,6 +67,23 @@ def test_can_compute_series_of_derived_values() -> None:
     )
 
 
+def test_creating_pipeline_with_provider_of_series_raises() -> None:
+    series = sl.Series(int, {0: 1.0, 1: 2.0, 2: 3.0})
+
+    def make_series() -> sl.Series[int, float]:
+        return series
+
+    with pytest.raises(ValueError):
+        sl.Pipeline([make_series])
+
+
+def test_creating_pipeline_with_series_param_raises() -> None:
+    series = sl.Series(int, {0: 1.0, 1: 2.0, 2: 3.0})
+
+    with pytest.raises(ValueError):
+        sl.Pipeline([], params={sl.Series[int, float]: series})
+
+
 def test_explicit_index_of_param_table_is_forwarded_correctly() -> None:
     def process(x: float) -> int:
         return int(x)

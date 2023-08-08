@@ -336,6 +336,12 @@ class Pipeline:
         # isinstance does not work here and types.NoneType available only in 3.10+
         if key == type(None):  # noqa: E721
             raise ValueError(f'Provider {provider} returning `None` is not allowed')
+        if get_origin(key) == Series:
+            raise ValueError(
+                f'Provider {provider} returning a sciline.Series is not allowed. '
+                'Series is a special container reserved for use in conjunction with '
+                'sciline.ParamTable and may not be provided directly.'
+            )
         if (origin := get_origin(key)) is not None:
             subproviders = self._subproviders.setdefault(origin, {})
             args = get_args(key)
