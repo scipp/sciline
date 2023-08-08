@@ -9,12 +9,25 @@ Value = TypeVar('Value')
 
 
 class Series(Mapping[Key, Value]):
-    def __init__(self, row_dim: Type[Key], values: Mapping[Key, Value]) -> None:
+    """A series of values with labels (row index) and named row dimension."""
+
+    def __init__(self, row_dim: Type[Key], items: Mapping[Key, Value]) -> None:
+        """
+        Create a new series.
+
+        Parameters
+        ----------
+        row_dim:
+            The row dimension. This must be a type or a type-alias (not an instance).
+        items:
+            The items of the series.
+        """
         self._row_dim = row_dim
-        self._map: Mapping[Key, Value] = values
+        self._map: Mapping[Key, Value] = items
 
     @property
     def row_dim(self) -> type:
+        """The row dimension of the series."""
         return self._row_dim
 
     def __contains__(self, item: object) -> bool:

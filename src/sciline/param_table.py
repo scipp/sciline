@@ -6,6 +6,8 @@ from typing import Any, Collection, Dict, Mapping, Optional
 
 
 class ParamTable(Mapping[type, Collection[Any]]):
+    """A table of parameters with a row index and named row dimension."""
+
     def __init__(
         self,
         row_dim: type,
@@ -13,6 +15,22 @@ class ParamTable(Mapping[type, Collection[Any]]):
         *,
         index: Optional[Collection[Any]] = None,
     ):
+        """
+        Create a new param table.
+
+        Parameters
+        ----------
+        row_dim:
+            The row dimension. This must be a type or a type-alias (not an instance),
+            and is used by :py:class:`sciline.Pipeline` to identify each parameter
+            table.
+        columns:
+            The columns of the table. The keys (column names) must be types or type-
+            aliases matching the values in the respective columns.
+        index:
+            The row index of the table. If not given, a default index will be
+            generated, as the integer range of the column length.
+        """
         sizes = set(len(v) for v in columns.values())
         if len(sizes) != 1:
             raise ValueError(
@@ -32,10 +50,12 @@ class ParamTable(Mapping[type, Collection[Any]]):
 
     @property
     def row_dim(self) -> type:
+        """The row dimension of the table."""
         return self._row_dim
 
     @property
     def index(self) -> Collection[Any]:
+        """The row index of the table."""
         return self._index
 
     def __contains__(self, key: Any) -> bool:
