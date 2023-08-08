@@ -6,12 +6,14 @@ from collections import defaultdict
 from typing import (
     Any,
     Callable,
+    Collection,
     Dict,
     Generic,
     Iterable,
     Iterator,
     List,
     Literal,
+    Mapping,
     Optional,
     Protocol,
     Tuple,
@@ -27,7 +29,6 @@ from typing import (
 from sciline.task_graph import TaskGraph
 
 from .domain import Scope
-from .graph import find_nodes_in_paths
 from .param_table import ParamTable
 from .scheduler import Scheduler
 from .series import Series
@@ -91,6 +92,33 @@ def _bind_free_typevars(tp: TypeVar | Key, bound: Dict[TypeVar, Key]) -> Key:
         return result
     else:
         return tp
+
+
+def _find_all_paths(
+    graph: Mapping[T, Collection[T]], start: T, end: T
+) -> List[List[T]]:
+    """Find all paths from start to end in a DAG."""
+    if start == end:
+        return [[start]]
+    if start not in graph:
+        return []
+    paths = []
+    for node in graph[start]:
+        for path in _find_all_paths(graph, node, end):
+            paths.append([start] + path)
+    return paths
+
+
+def _find_nodes_in_paths(
+    graph: Mapping[T, Tuple[Callable[..., Any], Collection[T]]], start: T, end: T
+) -> List[T]:
+    # 0 is the provider, 1 is the args
+    dependencies = {k: v[1] for k, v in graph.items()}
+    paths = _find_all_paths(dependencies, start, end)
+    nodes = set()
+    for path in paths:
+        nodes.update(path)
+    return list(nodes)
 
 
 def _yes(*_: Any) -> Literal[True]:
@@ -367,13 +395,13 @@ class Pipeline:
             label_name not in self._param_series
             and (params := self._param_tables.get(label_name)) is not None
         ):
-            path = find_nodes_in_paths(subgraph, value_type, label_name)
+            path = _find_nodes_in_paths(subgraph, value_type, label_name)
             grouper = NoGrouping(index=params.index)
         elif (index_name := self._param_series.get(label_name)) is not None:
             params = self._param_tables[index_name]
             labels = params[label_name]
             grouping_node = self._find_grouping_node(index_name, subgraph)
-            path = find_nodes_in_paths(subgraph, value_type, grouping_node)
+            path = _find_nodes_in_paths(subgraph, value_type, grouping_node)
             grouper = GroupBy(
                 index=params.index, labels=labels, grouping_node=grouping_node
             )
