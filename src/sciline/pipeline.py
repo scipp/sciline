@@ -10,9 +10,7 @@ from typing import (
     Dict,
     Generic,
     Iterable,
-    Iterator,
     List,
-    Literal,
     Mapping,
     Optional,
     Protocol,
@@ -128,44 +126,30 @@ def _find_nodes_in_paths(
     return list(nodes)
 
 
-def _yes(*_: Any) -> Literal[True]:
-    return True
-
-
 class Grouper(Protocol):
     """Helper protocol for rewriting graphs."""
 
-    def __iter__(self) -> Iterator[Any]:
-        ...
-
-    def __call__(self, key: Any) -> Callable[..., bool]:
-        ...
-
-    def get_grouping(self, key: Any, group: Any) -> Any:
+    def __contains__(self, key: Any) -> bool:
         ...
 
     def duplicate(self, key: Any, value: Any) -> Dict[Key, Any]:
-        pass
+        ...
 
 
 class NoGrouping(Generic[IndexType]):
     """Helper for rewriting the graph to map over a given index."""
 
     def __init__(self, param_table: ParamTable, graph_template: Graph) -> None:
-        self._graph_template = graph_template
-        self._index = param_table.index
+        self.index = param_table.index
         self._index_name = param_table.row_dim
         self._path = _find_nodes_in_paths(graph_template, self._index_name)
 
-    def __iter__(self) -> Iterator[IndexType]:
-        return iter(self._index)
-
-    def make_series(self, *vals: Any) -> Series[IndexType, Any]:
-        return Series(self._index, vals)
+    def __contains__(self, key: Any) -> bool:
+        return key in self._path
 
     def duplicate(self, key: Any, value: Any, get_provider) -> Dict[Key, Any]:
         return duplicate_node(
-            key, value, get_provider, self._index_name, self._index, self._path
+            key, value, get_provider, self._index_name, self.index, self._path
         )
 
 
@@ -195,28 +179,28 @@ class GroupBy(Generic[IndexType, LabelType]):
         self._label_name = label_name
         self._group_node = self._find_grouping_node(param_table.row_dim, graph_template)
         self._path = _find_nodes_in_paths(graph_template, self._group_node)
-        self._index: Dict[LabelType, List[IndexType]] = defaultdict(list)
+        self.index: Dict[LabelType, List[IndexType]] = defaultdict(list)
         for idx, label in zip(param_table.index, param_table[label_name]):
-            self._index[label].append(idx)
+            self.index[label].append(idx)
 
-    def __iter__(self) -> Iterator[LabelType]:
-        return iter(self._index)
+    def __contains__(self, key: Any) -> bool:
+        return key in self._path
 
     def duplicate(self, key: Any, value: Any, get_provider) -> Dict[Key, Any]:
         if key != self._group_node:
             return duplicate_node(
-                key, value, get_provider, self._label_name, self._index, self._path
+                key, value, get_provider, self._label_name, self.index, self._path
             )
         graph = {}
         provider, args = value
-        for index in self._index:
-            labels = self._index[index]
-            if set(labels) - set(provider._labels):
-                raise ValueError(f'{labels} is not a subset of {provider._labels}')
+        for index in self.index:
+            labels = self.index[index]
+            if set(labels) - set(provider.labels):
+                raise ValueError(f'{labels} is not a subset of {provider.labels}')
             subkey = _indexed_key(self._label_name, index, key)
             selected = {
                 label: arg
-                for label, arg in zip(provider._labels, args)
+                for label, arg in zip(provider.labels, args)
                 if label in labels
             }
             split_provider = SeriesProvider(selected, provider._row_dim)
@@ -241,11 +225,11 @@ class SeriesProvider(Generic[KeyType, ValueType]):
     """
 
     def __init__(self, labels: Iterable[KeyType], row_dim: type) -> None:
-        self._labels = labels
+        self.labels = labels
         self._row_dim = row_dim
 
     def __call__(self, *vals: ValueType) -> Series[KeyType, ValueType]:
-        return Series(self._row_dim, dict(zip(self._labels, vals)))
+        return Series(self._row_dim, dict(zip(self.labels, vals)))
 
 
 class _param_sentinel:
@@ -490,14 +474,14 @@ class Pipeline:
 
         graph: Graph = {}
         graph[tp] = (
-            SeriesProvider(list(grouper), label_name),
-            tuple(_indexed_key(label_name, index, value_type) for index in grouper),
+            SeriesProvider(list(grouper.index), label_name),
+            tuple(_indexed_key(label_name, idx, value_type) for idx in grouper.index),
         )
 
         # Step 3:
         # Duplicate nodes, replacing keys with indexed keys.
         for key, value in subgraph.items():
-            if key in grouper._path:
+            if key in grouper:
                 graph.update(grouper.duplicate(key, value, self._get_provider))
             else:
                 graph[key] = value
