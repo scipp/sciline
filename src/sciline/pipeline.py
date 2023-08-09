@@ -13,7 +13,6 @@ from typing import (
     List,
     Mapping,
     Optional,
-    Protocol,
     Tuple,
     Type,
     TypeVar,
@@ -51,16 +50,6 @@ class UnboundTypeVar(Exception):
 
 class AmbiguousProvider(Exception):
     """Raised when multiple providers are found for a type."""
-
-
-def _indexed_key(
-    index_name: Any, i: int, value_name: Union[Type[T], Item[T]]
-) -> Item[T]:
-    label = Label(index_name, i)
-    if isinstance(value_name, Item):
-        return Item(value_name.label + (label,), value_name.tp)
-    else:
-        return Item((label,), value_name)
 
 
 def _is_compatible_type_tuple(
@@ -126,51 +115,50 @@ def _find_nodes_in_paths(
     return list(nodes)
 
 
-class Grouper(Protocol):
-    """Helper protocol for rewriting graphs."""
-
-    def __contains__(self, key: Any) -> bool:
-        ...
-
-    def duplicate(self, key: Any, value: Any) -> Dict[Key, Any]:
-        ...
-
-
-class NoGrouping(Generic[IndexType]):
-    """Helper for rewriting the graph to map over a given index."""
-
-    def __init__(self, param_table: ParamTable, graph_template: Graph) -> None:
-        self.index = param_table.index
-        self._index_name = param_table.row_dim
-        self._path = _find_nodes_in_paths(graph_template, self._index_name)
+class Grouper:
+    def __init__(self, index_name, index, path):
+        self._index_name = index_name
+        self.index = index
+        self._path = path
 
     def __contains__(self, key: Any) -> bool:
         return key in self._path
 
     def duplicate(self, key: Any, value: Any, get_provider) -> Dict[Key, Any]:
-        return duplicate_node(
-            key, value, get_provider, self._index_name, self.index, self._path
+        graph = {}
+        for idx in self.index:
+            provider, args = value
+            subkey = self.key(idx, key)
+            if provider == _param_sentinel:
+                provider, _ = get_provider(subkey)
+                args = ()
+            args_with_index = tuple(
+                self.key(idx, arg) if arg in self else arg for arg in args
+            )
+            graph[subkey] = (provider, args_with_index)
+        return graph
+
+    def key(self, i: int, value_name: Union[Type[T], Item[T]]) -> Item[T]:
+        label = Label(self._index_name, i)
+        if isinstance(value_name, Item):
+            return Item(value_name.label + (label,), value_name.tp)
+        else:
+            return Item((label,), value_name)
+
+
+class NoGrouping(Grouper, Generic[IndexType]):
+    """Helper for rewriting the graph to map over a given index."""
+
+    def __init__(self, param_table: ParamTable, graph_template: Graph) -> None:
+        index_name = param_table.row_dim
+        super().__init__(
+            index_name=index_name,
+            index=param_table.index,
+            path=_find_nodes_in_paths(graph_template, index_name),
         )
 
 
-def duplicate_node(
-    key: Any, value: Any, get_provider, index_name: Any, index: Any, path
-) -> Dict[Key, Any]:
-    graph = {}
-    for idx in index:
-        provider, args = value
-        subkey = _indexed_key(index_name, idx, key)
-        if provider == _param_sentinel:
-            provider, _ = get_provider(subkey)
-            args = ()
-        args_with_index = tuple(
-            _indexed_key(index_name, idx, arg) if arg in path else arg for arg in args
-        )
-        graph[subkey] = (provider, args_with_index)
-    return graph
-
-
-class GroupBy(Generic[IndexType, LabelType]):
+class GroupBy(Grouper, Generic[IndexType, LabelType]):
     """Helper for rewriting the graph to group by a given index."""
 
     def __init__(
@@ -178,26 +166,25 @@ class GroupBy(Generic[IndexType, LabelType]):
     ) -> None:
         self._label_name = label_name
         self._group_node = self._find_grouping_node(param_table.row_dim, graph_template)
-        self._path = _find_nodes_in_paths(graph_template, self._group_node)
-        self.index: Dict[LabelType, List[IndexType]] = defaultdict(list)
+        index: Dict[LabelType, List[IndexType]] = defaultdict(list)
         for idx, label in zip(param_table.index, param_table[label_name]):
-            self.index[label].append(idx)
-
-    def __contains__(self, key: Any) -> bool:
-        return key in self._path
+            index[label].append(idx)
+        super().__init__(
+            index_name=label_name,
+            index=index,
+            path=_find_nodes_in_paths(graph_template, self._group_node),
+        )
 
     def duplicate(self, key: Any, value: Any, get_provider) -> Dict[Key, Any]:
         if key != self._group_node:
-            return duplicate_node(
-                key, value, get_provider, self._label_name, self.index, self._path
-            )
+            return super().duplicate(key, value, get_provider)
         graph = {}
         provider, args = value
         for index in self.index:
             labels = self.index[index]
             if set(labels) - set(provider.labels):
                 raise ValueError(f'{labels} is not a subset of {provider.labels}')
-            subkey = _indexed_key(self._label_name, index, key)
+            subkey = self.key(index, key)
             selected = {
                 label: arg
                 for label, arg in zip(provider.labels, args)
@@ -475,7 +462,7 @@ class Pipeline:
         graph: Graph = {}
         graph[tp] = (
             SeriesProvider(list(grouper.index), label_name),
-            tuple(_indexed_key(label_name, idx, value_type) for idx in grouper.index),
+            tuple(grouper.key(idx, value_type) for idx in grouper.index),
         )
 
         # Step 3:
