@@ -143,53 +143,98 @@ class Grouper(Protocol):
     def get_grouping(self, key: Any, group: Any) -> Any:
         ...
 
+    def duplicate(self, key: Any, value: Any) -> Dict[Key, Any]:
+        pass
+
 
 class NoGrouping(Generic[IndexType]):
     """Helper for rewriting the graph to map over a given index."""
 
-    def __init__(self, index: Iterable[IndexType]) -> None:
-        self._index = index
+    def __init__(self, param_table: ParamTable, graph_template: Graph) -> None:
+        self._graph_template = graph_template
+        self._index = param_table.index
+        self._index_name = param_table.row_dim
+        self._root = next(iter(graph_template))
+        self._path = _find_nodes_in_paths(graph_template, self._root, self._index_name)
 
     def __iter__(self) -> Iterator[IndexType]:
         return iter(self._index)
 
-    def __call__(self, key: Any) -> Callable[..., bool]:
-        return _yes
+    def duplicate(self, key: Any, value: Any, get_provider) -> Dict[Key, Any]:
+        return duplicate_node(
+            key, value, get_provider, self._index_name, self._index, self._path
+        )
 
-    def get_grouping(self, key: Any, group: int) -> None:
-        return None
+
+def duplicate_node(
+    key: Any, value: Any, get_provider, index_name: Any, index: Any, path
+) -> Dict[Key, Any]:
+    graph = {}
+    for idx in index:
+        provider, args = value
+        subkey = _indexed_key(index_name, idx, key)
+        if provider == _param_sentinel:
+            provider, _ = get_provider(subkey)
+            args = ()
+        args_with_index = tuple(
+            _indexed_key(index_name, idx, arg) if arg in path else arg for arg in args
+        )
+        graph[subkey] = (provider, args_with_index)
+    return graph
 
 
 class GroupBy(Generic[IndexType, LabelType]):
     """Helper for rewriting the graph to group by a given index."""
 
     def __init__(
-        self,
-        *,
-        grouping_node: type,
-        index: Iterable[IndexType],
-        labels: Iterable[LabelType],
+        self, param_table: ParamTable, graph_template: Graph, label_name
     ) -> None:
-        self.grouping_node = grouping_node
+        self._index_name = param_table.row_dim
+        self._label_name = label_name
+        self._root = next(iter(graph_template))
+        self._grouping_node = self._find_grouping_node(self._index_name, graph_template)
+        self._path = _find_nodes_in_paths(
+            graph_template, self._root, self._grouping_node
+        )
         self._index: Dict[LabelType, List[IndexType]] = defaultdict(list)
-        for idx, label in zip(index, labels):
+        for idx, label in zip(param_table.index, param_table[label_name]):
             self._index[label].append(idx)
 
     def __iter__(self) -> Iterator[LabelType]:
         return iter(self._index)
 
-    def __call__(self, key: Any) -> Any:
-        return self.in_group if key == self.grouping_node else _yes
-
-    def get_grouping(self, key: Any, group: LabelType) -> Optional[List[IndexType]]:
-        if key != self.grouping_node:
-            return None
-        return self._index[group]
-
     def in_group(self, arg: Item[Any], group: LabelType) -> bool:
         if len(arg.label) != 1:
             raise ValueError(f'Cannot group with multi-index label {arg.label}')
         return arg.label[0].index in self._index[group]
+
+    def duplicate(self, key: Any, value: Any, get_provider) -> Dict[Key, Any]:
+        if key != self._grouping_node:
+            return duplicate_node(
+                key, value, get_provider, self._label_name, self._index, self._path
+            )
+        graph = {}
+        for index in self._index:
+            provider, args = value
+            subkey = _indexed_key(self._label_name, index, key)
+            args_with_index = tuple(
+                _indexed_key(self._label_name, index, arg) if arg in self._path else arg
+                for arg in args
+                if self.in_group(arg, index)
+            )
+            provider = provider.restrict(self._index[index])
+            graph[subkey] = (provider, args_with_index)
+        return graph
+
+    def _find_grouping_node(self, index_name: Key, subgraph: Graph) -> type:
+        ends: List[type] = []
+        for key in subgraph:
+            if get_origin(key) == Series and get_args(key)[0] == index_name:
+                # Because of the succeeded get_origin we know it is a type
+                ends.append(key)  # type: ignore[arg-type]
+        if len(ends) == 1:
+            return ends[0]
+        raise ValueError(f"Could not find unique grouping node, found {ends}")
 
 
 class SeriesProvider(Generic[KeyType, ValueType]):
@@ -447,15 +492,12 @@ class Pipeline:
             label_name not in self._param_index_name
             and (params := self._param_tables.get(label_name)) is not None
         ):
-            path = _find_nodes_in_paths(subgraph, value_type, label_name)
-            grouper = NoGrouping(index=params.index)
+            grouper = NoGrouping(param_table=params, graph_template=subgraph)
         elif (index_name := self._param_index_name.get(label_name)) is not None:
-            params = self._param_tables[index_name]
-            labels = params[label_name]
-            grouping_node = self._find_grouping_node(index_name, subgraph)
-            path = _find_nodes_in_paths(subgraph, value_type, grouping_node)
             grouper = GroupBy(
-                index=params.index, labels=labels, grouping_node=grouping_node
+                param_table=self._param_tables[index_name],
+                graph_template=subgraph,
+                label_name=label_name,
             )
         else:
             raise KeyError(f'No parameter table found for label {label_name}')
@@ -469,38 +511,11 @@ class Pipeline:
         # Step 3:
         # Duplicate nodes, replacing keys with indexed keys.
         for key, value in subgraph.items():
-            if key in path:
-                in_group = grouper(key)
-                for index in grouper:
-                    provider, args = value
-                    subkey = _indexed_key(label_name, index, key)
-                    if provider == _param_sentinel:
-                        provider, _ = self._get_provider(subkey)
-                        args = ()
-                    args_with_index = tuple(
-                        _indexed_key(label_name, index, arg) if arg in path else arg
-                        for arg in args
-                        if in_group(arg, index)
-                    )
-                    if isinstance(provider, SeriesProvider):
-                        # mypy does not detect that SeriesProducer is Callable?
-                        provider = provider.restrict(  # type: ignore[unreachable]
-                            grouper.get_grouping(key, index)
-                        )
-                    graph[subkey] = (provider, args_with_index)
+            if key in grouper._path:
+                graph.update(grouper.duplicate(key, value, self._get_provider))
             else:
                 graph[key] = value
         return graph
-
-    def _find_grouping_node(self, index_name: Key, subgraph: Graph) -> type:
-        ends: List[type] = []
-        for key in subgraph:
-            if get_origin(key) == Series and get_args(key)[0] == index_name:
-                # Because of the succeeded get_origin we know it is a type
-                ends.append(key)  # type: ignore[arg-type]
-        if len(ends) == 1:
-            return ends[0]
-        raise ValueError(f"Could not find unique grouping node, found {ends}")
 
     @overload
     def compute(self, tp: Type[T]) -> T:
