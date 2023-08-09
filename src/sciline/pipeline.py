@@ -112,12 +112,13 @@ def _find_all_paths(
 
 
 def _find_nodes_in_paths(
-    graph: Mapping[T, Tuple[Callable[..., Any], Collection[T]]], start: T, end: T
+    graph: Mapping[T, Tuple[Callable[..., Any], Collection[T]]], end: T
 ) -> List[T]:
     """
     Helper for Pipeline. Finds all nodes that need to be duplicated since they depend
     on a value from a param table.
     """
+    start = next(iter(graph))
     # 0 is the provider, 1 is the args
     dependencies = {k: v[1] for k, v in graph.items()}
     paths = _find_all_paths(dependencies, start, end)
@@ -154,11 +155,13 @@ class NoGrouping(Generic[IndexType]):
         self._graph_template = graph_template
         self._index = param_table.index
         self._index_name = param_table.row_dim
-        self._root = next(iter(graph_template))
-        self._path = _find_nodes_in_paths(graph_template, self._root, self._index_name)
+        self._path = _find_nodes_in_paths(graph_template, self._index_name)
 
     def __iter__(self) -> Iterator[IndexType]:
         return iter(self._index)
+
+    def make_series(self, *vals: Any) -> Series[IndexType, Any]:
+        return Series(self._index, vals)
 
     def duplicate(self, key: Any, value: Any, get_provider) -> Dict[Key, Any]:
         return duplicate_node(
@@ -189,13 +192,9 @@ class GroupBy(Generic[IndexType, LabelType]):
     def __init__(
         self, param_table: ParamTable, graph_template: Graph, label_name
     ) -> None:
-        self._index_name = param_table.row_dim
         self._label_name = label_name
-        self._root = next(iter(graph_template))
-        self._grouping_node = self._find_grouping_node(self._index_name, graph_template)
-        self._path = _find_nodes_in_paths(
-            graph_template, self._root, self._grouping_node
-        )
+        self._group_node = self._find_grouping_node(param_table.row_dim, graph_template)
+        self._path = _find_nodes_in_paths(graph_template, self._group_node)
         self._index: Dict[LabelType, List[IndexType]] = defaultdict(list)
         for idx, label in zip(param_table.index, param_table[label_name]):
             self._index[label].append(idx)
@@ -203,27 +202,25 @@ class GroupBy(Generic[IndexType, LabelType]):
     def __iter__(self) -> Iterator[LabelType]:
         return iter(self._index)
 
-    def in_group(self, arg: Item[Any], group: LabelType) -> bool:
-        if len(arg.label) != 1:
-            raise ValueError(f'Cannot group with multi-index label {arg.label}')
-        return arg.label[0].index in self._index[group]
-
     def duplicate(self, key: Any, value: Any, get_provider) -> Dict[Key, Any]:
-        if key != self._grouping_node:
+        if key != self._group_node:
             return duplicate_node(
                 key, value, get_provider, self._label_name, self._index, self._path
             )
         graph = {}
+        provider, args = value
         for index in self._index:
-            provider, args = value
+            labels = self._index[index]
+            if set(labels) - set(provider._labels):
+                raise ValueError(f'{labels} is not a subset of {provider._labels}')
             subkey = _indexed_key(self._label_name, index, key)
-            args_with_index = tuple(
-                _indexed_key(self._label_name, index, arg) if arg in self._path else arg
-                for arg in args
-                if self.in_group(arg, index)
-            )
-            provider = provider.restrict(self._index[index])
-            graph[subkey] = (provider, args_with_index)
+            selected = {
+                label: arg
+                for label, arg in zip(provider._labels, args)
+                if label in labels
+            }
+            split_provider = SeriesProvider(selected, provider._row_dim)
+            graph[subkey] = (split_provider, tuple(selected.values()))
         return graph
 
     def _find_grouping_node(self, index_name: Key, subgraph: Graph) -> type:
@@ -249,17 +246,6 @@ class SeriesProvider(Generic[KeyType, ValueType]):
 
     def __call__(self, *vals: ValueType) -> Series[KeyType, ValueType]:
         return Series(self._row_dim, dict(zip(self._labels, vals)))
-
-    def restrict(
-        self, labels: Optional[Iterable[KeyType]]
-    ) -> SeriesProvider[KeyType, ValueType]:
-        if labels is None:
-            return self
-        if set(labels) - set(self._labels):
-            raise ValueError(f'{labels} is not a subset of {self._labels}')
-        # Ensure that labels are in the same order as in the original series
-        labels = [label for label in self._labels if label in labels]
-        return SeriesProvider(labels, self._row_dim)
 
 
 class _param_sentinel:
