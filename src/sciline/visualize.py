@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright (c) 2023 Scipp contributors (https://github.com/scipp)
+from dataclasses import dataclass
 from typing import (
     Any,
     Callable,
@@ -19,6 +20,12 @@ from .pipeline import Pipeline, SeriesProvider
 from .typing import Graph, Item, Key
 
 
+@dataclass
+class Node:
+    name: str
+    collapsed: bool = False
+
+
 def to_graphviz(graph: Graph, compact: bool = False, **kwargs: Any) -> Digraph:
     """
     Convert output of :py:class:`sciline.Pipeline.get_graph` to a graphviz graph.
@@ -35,10 +42,7 @@ def to_graphviz(graph: Graph, compact: bool = False, **kwargs: Any) -> Digraph:
     """
     dot = Digraph(strict=True, **kwargs)
     for p, (p_name, args, ret) in _format_graph(graph, compact=compact).items():
-        if '(' in ret and '=' not in ret:
-            dot.node(ret, ret, shape='box3d')
-        else:
-            dot.node(ret, ret, shape='rectangle')
+        dot.node(ret.name, ret.name, shape='box3d' if ret.collapsed else 'rectangle')
         # Do not draw dummy providers created by Pipeline when setting instances
         if p_name in (
             f'{_qualname(Pipeline.__setitem__)}.<locals>.<lambda>',
@@ -49,12 +53,12 @@ def to_graphviz(graph: Graph, compact: bool = False, **kwargs: Any) -> Digraph:
         # a dict
         if p_name == _qualname(SeriesProvider):
             for arg in args:
-                dot.edge(arg, ret, style='dashed')
+                dot.edge(arg.name, ret.name, style='dashed')
         else:
             dot.node(p, p_name, shape='ellipse')
             for arg in args:
-                dot.edge(arg, p)
-            dot.edge(p, ret)
+                dot.edge(arg.name, p)
+            dot.edge(p, ret.name)
     return dot
 
 
@@ -64,7 +68,9 @@ def _qualname(obj: Any) -> Any:
     )
 
 
-def _format_graph(graph: Graph, compact: bool) -> Dict[str, Tuple[str, List[str], str]]:
+def _format_graph(
+    graph: Graph, compact: bool
+) -> Dict[str, Tuple[str, List[Node], Node]]:
     return {
         _format_provider(provider, ret, compact=compact): (
             _qualname(provider),
@@ -76,7 +82,7 @@ def _format_graph(graph: Graph, compact: bool) -> Dict[str, Tuple[str, List[str]
 
 
 def _format_provider(provider: Callable[..., Any], ret: Key, compact: bool) -> str:
-    return f'{_qualname(provider)}_{_format_type(ret, compact=compact)}'
+    return f'{_qualname(provider)}_{_format_type(ret, compact=compact).name}'
 
 
 T = TypeVar('T')
@@ -91,7 +97,7 @@ def _extract_type_and_labels(
     return key, []
 
 
-def _format_type(tp: Key, compact: bool = False) -> str:
+def _format_type(tp: Key, compact: bool = False) -> Node:
     """
     Helper for _format_graph.
 
@@ -111,13 +117,16 @@ def _format_type(tp: Key, compact: bool = False) -> str:
             return f'{get_base(tp)}={index}'
         return get_base(label)
 
-    def with_labels(base: str) -> str:
+    def with_labels(base: str) -> Node:
         if labels:
-            return f'{base}({", ".join([format_label(l) for l in labels])})'
-        return base
+            return Node(
+                name=f'{base}({", ".join([format_label(l) for l in labels])})',
+                collapsed=True,
+            )
+        return Node(name=base)
 
     if (origin := get_origin(tp)) is not None:
-        params = [_format_type(param) for param in get_args(tp)]
+        params = [_format_type(param).name for param in get_args(tp)]
         return with_labels(f'{get_base(origin)}[{", ".join(params)}]')
     else:
         return with_labels(get_base(tp))

@@ -30,6 +30,6 @@ def test_generic_types_formatted_without_prefixes() -> None:
     class SubA(A[T]):
         pass
 
-    assert sl.visualize._format_type(A[float]) == 'A[float]'
-    assert sl.visualize._format_type(SubA[float]) == 'SubA[float]'
-    assert sl.visualize._format_type(B[float]) == 'B[float]'
+    assert sl.visualize._format_type(A[float]).name == 'A[float]'
+    assert sl.visualize._format_type(SubA[float]).name == 'SubA[float]'
+    assert sl.visualize._format_type(B[float]).name == 'B[float]'
