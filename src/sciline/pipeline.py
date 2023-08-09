@@ -137,11 +137,20 @@ class Grouper(Generic[IndexType]):
             if provider == _param_sentinel:
                 graph[subkey] = (get_provider(subkey)[0], ())
             else:
-                graph[subkey] = (
-                    provider,
-                    tuple(self.key(idx, arg) if arg in self else arg for arg in args),
-                )
+                graph[subkey] = self._copy_node(key, provider, args, idx)
         return graph
+
+    def _copy_node(
+        self,
+        key: Key,
+        provider: Union[Provider, SeriesProvider[IndexType]],
+        args: Tuple[Key, ...],
+        idx: IndexType,
+    ) -> Tuple[Callable[..., Any], Tuple[Key, ...]]:
+        return (
+            provider,
+            tuple(self.key(idx, arg) if arg in self else arg for arg in args),
+        )
 
     def key(self, i: IndexType, value_name: Union[Type[T], Item[T]]) -> Item[T]:
         label = Label(self._index_name, i)
@@ -180,29 +189,23 @@ class GroupBy(Grouper[LabelType], Generic[IndexType, LabelType]):
             path=_find_nodes_in_paths(graph_template, self._group_node),
         )
 
-    def duplicate(
+    def _copy_node(
         self,
         key: Key,
-        value: Any,
-        get_provider: Callable[..., Tuple[Callable[..., Any], Dict[TypeVar, Key]]],
-    ) -> Graph:
-        if key != self._group_node:
-            return super().duplicate(key, value, get_provider)
-        graph: Graph = {}
-        provider, args = value
-        for idx in self.index:
-            subkey = self.key(idx, key)
-            labels = self._groups[idx]
-            if set(labels) - set(provider.labels):
-                raise ValueError(f'{labels} is not a subset of {provider.labels}')
-            selected = {
-                label: arg
-                for label, arg in zip(provider.labels, args)
-                if label in labels
-            }
-            split_provider = SeriesProvider(selected, provider._row_dim)
-            graph[subkey] = (split_provider, tuple(selected.values()))
-        return graph
+        provider: Union[Provider, SeriesProvider[IndexType]],
+        args: Tuple[Key, ...],
+        idx: LabelType,
+    ) -> Tuple[Callable[..., Any], Tuple[Key, ...]]:
+        if (not isinstance(provider, SeriesProvider)) or key != self._group_node:
+            return super()._copy_node(key, provider, args, idx)
+        labels = self._groups[idx]
+        if set(labels) - set(provider.labels):
+            raise ValueError(f'{labels} is not a subset of {provider.labels}')
+        selected = {
+            label: arg for label, arg in zip(provider.labels, args) if label in labels
+        }
+        split_provider = SeriesProvider(selected, provider.row_dim)
+        return (split_provider, tuple(selected.values()))
 
     def _find_grouping_node(self, index_name: Key, subgraph: Graph) -> type:
         ends: List[type] = []
@@ -223,10 +226,10 @@ class SeriesProvider(Generic[KeyType]):
 
     def __init__(self, labels: Iterable[KeyType], row_dim: type) -> None:
         self.labels = labels
-        self._row_dim = row_dim
+        self.row_dim = row_dim
 
     def __call__(self, *vals: ValueType) -> Series[KeyType, ValueType]:
-        return Series(self._row_dim, dict(zip(self.labels, vals)))
+        return Series(self.row_dim, dict(zip(self.labels, vals)))
 
 
 class _param_sentinel:
