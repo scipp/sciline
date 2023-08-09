@@ -121,7 +121,7 @@ def _format_type(tp: Key, compact: bool = False) -> Node:
         if labels:
             return Node(
                 name=f'{base}({", ".join([format_label(l) for l in labels])})',
-                collapsed=True,
+                collapsed=compact,
             )
         return Node(name=base)
 
