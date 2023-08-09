@@ -131,16 +131,16 @@ class Grouper(Generic[IndexType]):
         get_provider: Callable[..., Tuple[Callable[..., Any], Dict[TypeVar, Key]]],
     ) -> Graph:
         graph: Graph = {}
+        provider, args = value
         for idx in self.index:
-            provider, args = value
             subkey = self.key(idx, key)
             if provider == _param_sentinel:
-                provider, _ = get_provider(subkey)
-                args = ()
-            args_with_index = tuple(
-                self.key(idx, arg) if arg in self else arg for arg in args
-            )
-            graph[subkey] = (provider, args_with_index)
+                graph[subkey] = (get_provider(subkey)[0], ())
+            else:
+                graph[subkey] = (
+                    provider,
+                    tuple(self.key(idx, arg) if arg in self else arg for arg in args),
+                )
         return graph
 
     def key(self, i: IndexType, value_name: Union[Type[T], Item[T]]) -> Item[T]:
@@ -191,10 +191,10 @@ class GroupBy(Grouper[LabelType], Generic[IndexType, LabelType]):
         graph: Graph = {}
         provider, args = value
         for idx in self.index:
+            subkey = self.key(idx, key)
             labels = self._groups[idx]
             if set(labels) - set(provider.labels):
                 raise ValueError(f'{labels} is not a subset of {provider.labels}')
-            subkey = self.key(idx, key)
             selected = {
                 label: arg
                 for label, arg in zip(provider.labels, args)
