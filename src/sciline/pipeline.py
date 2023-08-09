@@ -115,17 +115,22 @@ def _find_nodes_in_paths(
     return list(nodes)
 
 
-class Grouper:
-    def __init__(self, index_name, index, path):
+class Grouper(Generic[IndexType]):
+    def __init__(self, index_name: type, index: Iterable[IndexType], path: List[Key]):
         self._index_name = index_name
         self.index = index
         self._path = path
 
-    def __contains__(self, key: Any) -> bool:
+    def __contains__(self, key: Key) -> bool:
         return key in self._path
 
-    def duplicate(self, key: Any, value: Any, get_provider) -> Dict[Key, Any]:
-        graph = {}
+    def duplicate(
+        self,
+        key: Key,
+        value: Any,
+        get_provider: Callable[..., Tuple[Callable[..., Any], Dict[TypeVar, Key]]],
+    ) -> Graph:
+        graph: Graph = {}
         for idx in self.index:
             provider, args = value
             subkey = self.key(idx, key)
@@ -138,7 +143,7 @@ class Grouper:
             graph[subkey] = (provider, args_with_index)
         return graph
 
-    def key(self, i: int, value_name: Union[Type[T], Item[T]]) -> Item[T]:
+    def key(self, i: IndexType, value_name: Union[Type[T], Item[T]]) -> Item[T]:
         label = Label(self._index_name, i)
         if isinstance(value_name, Item):
             return Item(value_name.label + (label,), value_name.tp)
@@ -146,7 +151,7 @@ class Grouper:
             return Item((label,), value_name)
 
 
-class NoGrouping(Grouper, Generic[IndexType]):
+class NoGrouping(Grouper[IndexType]):
     """Helper for rewriting the graph to map over a given index."""
 
     def __init__(self, param_table: ParamTable, graph_template: Graph) -> None:
@@ -158,33 +163,38 @@ class NoGrouping(Grouper, Generic[IndexType]):
         )
 
 
-class GroupBy(Grouper, Generic[IndexType, LabelType]):
+class GroupBy(Grouper[LabelType], Generic[IndexType, LabelType]):
     """Helper for rewriting the graph to group by a given index."""
 
     def __init__(
-        self, param_table: ParamTable, graph_template: Graph, label_name
+        self, param_table: ParamTable, graph_template: Graph, label_name: type
     ) -> None:
         self._label_name = label_name
         self._group_node = self._find_grouping_node(param_table.row_dim, graph_template)
-        index: Dict[LabelType, List[IndexType]] = defaultdict(list)
+        self._groups: Dict[LabelType, List[IndexType]] = defaultdict(list)
         for idx, label in zip(param_table.index, param_table[label_name]):
-            index[label].append(idx)
+            self._groups[label].append(idx)
         super().__init__(
             index_name=label_name,
-            index=index,
+            index=self._groups,
             path=_find_nodes_in_paths(graph_template, self._group_node),
         )
 
-    def duplicate(self, key: Any, value: Any, get_provider) -> Dict[Key, Any]:
+    def duplicate(
+        self,
+        key: Key,
+        value: Any,
+        get_provider: Callable[..., Tuple[Callable[..., Any], Dict[TypeVar, Key]]],
+    ) -> Graph:
         if key != self._group_node:
             return super().duplicate(key, value, get_provider)
-        graph = {}
+        graph: Graph = {}
         provider, args = value
-        for index in self.index:
-            labels = self.index[index]
+        for idx in self.index:
+            labels = self._groups[idx]
             if set(labels) - set(provider.labels):
                 raise ValueError(f'{labels} is not a subset of {provider.labels}')
-            subkey = self.key(index, key)
+            subkey = self.key(idx, key)
             selected = {
                 label: arg
                 for label, arg in zip(provider.labels, args)
@@ -205,7 +215,7 @@ class GroupBy(Grouper, Generic[IndexType, LabelType]):
         raise ValueError(f"Could not find unique grouping node, found {ends}")
 
 
-class SeriesProvider(Generic[KeyType, ValueType]):
+class SeriesProvider(Generic[KeyType]):
     """
     Internal provider for combining results obtained based on different rows in a
     param table into a single object.
@@ -444,7 +454,7 @@ class Pipeline:
         # prior call to _build_series, so instead of duplicating everything until the
         # param table is reached, we only duplicate until the node that is performing
         # the grouping.
-        grouper: Grouper
+        grouper: Grouper[KeyType]
         if (
             label_name not in self._param_index_name
             and (params := self._param_tables.get(label_name)) is not None

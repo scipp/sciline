@@ -7,7 +7,7 @@ from typing import Any, Callable, Dict, Generic, Tuple, Type, TypeVar, Union
 @dataclass(frozen=True)
 class Label:
     tp: type
-    index: int
+    index: Any
 
 
 T = TypeVar('T')
