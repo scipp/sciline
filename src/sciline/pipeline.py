@@ -161,7 +161,20 @@ class Grouper(Generic[IndexType]):
 
 
 class NoGrouping(Grouper[IndexType]):
-    """Helper for rewriting the graph to map over a given index."""
+    r"""
+    Helper for rewriting the graph to map over a given index.
+
+    Given a graph template, this makes a transformation as follows:
+
+    S          P[0]    P[1]    P[2]
+    |           |       |       |
+    A    ->    A[0]    A[1]    A[2]
+    |           |       |       |
+    B          B[0]    B[1]    B[2]
+
+    Where S is a sentinel value, P are parameters from a parameter table, 0,1,2
+    are indices of the param table rows, and A and B are arbitrary nodes in the graph.
+    """
 
     def __init__(self, param_table: ParamTable, graph_template: Graph) -> None:
         index_name = param_table.row_dim
@@ -173,7 +186,27 @@ class NoGrouping(Grouper[IndexType]):
 
 
 class GroupBy(Grouper[LabelType], Generic[IndexType, LabelType]):
-    """Helper for rewriting the graph to group by a given index."""
+    r"""
+    Helper for rewriting the graph to group by a given index.
+
+    Given a graph template, this makes a transformation as follows:
+
+    P[0]    P[1]    P[2]          P[0]    P[1]    P[2]
+     |       |       |             |       |       |
+    A[0]    A[1]    A[2]          A[0]    A[1]    A[2]
+     |       |       |             |       |       |
+    B[0]    B[1]    B[2]    ->    B[0]    B[1]    B[2]
+      \______|______/              \______/        |
+             |                         |           |
+             C                        C[x]        C[y]
+             |                         |           |
+             D                        D[x]        D[y]
+
+    Here, the upper half of the graph originates from a prior transformation of
+    a graph template using `NoGrouping`. The output of this combined with further
+    nodes is the graph template passes to this class. x and y are the labels used
+    in a grouping operation.
+    """
 
     def __init__(
         self, param_table: ParamTable, graph_template: Graph, label_name: type
@@ -456,7 +489,8 @@ class Pipeline:
         # ungrouped graph (including duplication of nodes) will have been built by a
         # prior call to _build_series, so instead of duplicating everything until the
         # param table is reached, we only duplicate until the node that is performing
-        # the grouping.
+        # the grouping. See the docstrings of GroupBy and NoGrouping for an
+        # illustration.
         grouper: Grouper[KeyType]
         if (
             label_name not in self._param_index_name
