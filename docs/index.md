@@ -11,9 +11,32 @@ Writing, testing, and maintaining complex data analysis workflows is hard.
 Boiler-plate code may hide the actual analysis, making it hard to understand.
 The code may be hard to test, leading to bugs.
 
+Systems like [Snakemake](https://snakemake.readthedocs.io/en/stable/) can help with this, by using a set of *rules* declaring their inputs and outputs.
+A rule might run, e.g., a Python script.
+Snakemake then automatically assembles a task graph, and runs the tasks in the correct order to compute the desired outputs.
+But how do you write the Python script?
+It in itself can be thought of as a workflow.
+It may have a significant number of inputs and outputs, and may be complex with many internal computation steps.
+If intermediate results are large, splitting the rule into multiple rules may be prohibitive due to the overhead of repeatedly writing to and reading from disk.
+
+Regardless of whether you are using Snakemake, another workflow management system, or are just writing Python scripts or Jupyter notebooks, Sciline can help you.
+
 Sciline takes a *declarative* approach, inspired by [dependency injection](https://en.wikipedia.org/wiki/Dependency_injection) frameworks.
 By relying on Python's type-hinting, a [domain-specific language](https://en.wikipedia.org/wiki/Domain-specific_language) is used to describe the workflow.
 This enforces a clear expression of intent, aiding readability and enabling automatic assembly of a task graph that can compute desired outputs.
+
+## FAQ
+
+### Why not Snakemake?
+
+Sciline is not intended to replace Snakemake or similar systems.
+We see Snakemake as a complementary tool that operates on a higher level.
+
+### But I do not want to change all my code!
+
+Sciline is very non-invasive.
+If you are willing to define a few types (or type aliases) and add [type annotations](https://mypy.readthedocs.io/en/stable/cheat_sheet_py3.html) to your functions &mdash; which is considered good practice anyway &mdash; you can use it with Sciline with just a few extra lines of code.
+Your existing Python code can remain generic and can still be used without Sciline.
 
 ## At a glance
 
