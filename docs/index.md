@@ -35,7 +35,7 @@ We see Snakemake as a complementary tool that operates on a higher level.
 ### But I do not want to change all my code!
 
 Sciline is very non-invasive.
-If you are willing to define a few types (or type aliases) and add [type](https://docs.python.org/3/library/typing.html) [annotations](https://mypy.readthedocs.io/en/stable/cheat_sheet_py3.html) to your functions &mdash; which is considered good practice anyway &mdash; you can use it with Sciline with just a few extra lines of code.
+If you are willing to define a few types (or type aliases) and add [type annotations](https://mypy.readthedocs.io/en/stable/cheat_sheet_py3.html) to your functions &mdash; which is considered good practice anyway &mdash; you can use it with Sciline with just a few extra lines of code.
 Your existing Python code can remain generic and can still be used without Sciline.
 
 ## At a glance
