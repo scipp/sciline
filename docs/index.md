@@ -27,10 +27,11 @@ This enforces a clear expression of intent, aiding readability and enabling auto
 
 ## FAQ
 
-### Why not Snakemake?
+### Is Sciline an alternative to Snakemake?
 
 Sciline is not intended to replace Snakemake or similar systems.
 We see Snakemake as a complementary tool that operates on a higher level.
+While Snakemake's rules describe transformations of *files*, Sciline used Python functions to describe transformations of *Python objects* such as NumPy arrays or Pandas dataframes.
 
 ### But I do not want to change all my code!
 
