@@ -128,7 +128,7 @@ class Grouper(Generic[IndexType]):
         self,
         key: Key,
         value: Any,
-        get_provider: Callable[..., Tuple[Callable[..., Any], Dict[TypeVar, Key]]],
+        get_provider: Callable[..., Tuple[Provider, Dict[TypeVar, Key]]],
     ) -> Graph:
         graph: Graph = {}
         provider, args = value
@@ -146,7 +146,7 @@ class Grouper(Generic[IndexType]):
         provider: Union[Provider, SeriesProvider[IndexType]],
         args: Tuple[Key, ...],
         idx: IndexType,
-    ) -> Tuple[Callable[..., Any], Tuple[Key, ...]]:
+    ) -> Tuple[Provider, Tuple[Key, ...]]:
         return (
             provider,
             tuple(self.key(idx, arg) if arg in self else arg for arg in args),
@@ -195,7 +195,7 @@ class GroupBy(Grouper[LabelType], Generic[IndexType, LabelType]):
         provider: Union[Provider, SeriesProvider[IndexType]],
         args: Tuple[Key, ...],
         idx: LabelType,
-    ) -> Tuple[Callable[..., Any], Tuple[Key, ...]]:
+    ) -> Tuple[Provider, Tuple[Key, ...]]:
         if (not isinstance(provider, SeriesProvider)) or key != self._group_node:
             return super()._copy_node(key, provider, args, idx)
         labels = self._groups[idx]
