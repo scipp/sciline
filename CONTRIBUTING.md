@@ -13,3 +13,8 @@ You are welcome to submit pull requests at any time.
 But to avoid having to make large modifications during review or even have your PR rejected, please first open an issue first to discuss your idea!
 
 Check out the subsections of the [Developer documentation](https://scipp.github.io/sciline/developer/index.html) for details on how Sciline is developed.
+
+## Code of conduct
+
+This project is a community effort, and everyone is welcome to contribute.
+Everyone within the community is expected to abide by our [code of conduct](https://scipp.github.io/sciline/CODE_OF_CONDUCT.md).
