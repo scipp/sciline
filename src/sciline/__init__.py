@@ -10,15 +10,19 @@ except importlib.metadata.PackageNotFoundError:
     __version__ = "0.0.0"
 
 from .domain import Scope
+from .param_table import ParamTable
 from .pipeline import (
     AmbiguousProvider,
     Pipeline,
     UnboundTypeVar,
     UnsatisfiedRequirement,
 )
+from .series import Series
 
 __all__ = [
     "AmbiguousProvider",
+    "Series",
+    "ParamTable",
     "Pipeline",
     "Scope",
     "UnboundTypeVar",
