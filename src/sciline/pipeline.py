@@ -496,7 +496,7 @@ class Pipeline:
         2. Instantiation of `Replicator`, which will be used to replicate the
            relevant parts of the graph (see illustration there).
         3. Insert a special `SeriesProvider` node, which will gather the duplicates of
-           the 'B' node and providers the requested Series[Idx,B].
+           the 'B' node and provides the requested Series[Idx,B].
         4. Replicate the graph. Nodes that do not directly or indirectly depend on P1
            are not replicated.
 
