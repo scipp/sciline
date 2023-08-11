@@ -292,7 +292,7 @@ def test_groupby_by_requesting_series_of_series_preserves_indices() -> None:
 
 def test_can_groupby_by_param_used_in_ancestor() -> None:
     Row = NewType("Row", int)
-    Param = NewType("Param1", str)
+    Param = NewType("Param", str)
 
     pl = sl.Pipeline()
     pl.set_param_table(sl.ParamTable(Row, {Param: ['x', 'x', 'y']}))
