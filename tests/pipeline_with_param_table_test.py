@@ -290,6 +290,19 @@ def test_groupby_by_requesting_series_of_series_preserves_indices() -> None:
     )
 
 
+def test_can_groupby_by_param_used_in_ancestor() -> None:
+    Row = NewType("Row", int)
+    Param = NewType("Param1", str)
+
+    pl = sl.Pipeline()
+    pl.set_param_table(sl.ParamTable(Row, {Param: ['x', 'x', 'y']}))
+    expected = sl.Series(
+        Param,
+        {"x": sl.Series(Row, {0: "x", 1: "x"}), "y": sl.Series(Row, {2: "y"})},
+    )
+    assert pl.compute(sl.Series[Param, sl.Series[Row, Param]]) == expected
+
+
 def test_multi_level_groupby_raises_with_params_from_same_table() -> None:
     Row = NewType("Row", int)
     Param1 = NewType("Param1", int)

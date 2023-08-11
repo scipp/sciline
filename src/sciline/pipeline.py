@@ -115,7 +115,7 @@ def _find_nodes_in_paths(
     return list(nodes)
 
 
-class Grouper(Generic[IndexType]):
+class ReplicatorBase(Generic[IndexType]):
     def __init__(self, index_name: type, index: Iterable[IndexType], path: List[Key]):
         self._index_name = index_name
         self.index = index
@@ -124,7 +124,7 @@ class Grouper(Generic[IndexType]):
     def __contains__(self, key: Key) -> bool:
         return key in self._path
 
-    def duplicate(
+    def replicate(
         self,
         key: Key,
         value: Any,
@@ -160,19 +160,20 @@ class Grouper(Generic[IndexType]):
             return Item((label,), value_name)
 
 
-class NoGrouping(Grouper[IndexType]):
+class Replicator(ReplicatorBase[IndexType]):
     r"""
     Helper for rewriting the graph to map over a given index.
 
-    Given a graph template, this makes a transformation as follows:
+    See Pipeline._build_series for context. Given a graph template, this makes a
+    transformation as follows:
 
-    S          P[0]    P[1]    P[2]
+    S          P1[0]   P1[1]   P1[2]
     |           |       |       |
     A    ->    A[0]    A[1]    A[2]
     |           |       |       |
     B          B[0]    B[1]    B[2]
 
-    Where S is a sentinel value, P are parameters from a parameter table, 0,1,2
+    Where S is a sentinel value, P1 are parameters from a parameter table, 0,1,2
     are indices of the param table rows, and A and B are arbitrary nodes in the graph.
     """
 
@@ -185,27 +186,29 @@ class NoGrouping(Grouper[IndexType]):
         )
 
 
-class GroupBy(Grouper[LabelType], Generic[IndexType, LabelType]):
+class GroupingReplicator(ReplicatorBase[LabelType], Generic[IndexType, LabelType]):
     r"""
     Helper for rewriting the graph to group by a given index.
 
-    Given a graph template, this makes a transformation as follows:
+    See Pipeline._build_series for context. Given a graph template, this makes a
+    transformation as follows:
 
-    P[0]    P[1]    P[2]          P[0]    P[1]    P[2]
+    P1[0]   P1[1]   P1[2]         P1[0]   P1[1]   P1[2]
      |       |       |             |       |       |
     A[0]    A[1]    A[2]          A[0]    A[1]    A[2]
      |       |       |             |       |       |
     B[0]    B[1]    B[2]    ->    B[0]    B[1]    B[2]
       \______|______/              \______/        |
              |                         |           |
-             C                        C[x]        C[y]
+            SB                       SB[x]       SB[y]
              |                         |           |
-             D                        D[x]        D[y]
+             C                        C[x]        C[y]
 
-    Here, the upper half of the graph originates from a prior transformation of
-    a graph template using `NoGrouping`. The output of this combined with further
-    nodes is the graph template passes to this class. x and y are the labels used
-    in a grouping operation.
+    Where SB is Series[Idx,B].  Here, the upper half of the graph originates from a
+    prior transformation of a graph template using `Replicator`. The output of this
+    combined with further nodes is the graph template passed to this class. x and y
+    are the labels used in a grouping operation, based on the values of a ParamTable
+    column P2.
     """
 
     def __init__(
@@ -292,7 +295,7 @@ class Pipeline:
         self._providers: Dict[Key, Provider] = {}
         self._subproviders: Dict[type, Dict[Tuple[Key | TypeVar, ...], Provider]] = {}
         self._param_tables: Dict[Key, ParamTable] = {}
-        self._param_index_name: Dict[Key, Key] = {}
+        self._param_name_to_table_key: Dict[Key, Key] = {}
         for provider in providers or []:
             self.insert(provider)
         for tp, param in (params or {}).items():
@@ -368,11 +371,11 @@ class Pipeline:
         if params.row_dim in self._param_tables:
             raise ValueError(f'Parameter table for {params.row_dim} already set')
         for param_name in params:
-            if param_name in self._param_index_name:
+            if param_name in self._param_name_to_table_key:
                 raise ValueError(f'Parameter {param_name} already set')
         self._param_tables[params.row_dim] = params
         for param_name in params:
-            self._param_index_name[param_name] = params.row_dim
+            self._param_name_to_table_key[param_name] = params.row_dim
         for param_name, values in params.items():
             for index, label in zip(params.index, values):
                 self._set_provider(
@@ -452,8 +455,8 @@ class Pipeline:
         stack: List[Union[Type[T], Item[T]]] = [tp]
         while stack:
             tp = stack.pop()
-            if search_param_tables and tp in self._param_index_name:
-                graph[tp] = (_param_sentinel, (self._param_index_name[tp],))
+            if search_param_tables and tp in self._param_name_to_table_key:
+                graph[tp] = (_param_sentinel, (self._param_name_to_table_key[tp],))
                 continue
             if get_origin(tp) == Series:
                 graph.update(self._build_series(tp))  # type: ignore[arg-type]
@@ -473,50 +476,91 @@ class Pipeline:
         return graph
 
     def _build_series(self, tp: Type[Series[KeyType, ValueType]]) -> Graph:
-        label_name: Type[KeyType]
+        """
+        Build (sub)graph for a Series type implementing ParamTable-based functionality.
+
+        We illustrate this with an example. Given a ParamTable with row_dim 'Idx':
+
+        Idx | P1 | P2
+        0   | a  | x
+        1   | b  | x
+        2   | c  | y
+
+        and providers for A depending on P1 and B depending on A.  Calling
+        build(Series[Idx,B]) will call _build_series(Series[Idx,B]). This results in
+        the following procedure here:
+
+        1. Call build(P1), resulting, e.g., in a graph S->A->B, where S is a sentinel.
+           The sentinel is used because build() cannot find a unique P1, since it is
+           not a single value but a column in a table.
+        2. Instantiation of `Replicator`, which will be used to replicate the
+           relevant parts of the graph (see illustration there).
+        3. Insert a special `SeriesProvider` node, which will gather the duplicates of
+           the 'B' node and providers the requested Series[Idx,B].
+        4. Replicate the graph. Nodes that do not directly or indirectly depend on P1
+           are not replicated.
+
+        Conceptually, the final result will be {
+            0: B(A(a)),
+            1: B(A(b)),
+            2: B(A(c))
+        }.
+
+        In more complex cases, we may be dealing with multiple levels of Series,
+        which is used for grouping operations. Consider the above example, but with
+        and additional provider for C depending on Series[Idx,B]. Calling
+        build(Series[P2,C]) will call _build_series(Series[P2,C]). This results in
+        the following procedure here:
+
+        a. Call build(C), which results in the procedure above, i.e., a nested call
+           to _build_series(Series[Idx,B]) and the resulting graph as explained above.
+        b. Instantiation of `GroupingReplicator`, which will be used to replicate the
+           relevant parts of the graph (see illustration there).
+        c. Insert a special `SeriesProvider` node, which will gather the duplicates of
+           the 'C' node and providers the requested Series[P2,C].
+        c. Replicate the graph. Nodes that do not directly or indirectly depend on
+           the special `SeriesProvider` node (from step 3.) are not replicated.
+
+        Conceptually, the final result will be {
+            x: C({
+                0: B(A(a)),
+                1: B(A(b))
+            }),
+            y: C({
+                2: B(A(c))
+            })
+        }.
+        """
+        index_name: Type[KeyType]
         value_type: Type[ValueType]
-        label_name, value_type = get_args(tp)
-        # Step 1:
-        # Build a graph that can compute the value type. As we are building
-        # a Series, this will terminate when it reaches a parameter that is not a
-        # single provided value but a collection of values from a parameter table
-        # column. Instead of single value (which does not exist), a sentinel is
-        # used to mark this, for processing below.
+        index_name, value_type = get_args(tp)
+
         subgraph = self.build(value_type, search_param_tables=True)
-        # Step 2:
-        # Identify nodes in the graph that need to be duplicated as they lie in the
-        # path to a parameter from a table. In the case of grouping, note that the
-        # ungrouped graph (including duplication of nodes) will have been built by a
-        # prior call to _build_series, so instead of duplicating everything until the
-        # param table is reached, we only duplicate until the node that is performing
-        # the grouping. See the docstrings of GroupBy and NoGrouping for an
-        # illustration.
-        grouper: Grouper[KeyType]
+
+        replicator: ReplicatorBase[KeyType]
         if (
-            label_name not in self._param_index_name
-            and (params := self._param_tables.get(label_name)) is not None
+            index_name not in self._param_name_to_table_key
+            and (params := self._param_tables.get(index_name)) is not None
         ):
-            grouper = NoGrouping(param_table=params, graph_template=subgraph)
-        elif (index_name := self._param_index_name.get(label_name)) is not None:
-            grouper = GroupBy(
-                param_table=self._param_tables[index_name],
+            replicator = Replicator(param_table=params, graph_template=subgraph)
+        elif (table_key := self._param_name_to_table_key.get(index_name)) is not None:
+            replicator = GroupingReplicator(
+                param_table=self._param_tables[table_key],
                 graph_template=subgraph,
-                label_name=label_name,
+                label_name=index_name,
             )
         else:
-            raise KeyError(f'No parameter table found for label {label_name}')
+            raise KeyError(f'No parameter table found for label {index_name}')
 
         graph: Graph = {}
         graph[tp] = (
-            SeriesProvider(list(grouper.index), label_name),
-            tuple(grouper.key(idx, value_type) for idx in grouper.index),
+            SeriesProvider(list(replicator.index), index_name),
+            tuple(replicator.key(idx, value_type) for idx in replicator.index),
         )
 
-        # Step 3:
-        # Duplicate nodes, replacing keys with indexed keys.
         for key, value in subgraph.items():
-            if key in grouper:
-                graph.update(grouper.duplicate(key, value, self._get_provider))
+            if key in replicator:
+                graph.update(replicator.replicate(key, value, self._get_provider))
             else:
                 graph[key] = value
         return graph
