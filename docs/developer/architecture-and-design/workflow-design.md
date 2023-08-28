@@ -65,6 +65,7 @@ For example we typically write components of reduction workflows as functions of
 def transmission_fraction(
     incident_monitor: sc.DataArray,
     transmission_monitor: sc.DataArray,
+) -> sc.DataArray:
 """
 Compute transmission fraction from incident and transmission monitors.
 
@@ -75,7 +76,6 @@ incident_monitor:
 transmission_monitor:
     Transmission monitor.
 """
-) -> sc.DataArray:
     return transmission_monitor / incident_monitor
 ```
 
@@ -89,7 +89,7 @@ def transmission_fraction(
     incident_monitor: IncidentMonitor,
     transmission_monitor: TransmissionMonitor,
 ) -> TransmissionFraction:
-    return transmission_monitor / incident_monitor
+    return TransmissionFraction(transmission_monitor / incident_monitor)
 ```
 
 We could now run [mypy](https://mypy-lang.org/) on reduction scripts to ensure that the correct types are passed to each function.
@@ -107,13 +107,6 @@ Simple functions provide workflow components that define relations between these
 Concretely, we propose to define specific domain types, such as `IncidentMonitor`, `TransmissionMonitor`, and `TransmissionFraction` in the example above.
 However, instead of the user having to pass these to functions, we use dependency injection to provide them to the functions.
 In essence this will build a workflow's task graph.
-
-From the [Guice documentation](https://github.com/google/guice/wiki/MentalModel#injection) (Guice is a dependency injection framework for Java):
-
-> "This is the essence of dependency injection. If you need something, you don't go out and get it from somewhere, or even ask a class to return you something. Instead, you simply declare that you can't do your work without it, and rely on Guice to give you what you need.
->
-> This model is backwards from how most people think about code: it's a more *declarative model* rather than an *imperative one*. This is why dependency injection is often described as a kind of inversion of control (IoC)."
-> (emphasis added)
 
 
 ### Domain-driven design
@@ -137,6 +130,13 @@ Dependency injection is a common technique for implementing the [inversion of co
 It makes components of a system more loosely coupled, and makes it easier to replace components, including for testing purposes.
 Dependency injection can be performed manually, but there are also frameworks that can help with this.
 
+From the [Guice documentation](https://github.com/google/guice/wiki/MentalModel#injection) (Guice is a dependency injection framework for Java):
+
+> "This is the essence of dependency injection. If you need something, you don't go out and get it from somewhere, or even ask a class to return you something. Instead, you simply declare that you can't do your work without it, and rely on Guice to give you what you need.
+>
+> This model is backwards from how most people think about code: it's a more *declarative model* rather than an *imperative one*. This is why dependency injection is often described as a kind of inversion of control (IoC)."
+> (emphasis added)
+
 ## Architecture
 
 ### In a nutshell
@@ -148,7 +148,7 @@ Dependency injection can be performed manually, but there are also frameworks th
        incident_monitor: IncidentMonitor,
        transmission_monitor: TransmissionMonitor,
    ) -> TransmissionFraction:
-       return transmission_monitor / incident_monitor
+       return TransmissionFraction(transmission_monitor / incident_monitor)
    ```
 
 2. The user passes a set of building blocks to the system, which assembles a dependency graph based on the type-hints.
@@ -162,7 +162,7 @@ Depending on the level of expertise of the user and the level of control they ne
 Generally, the user must provide configuration parameters to a workflow.
 In many cases there are defaults that can be used.
 In either case, these parameters must be associated with the correct step in the workflow.
-This is complicated by the non-linear nature of the workflow.
+This gets complicated by the non-linear nature of the workflow.
 A flat list of parameters has been used traditionally, relying entirely on parameter naming.
 This is problematic for two reasons:
 First, certain basic workflow steps may be used in multiple places.
