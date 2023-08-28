@@ -7,12 +7,11 @@
 
 ```{toctree}
 ---
-caption: About
 maxdepth: 2
-hidden:
 ---
 
 getting-started
 coding-conventions
 dependency-management
+architecture-and-design/index
 ```
