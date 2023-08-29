@@ -7,7 +7,8 @@
 
 ## About
 
-Build scientific pipelines for your data
+Build scientific pipelines for your data.
+See the [documentation](https://scipp.github.io/sciline/) for details.
 
 ## Installation
 
