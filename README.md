@@ -8,6 +8,8 @@
 ## About
 
 Build scientific pipelines for your data.
+Sciline uses a dependency-injection mechanism to build task graphs that can be executed, e.g., with a Dask scheduler.
+
 See the [documentation](https://scipp.github.io/sciline/) for details.
 
 ## Installation
