@@ -3,7 +3,9 @@
 [![Anaconda-Server Badge](https://anaconda.org/scipp/sciline/badges/version.svg)](https://anaconda.org/scipp/sciline)
 [![License: BSD 3-Clause](https://img.shields.io/badge/License-BSD%203--Clause-blue.svg)](LICENSE)
 
-# sciline
+![logo](docs/_static/logo.svg)
+
+# Sciline
 
 ## About
 
