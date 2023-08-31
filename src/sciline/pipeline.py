@@ -570,7 +570,7 @@ class Pipeline:
         ...
 
     @overload
-    def compute(self, tp: Tuple[Type[T], ...]) -> Tuple[T, ...]:
+    def compute(self, tp: Tuple[Type[T], ...]) -> Dict[Type[T], T]:
         ...
 
     @overload
