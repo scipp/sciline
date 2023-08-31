@@ -61,7 +61,7 @@ class TaskGraph:
             keys = self._keys
         if isinstance(keys, tuple):
             results = self._scheduler.get(self._graph, list(keys))
-            return {tp: result for tp, result in zip(keys, results)}
+            return dict(zip(keys, results))
         else:
             return self._scheduler.get(self._graph, [keys])[0]
 
