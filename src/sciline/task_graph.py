@@ -37,7 +37,7 @@ class TaskGraph:
     def compute(
         self,
         keys: Optional[
-            Union[type, Tuple[type, ...], Item[T], Tuple[Item[T], ...], None]
+            Union[type, Tuple[type, ...], Item[T], Tuple[Item[T], ...]]
         ] = None,
     ) -> Any:
         """
