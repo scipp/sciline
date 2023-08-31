@@ -18,6 +18,7 @@ from .pipeline import (
     UnsatisfiedRequirement,
 )
 from .series import Series
+from . import scheduler
 
 __all__ = [
     "AmbiguousProvider",
@@ -27,4 +28,5 @@ __all__ = [
     "Scope",
     "UnboundTypeVar",
     "UnsatisfiedRequirement",
+    "scheduler",
 ]
