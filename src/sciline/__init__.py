@@ -9,6 +9,7 @@ try:
 except importlib.metadata.PackageNotFoundError:
     __version__ = "0.0.0"
 
+from . import scheduler
 from .domain import Scope
 from .param_table import ParamTable
 from .pipeline import (
@@ -18,7 +19,6 @@ from .pipeline import (
     UnsatisfiedRequirement,
 )
 from .series import Series
-from . import scheduler
 
 __all__ = [
     "AmbiguousProvider",
