@@ -471,6 +471,20 @@ class Pipeline:
             )
             graph[tp] = (provider, args)
             for arg in args:
+                if get_origin(arg) == Union:
+                    tps = get_args(arg)
+                    if len(tps) == 2 and tps[1] == type(None):  # noqa: E721
+                        try:
+                            optional_arg = tps[0]
+                            optional_subgraph = self.build(optional_arg)
+                        except UnsatisfiedRequirement:
+                            graph[arg] = (lambda: None, ())
+                            continue
+                        else:
+                            optional = optional_subgraph.pop(optional_arg)
+                            graph[arg] = optional
+                            graph.update(optional_subgraph)
+                            continue
                 if arg not in graph:
                     stack.append(arg)
         return graph

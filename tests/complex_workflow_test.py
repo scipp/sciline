@@ -54,21 +54,21 @@ BackgroundSubtractedIofQ = NewType('BackgroundSubtractedIofQ', npt.NDArray[np.fl
 
 
 def incident_monitor(x: Raw[Run]) -> IncidentMonitor[Run]:
-    return IncidentMonitor(x.monitor1)
+    return IncidentMonitor[Run](x.monitor1)
 
 
 def transmission_monitor(x: Raw[Run]) -> TransmissionMonitor[Run]:
-    return TransmissionMonitor(x.monitor2)
+    return TransmissionMonitor[Run](x.monitor2)
 
 
 def mask_detector(x: Raw[Run], mask: DetectorMask) -> Masked[Run]:
-    return Masked(x.data * mask)
+    return Masked[Run](x.data * mask)
 
 
 def transmission(
     incident: IncidentMonitor[Run], transmission: TransmissionMonitor[Run]
 ) -> TransmissionFraction[Run]:
-    return TransmissionFraction(incident / transmission)
+    return TransmissionFraction[Run](incident / transmission)
 
 
 def iofq(
@@ -77,7 +77,7 @@ def iofq(
     direct_beam: DirectBeam,
     transmission: TransmissionFraction[Run],
 ) -> IofQ[Run]:
-    return IofQ(x / (solid_angle * direct_beam * transmission))
+    return IofQ[Run](x / (solid_angle * direct_beam * transmission))
 
 
 reduction = [incident_monitor, transmission_monitor, mask_detector, transmission, iofq]
