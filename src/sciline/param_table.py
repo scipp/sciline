@@ -71,7 +71,7 @@ class ParamTable(Mapping[type, Collection[Any]]):
         return self._columns.__len__()
 
     def __repr__(self) -> str:
-        return f"ParamTable(row_dim={self.row_dim}, columns={self._columns})"
+        return f"ParamTable(row_dim={self.row_dim.__name__}, columns={self._columns})"
 
     def _repr_html_(self) -> str:
         return (

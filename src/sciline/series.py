@@ -43,7 +43,7 @@ class Series(Mapping[Key, Value]):
         return self._map[key]
 
     def __repr__(self) -> str:
-        return f"Series(row_dim={self.row_dim}, {self._map})"
+        return f"Series(row_dim={self.row_dim.__name__}, {self._map})"
 
     def _repr_html_(self) -> str:
         return (
