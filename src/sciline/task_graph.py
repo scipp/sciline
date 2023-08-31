@@ -49,23 +49,19 @@ class TaskGraph:
             Optional list of keys to compute. This can be used to override the keys
             stored in the graph instance. Note that the keys must be present in the
             graph as intermediate results, otherwise KeyError is raised.
-        
+
         Returns
         -------
         If ``keys`` is a single type, returns the single result that was computed.
         If ``keys`` is a tuple of types, returns a dictionary with type as keys
-        and the coresponding results as values.
+        and the corresponding results as values.
 
         """
         if keys is None:
             keys = self._keys
         if isinstance(keys, tuple):
             results = self._scheduler.get(self._graph, list(keys))
-            return {
-                tp: result
-                for tp, result
-                in zip(keys, results)
-            }
+            return {tp: result for tp, result in zip(keys, results)}
         else:
             return self._scheduler.get(self._graph, [keys])[0]
 
