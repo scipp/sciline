@@ -326,6 +326,8 @@ class Pipeline:
         param:
             Concrete value to provide.
         """
+        if get_origin(key) == Union:
+            raise ValueError('Union (or Optional) parameters are not allowed.')
         # TODO Switch to isinstance(key, NewType) once our minimum is Python 3.10
         # Note that we cannot pass mypy in Python<3.10 since NewType is not a type.
         if hasattr(key, '__supertype__'):
@@ -389,6 +391,10 @@ class Pipeline:
         # isinstance does not work here and types.NoneType available only in 3.10+
         if key == type(None):  # noqa: E721
             raise ValueError(f'Provider {provider} returning `None` is not allowed')
+        if get_origin(key) == Union:
+            raise ValueError(
+                f'Provider {provider} returning a Union (or Optional) is not allowed.'
+            )
         if get_origin(key) == Series:
             raise ValueError(
                 f'Provider {provider} returning a sciline.Series is not allowed. '
@@ -461,6 +467,19 @@ class Pipeline:
             if get_origin(tp) == Series:
                 graph.update(self._build_series(tp))  # type: ignore[arg-type]
                 continue
+            if get_origin(tp) == Union:
+                tps = get_args(tp)
+                if len(tps) == 2 and tps[1] == type(None):  # noqa: E721
+                    try:
+                        optional_arg = tps[0]
+                        optional_subgraph = self.build(optional_arg)
+                    except UnsatisfiedRequirement:
+                        graph[tp] = (lambda: None, ())
+                    else:
+                        optional = optional_subgraph.pop(optional_arg)
+                        graph[tp] = optional
+                        graph.update(optional_subgraph)
+                    continue
             provider: Callable[..., T]
             provider, bound = self._get_provider(tp)
             tps = get_type_hints(provider)
@@ -471,20 +490,6 @@ class Pipeline:
             )
             graph[tp] = (provider, args)
             for arg in args:
-                if get_origin(arg) == Union:
-                    tps = get_args(arg)
-                    if len(tps) == 2 and tps[1] == type(None):  # noqa: E721
-                        try:
-                            optional_arg = tps[0]
-                            optional_subgraph = self.build(optional_arg)
-                        except UnsatisfiedRequirement:
-                            graph[arg] = (lambda: None, ())
-                            continue
-                        else:
-                            optional = optional_subgraph.pop(optional_arg)
-                            graph[arg] = optional
-                            graph.update(optional_subgraph)
-                            continue
                 if arg not in graph:
                     stack.append(arg)
         return graph

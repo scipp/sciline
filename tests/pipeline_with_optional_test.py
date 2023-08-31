@@ -1,38 +1,43 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright (c) 2023 Scipp contributors (https://github.com/scipp)
-from typing import Optional
+from typing import Optional, Union
 
 import pytest
 
 import sciline as sl
 
 
-def test_can_provide_optional():
+def test_provider_returning_optional_disallowed():
     def make_optional() -> Optional[int]:
         return 3
 
-    pipeline = sl.Pipeline([make_optional])
-    assert pipeline.compute(Optional[int]) == 3
+    with pytest.raises(ValueError):
+        sl.Pipeline([make_optional])
 
 
-def test_can_provide_optional_returning_none():
-    def make_optional() -> Optional[int]:
-        return None
-
-    pipeline = sl.Pipeline([make_optional])
-    assert pipeline.compute(Optional[int]) is None
-
-
-def test_optional_cannot_provide_underlying():
-    def make_optional() -> Optional[int]:
+def test_provider_returning_union_disallowed():
+    def make_union() -> Union[int, float]:
         return 3
 
-    def use_int(i: int) -> float:
-        return float(i)
+    with pytest.raises(ValueError):
+        sl.Pipeline([make_union])
 
-    pipeline = sl.Pipeline([make_optional, use_int])
+
+def test_parameter_type_union_or_optional_disallowed():
+    pipeline = sl.Pipeline()
+    with pytest.raises(ValueError):
+        pipeline[Union[int, float]] = 3
+    with pytest.raises(ValueError):
+        pipeline[Optional[int]] = 3
+
+
+def test_union_requirement_leads_to_UnsatisfiedRequirement():
+    def require_union(x: Union[int, float]) -> str:
+        return f'{x}'
+
+    pipeline = sl.Pipeline([require_union])
     with pytest.raises(sl.UnsatisfiedRequirement):
-        pipeline.get(float)
+        pipeline.compute(str)
 
 
 def test_optional_dependency_can_be_filled_by_non_optional_param():
@@ -41,6 +46,11 @@ def test_optional_dependency_can_be_filled_by_non_optional_param():
 
     pipeline = sl.Pipeline([use_optional], params={int: 1})
     assert pipeline.compute(str) == '1'
+
+
+def test_optional_requested_directly_can_be_filled_by_non_optional_param():
+    pipeline = sl.Pipeline([], params={int: 1})
+    assert pipeline.compute(Optional[int]) == 1
 
 
 def test_optional_dependency_can_be_filled_transitively():
