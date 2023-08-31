@@ -58,7 +58,7 @@ def test_multiple_keys_can_be_computed_without_repeated_calls() -> None:
         return 3
 
     pipeline = sl.Pipeline([int_to_float, provide_int, int_float_to_str])
-    assert pipeline.compute((float, str)) == (1.5, "3;1.5")
+    assert pipeline.compute((float, str)) == {float: 1.5, str: "3;1.5"}
     assert ncall == 1
 
 
@@ -77,7 +77,7 @@ def test_multiple_keys_not_in_same_path_use_same_intermediate() -> None:
         return f"{x}"
 
     pipeline = sl.Pipeline([provide_int, func1, func2])
-    assert pipeline.compute((float, str)) == (1.5, "3")
+    assert pipeline.compute((float, str)) == {float: 1.5, str: "3"}
     assert ncall == 1
 
 
@@ -588,10 +588,10 @@ def test_get_with_single_key_return_task_graph_that_computes_value() -> None:
     assert task.compute() == '3;1.5'
 
 
-def test_get_with_key_tuple_return_task_graph_that_computes_tuple_of_values() -> None:
+def test_get_with_key_tuple_return_task_graph_that_computes_dict_of_values() -> None:
     pipeline = sl.Pipeline([int_to_float, make_int])
     task = pipeline.get((float, int))
-    assert task.compute() == (1.5, 3)
+    assert task.compute() == {float: 1.5, int: 3}
 
 
 def test_task_graph_compute_can_override_single_key() -> None:
@@ -603,7 +603,7 @@ def test_task_graph_compute_can_override_single_key() -> None:
 def test_task_graph_compute_can_override_key_tuple() -> None:
     pipeline = sl.Pipeline([int_to_float, make_int])
     task = pipeline.get(float)
-    assert task.compute((int, float)) == (3, 1.5)
+    assert task.compute((int, float)) == {int: 3, float: 1.5}
 
 
 def test_task_graph_compute_raises_if_override_keys_outside_graph() -> None:
