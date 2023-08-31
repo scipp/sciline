@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright (c) 2023 Scipp contributors (https://github.com/scipp)
-from typing import Any, Callable, Dict, List, Optional, Protocol
+from typing import Any, Callable, Dict, List, Optional, Protocol, Tuple
 
 from sciline.typing import Graph, Key
 
@@ -14,7 +14,7 @@ class Scheduler(Protocol):
     Scheduler interface compatible with :py:class:`sciline.Pipeline`.
     """
 
-    def get(self, graph: Graph, keys: List[Key]) -> Any:
+    def get(self, graph: Graph, keys: List[Key]) -> Tuple[Any, ...]:
         """
         Compute the result for given keys from the graph.
 
@@ -33,7 +33,7 @@ class NaiveScheduler:
     :py:class:`DaskScheduler` instead.
     """
 
-    def get(self, graph: Graph, keys: List[Key]) -> Any:
+    def get(self, graph: Graph, keys: List[Key]) -> Tuple[Any, ...]:
         import graphlib
 
         dependencies = {tp: args for tp, (_, args) in graph.items()}
