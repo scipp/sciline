@@ -43,9 +43,31 @@ def test_optional_dependency_can_be_filled_by_non_optional_param():
     assert pipeline.compute(str) == '1'
 
 
+def test_optional_dependency_can_be_filled_transitively():
+    def use_optional(x: Optional[int]) -> str:
+        return f'{x or 123}'
+
+    def make_int(x: float) -> int:
+        return int(x)
+
+    pipeline = sl.Pipeline([use_optional, make_int], params={float: 2.2})
+    assert pipeline.compute(str) == '2'
+
+
 def test_optional_dependency_is_set_to_none_if_no_provider_found():
     def use_optional(x: Optional[int]) -> str:
         return f'{x or 123}'
 
     pipeline = sl.Pipeline([use_optional])
+    assert pipeline.compute(str) == '123'
+
+
+def test_optional_dependency_is_set_to_none_if_no_provider_found_transitively():
+    def use_optional(x: Optional[int]) -> str:
+        return f'{x or 123}'
+
+    def make_int(x: float) -> int:
+        return int(x)
+
+    pipeline = sl.Pipeline([use_optional, make_int])
     assert pipeline.compute(str) == '123'
