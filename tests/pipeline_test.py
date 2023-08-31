@@ -619,3 +619,126 @@ def test_get_with_NaiveScheduler() -> None:
     pipeline = sl.Pipeline([int_to_float, make_int])
     task = pipeline.get(float, scheduler=sl.scheduler.NaiveScheduler())
     assert task.compute() == 1.5
+
+
+def test_bind_and_call_no_function() -> None:
+    pipeline = sl.Pipeline([make_int])
+    assert pipeline.bind_and_call(()) == ()
+
+
+def test_bind_and_call_function_without_args() -> None:
+    def func() -> str:
+        return "func"
+
+    pipeline = sl.Pipeline([make_int])
+    assert pipeline.bind_and_call(func) == "func"
+
+
+def test_bind_and_call_function_with_1_arg() -> None:
+    def func(i: int) -> int:
+        return i * 2
+
+    pipeline = sl.Pipeline([make_int])
+    assert pipeline.bind_and_call(func) == 6
+
+
+def test_bind_and_call_function_with_2_arg2() -> None:
+    def func(i: int, f: float) -> float:
+        return i + f
+
+    pipeline = sl.Pipeline([make_int, int_to_float])
+    assert pipeline.bind_and_call(func) == 4.5
+
+
+def test_bind_and_call_function_in_iterator() -> None:
+    def func(i: int) -> int:
+        return i * 2
+
+    pipeline = sl.Pipeline([make_int])
+    assert pipeline.bind_and_call(iter((func,))) == (6,)
+
+
+def test_bind_and_call_dataclass_without_args() -> None:
+    @dataclass
+    class C:
+        ...
+
+    pipeline = sl.Pipeline([make_int])
+    assert pipeline.bind_and_call(C) == C()
+
+
+def test_bind_and_call_dataclass_with_1_arg() -> None:
+    @dataclass
+    class C:
+        i: int
+
+    pipeline = sl.Pipeline([make_int])
+    assert pipeline.bind_and_call(C) == C(i=3)
+
+
+def test_bind_and_call_dataclass_with_2_arg2() -> None:
+    @dataclass
+    class C:
+        i: int
+        f: float
+
+    pipeline = sl.Pipeline([make_int, int_to_float])
+    assert pipeline.bind_and_call(C) == C(i=3, f=1.5)
+
+
+def test_bind_and_call_two_functions() -> None:
+    def func1(i: int) -> int:
+        return 2 * i
+
+    def func2(f: float) -> float:
+        return f + 1
+
+    pipeline = sl.Pipeline([make_int, int_to_float])
+    assert pipeline.bind_and_call((func1, func2)) == (6, 2.5)
+
+
+def test_bind_and_call_two_functions_in_iterator() -> None:
+    def func1(i: int) -> int:
+        return 2 * i
+
+    def func2(f: float) -> float:
+        return f + 1
+
+    pipeline = sl.Pipeline([make_int, int_to_float])
+    assert pipeline.bind_and_call(iter((func1, func2))) == (6, 2.5)
+
+
+def test_bind_and_call_function_and_dataclass() -> None:
+    def func(i: int) -> int:
+        return 2 * i
+
+    @dataclass
+    class C:
+        i: int
+        f: float
+
+    pipeline = sl.Pipeline([make_int, int_to_float])
+    assert pipeline.bind_and_call((func, C)) == (6, C(i=3, f=1.5))
+
+
+def test_bind_and_call_function_without_return_annotation() -> None:
+    def func(i: int):  # type: ignore[no-untyped-def]
+        return 2 * i
+
+    pipeline = sl.Pipeline([make_int])
+    assert pipeline.bind_and_call(func) == 6
+
+
+def test_bind_and_call_generic_function() -> None:
+    T = TypeVar('T')
+    A = NewType('A', int)
+    B = NewType('B', int)
+
+    class G(sl.Scope[T, int], int):
+        ...
+
+    def func(a: G[A]) -> int:
+        return -4 * a
+
+    pipeline = sl.Pipeline([], params={G[A]: 3, G[B]: 4})
+    assert pipeline.bind_and_call(func) == -12

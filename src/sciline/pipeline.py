@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from itertools import chain
 from typing import (
     Any,
     Callable,
@@ -632,3 +633,57 @@ class Pipeline:
         else:
             graph = self.build(keys)
         return TaskGraph(graph=graph, keys=keys, scheduler=scheduler)
+
+    @overload
+    def bind_and_call(self, fns: Callable[..., T], /) -> T:
+        ...
+
+    @overload
+    def bind_and_call(self, fns: Iterable[Callable[..., Any]], /) -> Tuple[Any, ...]:
+        ...
+
+    def bind_and_call(
+        self, fns: Union[Callable[..., Any], Iterable[Callable[..., Any]]], /
+    ) -> Any:
+        """
+        Call the given functions with arguments provided by the pipeline.
+
+        Parameters
+        ----------
+        fns:
+            Functions to call.
+            The pipeline will provide all arguments based on the function's type hints.
+
+            If this is a single callable, it is called directly.
+            Otherwise, ``bind_and_call`` will iterate over it and call all functions.
+            If will in either case call :meth:`Pipeline.compute` only once.
+
+        Returns
+        -------
+        :
+            The return values of the functions in the same order as the functions.
+            If only one function is passed, its return value
+            is *not* wrapped in a tuple.
+        """
+        return_tuple = True
+        if callable(fns):
+            fns = (fns,)
+            return_tuple = False
+
+        arg_types_per_function = {
+            fn: {
+                name: ty for name, ty in get_type_hints(fn).items() if name != 'return'
+            }
+            for fn in fns
+        }
+        all_arg_types = tuple(
+            set(chain(*(a.values() for a in arg_types_per_function.values())))
+        )
+        values_per_type = self.compute(all_arg_types)
+        results = tuple(
+            fn(**{name: values_per_type[ty] for name, ty in arg_types.items()})
+            for fn, arg_types in arg_types_per_function.items()
+        )
+        if not return_tuple:
+            return results[0]
+        return results
