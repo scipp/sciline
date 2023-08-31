@@ -76,7 +76,10 @@ class ParamTable(Mapping[type, Collection[Any]]):
     def _repr_html_(self) -> str:
         return (
             f"<table><tr><th>{self.row_dim.__name__}</th>"
-            + "".join(f"<th>{k.__name__}</th>" for k in self._columns.keys())
+            + "".join(
+                f"<th>{getattr(k, '__name__', str(k).split('.')[-1])}</th>"
+                for k in self._columns.keys()
+            )
             + "</tr>"
             + "".join(
                 f"<tr><td>{idx}</td>" + "".join(f"<td>{v}</td>" for v in row) + "</tr>"
