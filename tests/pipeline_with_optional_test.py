@@ -48,6 +48,19 @@ def test_optional_dependency_can_be_filled_by_non_optional_param():
     assert pipeline.compute(str) == '1'
 
 
+def test_union_with_none_can_be_used_instead_of_Optional():
+    def use_union1(x: Union[int, None]) -> str:
+        return f'{x or 123}'
+
+    def use_union2(x: Union[None, int]) -> str:
+        return f'{x or 123}'
+
+    pipeline = sl.Pipeline([use_union1], params={int: 1})
+    assert pipeline.compute(str) == '1'
+    pipeline = sl.Pipeline([use_union2], params={int: 1})
+    assert pipeline.compute(str) == '1'
+
+
 def test_optional_requested_directly_can_be_filled_by_non_optional_param():
     pipeline = sl.Pipeline([], params={int: 1})
     assert pipeline.compute(Optional[int]) == 1
