@@ -110,10 +110,10 @@ def test_can_have_both_optional_and_non_optional_path_to_param() -> None:
         return Str2(f'{x}')
 
     def combine12(x: Str1, y: Str2) -> Str12:
-        return f'{x} {y}'
+        return Str12(f'{x} {y}')
 
     def combine21(x: Str2, y: Str1) -> Str21:
-        return f'{x} {y}'
+        return Str21(f'{x} {y}')
 
     pipeline = sl.Pipeline(
         [use_optional_int, use_int, combine12, combine21], params={int: 1}
@@ -137,10 +137,10 @@ def test_presence_of_optional_does_not_affect_related_exception() -> None:
         return Str2(f'{x}')
 
     def combine12(x: Str1, y: Str2) -> Str12:
-        return f'{x} {y}'
+        return Str12(f'{x} {y}')
 
     def combine21(x: Str2, y: Str1) -> Str21:
-        return f'{x} {y}'
+        return Str21(f'{x} {y}')
 
     pipeline = sl.Pipeline([use_optional_int, use_int, combine12, combine21])
     with pytest.raises(sl.UnsatisfiedRequirement):
