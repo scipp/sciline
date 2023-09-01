@@ -36,6 +36,7 @@ def test_union_requirement_leads_to_UnsatisfiedRequirement() -> None:
         return f'{x}'
 
     pipeline = sl.Pipeline([require_union])
+    pipeline[int] = 1
     with pytest.raises(sl.UnsatisfiedRequirement):
         pipeline.compute(str)
 
