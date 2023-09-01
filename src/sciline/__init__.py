@@ -9,6 +9,7 @@ try:
 except importlib.metadata.PackageNotFoundError:
     __version__ = "0.0.0"
 
+from . import scheduler
 from .domain import Scope
 from .param_table import ParamTable
 from .pipeline import (
@@ -27,4 +28,5 @@ __all__ = [
     "Scope",
     "UnboundTypeVar",
     "UnsatisfiedRequirement",
+    "scheduler",
 ]
