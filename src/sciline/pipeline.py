@@ -124,8 +124,18 @@ def _get_optional(tp: type) -> Optional[type]:
     return args[0] if args[1] == type(None) else args[1]  # noqa: E721
 
 
+def provide_none() -> None:
+    return None
+
+
 class ReplicatorBase(Generic[IndexType]):
     def __init__(self, index_name: type, index: Iterable[IndexType], path: List[Key]):
+        if len(path) == 0:
+            raise UnsatisfiedRequirement(
+                'Could not find path to param in param table. This is likely caused '
+                'by requesting a Series that does not depend directly or transitively '
+                'on any param from a table.'
+            )
         self._index_name = index_name
         self.index = index
         self._path = path
@@ -483,7 +493,7 @@ class Pipeline:
                         optional_arg, search_param_tables=search_param_tables
                     )
                 except UnsatisfiedRequirement:
-                    graph[tp] = (lambda: None, ())
+                    graph[tp] = (provide_none, ())
                 else:
                     graph[tp] = optional_subgraph.pop(optional_arg)
                     graph.update(optional_subgraph)
