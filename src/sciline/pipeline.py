@@ -115,6 +115,15 @@ def _find_nodes_in_paths(
     return list(nodes)
 
 
+def _get_optional(tp: type) -> Optional[type]:
+    if get_origin(tp) != Union:
+        return None
+    args = get_args(tp)
+    if len(args) != 2 or type(None) not in args:
+        return None
+    return args[0] if args[1] == type(None) else args[1]  # noqa: E721
+
+
 class ReplicatorBase(Generic[IndexType]):
     def __init__(self, index_name: type, index: Iterable[IndexType], path: List[Key]):
         self._index_name = index_name
@@ -153,6 +162,7 @@ class ReplicatorBase(Generic[IndexType]):
         )
 
     def key(self, i: IndexType, value_name: Union[Type[T], Item[T]]) -> Item[T]:
+        value_name = _get_optional(value_name) or value_name
         label = Label(self._index_name, i)
         if isinstance(value_name, Item):
             return Item(value_name.label + (label,), value_name.tp)
@@ -467,19 +477,17 @@ class Pipeline:
             if get_origin(tp) == Series:
                 graph.update(self._build_series(tp))  # type: ignore[arg-type]
                 continue
-            if get_origin(tp) == Union:
-                tps = get_args(tp)
-                if len(tps) == 2 and tps[1] == type(None):  # noqa: E721
-                    try:
-                        optional_arg = tps[0]
-                        optional_subgraph = self.build(optional_arg)
-                    except UnsatisfiedRequirement:
-                        graph[tp] = (lambda: None, ())
-                    else:
-                        optional = optional_subgraph.pop(optional_arg)
-                        graph[tp] = optional
-                        graph.update(optional_subgraph)
-                    continue
+            if (optional_arg := _get_optional(tp)) is not None:
+                try:
+                    optional_subgraph = self.build(
+                        optional_arg, search_param_tables=search_param_tables
+                    )
+                except UnsatisfiedRequirement:
+                    graph[tp] = (lambda: None, ())
+                else:
+                    graph[tp] = optional_subgraph.pop(optional_arg)
+                    graph.update(optional_subgraph)
+                continue
             provider: Callable[..., T]
             provider, bound = self._get_provider(tp)
             tps = get_type_hints(provider)

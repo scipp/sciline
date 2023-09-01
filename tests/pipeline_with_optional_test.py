@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright (c) 2023 Scipp contributors (https://github.com/scipp)
-from typing import Optional, Union
+from typing import NewType, Optional, Union
 
 import pytest
 
@@ -81,3 +81,27 @@ def test_optional_dependency_is_set_to_none_if_no_provider_found_transitively():
 
     pipeline = sl.Pipeline([use_optional, make_int])
     assert pipeline.compute(str) == '123'
+
+
+def test_optional_dependency_can_be_filled_from_param_table():
+    def use_optional(x: Optional[float]) -> str:
+        return f'{x or 4.0}'
+
+    pl = sl.Pipeline([use_optional])
+    pl.set_param_table(sl.ParamTable(int, {float: [1.0, 2.0, 3.0]}))
+    assert pl.compute(sl.Series[int, str]) == sl.Series(
+        int, {0: '1.0', 1: '2.0', 2: '3.0'}
+    )
+
+
+def test_optional_dependency_is_set_to_none_from_param_table_size():
+    Param = NewType('Param', float)
+
+    def use_optional(x: Optional[float]) -> str:
+        return f'{x or 4.0}'
+
+    pl = sl.Pipeline([use_optional])
+    pl.set_param_table(sl.ParamTable(int, {Param: [1.0, 2.0, 3.0]}))
+    assert pl.compute(sl.Series[int, str]) == sl.Series(
+        int, {0: '4.0', 1: '4.0', 2: '4.0'}
+    )
