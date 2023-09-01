@@ -650,6 +650,14 @@ def test_bind_and_call_function_with_2_arg2() -> None:
     assert pipeline.bind_and_call(func) == 4.5
 
 
+def test_bind_and_call_overrides_default_args() -> None:
+    def func(i: int, f: float = -0.5) -> float:
+        return i + f
+
+    pipeline = sl.Pipeline([make_int, int_to_float])
+    assert pipeline.bind_and_call(func) == 4.5
+
+
 def test_bind_and_call_function_in_iterator() -> None:
     def func(i: int) -> int:
         return i * 2
