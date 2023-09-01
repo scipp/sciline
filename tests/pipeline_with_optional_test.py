@@ -100,6 +100,8 @@ def test_optional_dependency_is_set_to_none_if_no_provider_found_transitively() 
 def test_can_have_both_optional_and_non_optional_path_to_param() -> None:
     Str1 = NewType('Str1', str)
     Str2 = NewType('Str2', str)
+    Str12 = NewType('Str12', str)
+    Str21 = NewType('Str21', str)
 
     def use_optional_int(x: Optional[int]) -> Str1:
         return Str1(f'{x or 123}')
@@ -107,11 +109,44 @@ def test_can_have_both_optional_and_non_optional_path_to_param() -> None:
     def use_int(x: int) -> Str2:
         return Str2(f'{x}')
 
-    def combine(x: Str1, y: Str2) -> str:
+    def combine12(x: Str1, y: Str2) -> Str12:
         return f'{x} {y}'
 
-    pipeline = sl.Pipeline([use_optional_int, use_int, combine], params={int: 1})
-    assert pipeline.compute(str) == '1 1'
+    def combine21(x: Str2, y: Str1) -> Str21:
+        return f'{x} {y}'
+
+    pipeline = sl.Pipeline(
+        [use_optional_int, use_int, combine12, combine21], params={int: 1}
+    )
+    assert pipeline.compute(Str12) == '1 1'
+    assert pipeline.compute(Str21) == '1 1'
+
+
+def test_presence_of_optional_does_not_affect_related_exception() -> None:
+    Str1 = NewType('Str1', str)
+    Str2 = NewType('Str2', str)
+    Str12 = NewType('Str12', str)
+    Str21 = NewType('Str21', str)
+
+    def use_optional_int(x: Optional[int]) -> Str1:
+        return Str1(f'{x or 123}')
+
+    # Make sure the implementation does not unintentionally put "None" here,
+    # triggered by the presence of the optional dependency on int in another provider.
+    def use_int(x: int) -> Str2:
+        return Str2(f'{x}')
+
+    def combine12(x: Str1, y: Str2) -> Str12:
+        return f'{x} {y}'
+
+    def combine21(x: Str2, y: Str1) -> Str21:
+        return f'{x} {y}'
+
+    pipeline = sl.Pipeline([use_optional_int, use_int, combine12, combine21])
+    with pytest.raises(sl.UnsatisfiedRequirement):
+        pipeline.compute(Str12)
+    with pytest.raises(sl.UnsatisfiedRequirement):
+        pipeline.compute(Str21)
 
 
 def test_optional_dependency_in_node_depending_on_param_table() -> None:
