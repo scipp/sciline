@@ -26,9 +26,9 @@ def test_provider_returning_union_disallowed() -> None:
 def test_parameter_type_union_or_optional_disallowed() -> None:
     pipeline = sl.Pipeline()
     with pytest.raises(ValueError):
-        pipeline[Union[int, float]] = 3
+        pipeline[Union[int, float]] = 3  # type: ignore[index]
     with pytest.raises(ValueError):
-        pipeline[Optional[int]] = 3
+        pipeline[Optional[int]] = 3  # type: ignore[index]
 
 
 def test_union_requirement_leads_to_UnsatisfiedRequirement() -> None:
@@ -63,7 +63,7 @@ def test_union_with_none_can_be_used_instead_of_Optional() -> None:
 
 def test_optional_requested_directly_can_be_filled_by_non_optional_param() -> None:
     pipeline = sl.Pipeline([], params={int: 1})
-    assert pipeline.compute(Optional[int]) == 1
+    assert pipeline.compute(Optional[int]) == 1  # type: ignore[call-overload]
 
 
 def test_optional_dependency_can_be_filled_transitively() -> None:

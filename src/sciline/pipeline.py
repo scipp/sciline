@@ -115,7 +115,7 @@ def _find_nodes_in_paths(
     return list(nodes)
 
 
-def _get_optional(tp: Key) -> Optional[type]:
+def _get_optional(tp: Key) -> Optional[Any]:
     if get_origin(tp) != Union:
         return None
     args = get_args(tp)
