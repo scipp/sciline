@@ -97,6 +97,23 @@ def test_optional_dependency_is_set_to_none_if_no_provider_found_transitively() 
     assert pipeline.compute(str) == '123'
 
 
+def test_can_have_both_optional_and_non_optional_path_to_param() -> None:
+    Str1 = NewType('Str1', str)
+    Str2 = NewType('Str2', str)
+
+    def use_optional_int(x: Optional[int]) -> Str1:
+        return Str1(f'{x or 123}')
+
+    def use_int(x: int) -> Str2:
+        return Str2(f'{x}')
+
+    def combine(x: Str1, y: Str2) -> str:
+        return f'{x} {y}'
+
+    pipeline = sl.Pipeline([use_optional_int, use_int, combine], params={int: 1})
+    assert pipeline.compute(str) == '1 1'
+
+
 def test_optional_dependency_in_node_depending_on_param_table() -> None:
     def use_optional(x: float, y: Optional[int]) -> str:
         return f'{x} {y or 123}'
