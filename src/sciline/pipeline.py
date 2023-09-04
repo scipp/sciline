@@ -116,8 +116,27 @@ def _find_nodes_in_paths(
     return list(nodes)
 
 
+def _get_optional(tp: Key) -> Optional[Any]:
+    if get_origin(tp) != Union:
+        return None
+    args = get_args(tp)
+    if len(args) != 2 or type(None) not in args:
+        return None
+    return args[0] if args[1] == type(None) else args[1]  # noqa: E721
+
+
+def provide_none() -> None:
+    return None
+
+
 class ReplicatorBase(Generic[IndexType]):
     def __init__(self, index_name: type, index: Iterable[IndexType], path: List[Key]):
+        if len(path) == 0:
+            raise UnsatisfiedRequirement(
+                'Could not find path to param in param table. This is likely caused '
+                'by requesting a Series that does not depend directly or transitively '
+                'on any param from a table.'
+            )
         self._index_name = index_name
         self.index = index
         self._path = path
@@ -154,6 +173,7 @@ class ReplicatorBase(Generic[IndexType]):
         )
 
     def key(self, i: IndexType, value_name: Union[Type[T], Item[T]]) -> Item[T]:
+        value_name = _get_optional(value_name) or value_name
         label = Label(self._index_name, i)
         if isinstance(value_name, Item):
             return Item(value_name.label + (label,), value_name.tp)
@@ -327,6 +347,8 @@ class Pipeline:
         param:
             Concrete value to provide.
         """
+        if get_origin(key) == Union:
+            raise ValueError('Union (or Optional) parameters are not allowed.')
         # TODO Switch to isinstance(key, NewType) once our minimum is Python 3.10
         # Note that we cannot pass mypy in Python<3.10 since NewType is not a type.
         if hasattr(key, '__supertype__'):
@@ -390,6 +412,10 @@ class Pipeline:
         # isinstance does not work here and types.NoneType available only in 3.10+
         if key == type(None):  # noqa: E721
             raise ValueError(f'Provider {provider} returning `None` is not allowed')
+        if get_origin(key) == Union:
+            raise ValueError(
+                f'Provider {provider} returning a Union (or Optional) is not allowed.'
+            )
         if get_origin(key) == Series:
             raise ValueError(
                 f'Provider {provider} returning a sciline.Series is not allowed. '
@@ -461,6 +487,17 @@ class Pipeline:
                 continue
             if get_origin(tp) == Series:
                 graph.update(self._build_series(tp))  # type: ignore[arg-type]
+                continue
+            if (optional_arg := _get_optional(tp)) is not None:
+                try:
+                    optional_subgraph = self.build(
+                        optional_arg, search_param_tables=search_param_tables
+                    )
+                except UnsatisfiedRequirement:
+                    graph[tp] = (provide_none, ())
+                else:
+                    graph[tp] = optional_subgraph.pop(optional_arg)
+                    graph.update(optional_subgraph)
                 continue
             provider: Callable[..., T]
             provider, bound = self._get_provider(tp)

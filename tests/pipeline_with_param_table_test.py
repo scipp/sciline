@@ -56,6 +56,19 @@ def test_can_compute_series_of_param_values() -> None:
     assert pl.compute(sl.Series[int, float]) == sl.Series(int, {0: 1.0, 1: 2.0, 2: 3.0})
 
 
+def test_cannot_compute_series_of_non_table_param() -> None:
+    pl = sl.Pipeline()
+    # Table for defining length
+    pl.set_param_table(sl.ParamTable(int, {float: [1.0, 2.0, 3.0]}))
+    pl[str] = 'abc'
+    # The alternative option would be to expect to return
+    #     sl.Series(int, {0: 'abc', 1: 'abc', 2: 'abc'})
+    # For now, we are not supporting this since it is unclear if this would be
+    # conceptually sound and risk free.
+    with pytest.raises(sl.UnsatisfiedRequirement):
+        pl.compute(sl.Series[int, str])
+
+
 def test_can_compute_series_of_derived_values() -> None:
     def process(x: float) -> str:
         return str(x)
