@@ -18,13 +18,16 @@ from typing import (
 from graphviz import Digraph
 
 from .pipeline import Pipeline, SeriesProvider
-from .typing import Graph, Item, Key
+from .typing import Graph, Item, Key, get_optional
 
 
 @dataclass
 class Node:
     name: str
     collapsed: bool = False
+
+
+FormattedGraph = Dict[str, Tuple[str, List[Node], Node]]
 
 
 def to_graphviz(
@@ -52,40 +55,40 @@ def to_graphviz(
         Keyword arguments passed to :py:class:`graphviz.Digraph`.
     """
     dot = Digraph(strict=True, **kwargs)
-    graph = _format_graph(graph, compact=compact)
-    graph = dict(sorted(graph.items(), key=lambda item: item[1][2].name))
-    subgraphs = _to_subgraphs(graph)
+    formatted_graph = _format_graph(graph, compact=compact)
+    ordered_graph = dict(
+        sorted(formatted_graph.items(), key=lambda item: item[1][2].name)
+    )
+    subgraphs = _to_subgraphs(ordered_graph)
 
-    for i, graph in enumerate(subgraphs):
-        cluster = cluster_generics and len(graph) > 1
-        name = f'cluster{i}' if cluster else None
-        with dot.subgraph(name=name) as subgraph:
+    for origin, subgraph in subgraphs.items():
+        cluster = cluster_generics and len(subgraph) > 1
+        name = f'cluster_{origin}' if cluster else None
+        with dot.subgraph(name=name) as dot_subgraph:
             if cluster:
-                subgraph.attr(rank='same')
+                dot_subgraph.attr(rank='same')
                 if cluster_color is None:
-                    subgraph.attr(style='dotted')
+                    dot_subgraph.attr(style='dotted')
                 else:
-                    subgraph.attr(style='filled', color=cluster_color)
-            _add_subgraph(graph, dot, subgraph)
+                    dot_subgraph.attr(style='filled', color=cluster_color)
+            _add_subgraph(subgraph, dot, dot_subgraph)
     return dot
 
 
-def _to_subgraphs(
-    graph: Dict[str, Tuple[str, List[Node], Node]]
-) -> List[Dict[str, Tuple[str, List[Node], Node]]]:
+def _to_subgraphs(graph: FormattedGraph) -> Dict[str, FormattedGraph]:
     def get_subgraph_name(name: str) -> str:
         return name.split('[')[0]
 
-    subgraphs: Dict[str, Dict[str, Tuple[str, List[Node], Node]]] = {}
+    subgraphs: Dict[str, FormattedGraph] = {}
     for p, (p_name, args, ret) in graph.items():
         subgraph_name = get_subgraph_name(ret.name)
         if subgraph_name not in subgraphs:
             subgraphs[subgraph_name] = {}
         subgraphs[subgraph_name][p] = (p_name, args, ret)
-    return list(subgraphs.values())
+    return subgraphs
 
 
-def _add_subgraph(graph, dot, subgraph):
+def _add_subgraph(graph: FormattedGraph, dot: Digraph, subgraph: Digraph) -> None:
     for p, (p_name, args, ret) in graph.items():
         subgraph.node(
             ret.name, ret.name, shape='box3d' if ret.collapsed else 'rectangle'
@@ -114,9 +117,7 @@ def _qualname(obj: Any) -> Any:
     )
 
 
-def _format_graph(
-    graph: Graph, compact: bool
-) -> Dict[str, Tuple[str, List[Node], Node]]:
+def _format_graph(graph: Graph, compact: bool) -> FormattedGraph:
     return {
         _format_provider(provider, ret, compact=compact): (
             _qualname(provider),
@@ -153,12 +154,11 @@ def _format_type(tp: Key, compact: bool = False) -> Node:
     """
 
     tp, labels = _extract_type_and_labels(tp, compact=compact)
-    from .pipeline import _get_optional
 
-    if (tp_ := _get_optional(tp)) is not None:
+    if (tp_ := get_optional(tp)) is not None:
         tp = tp_
 
-    def get_base(tp: type) -> str:
+    def get_base(tp: Key) -> str:
         return tp.__name__ if hasattr(tp, '__name__') else str(tp).split('.')[-1]
 
     def format_label(label: Union[type, Tuple[type, Any]]) -> str:
