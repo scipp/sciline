@@ -6,6 +6,7 @@ from typing import (
     Callable,
     Dict,
     List,
+    Optional,
     Tuple,
     Type,
     TypeVar,
@@ -26,7 +27,13 @@ class Node:
     collapsed: bool = False
 
 
-def to_graphviz(graph: Graph, compact: bool = False, **kwargs: Any) -> Digraph:
+def to_graphviz(
+    graph: Graph,
+    compact: bool = False,
+    cluster_generics: bool = True,
+    cluster_color: Optional[str] = '#f0f0ff',
+    **kwargs: Any,
+) -> Digraph:
     """
     Convert output of :py:class:`sciline.Pipeline.get_graph` to a graphviz graph.
 
@@ -36,13 +43,53 @@ def to_graphviz(graph: Graph, compact: bool = False, **kwargs: Any) -> Digraph:
         Output of :py:class:`sciline.Pipeline.get_graph`.
     compact:
         If True, parameter-table-dependent branches are collapsed into a single copy
-        of the branch. Recommendend for large graphs with long parameter tables.
+        of the branch. Recommended for large graphs with long parameter tables.
+    cluster_generics:
+        If True, generic products are grouped into clusters.
+    cluster_color:
+        Background color of clusters. If None, clusters are dotted.
     kwargs:
         Keyword arguments passed to :py:class:`graphviz.Digraph`.
     """
     dot = Digraph(strict=True, **kwargs)
-    for p, (p_name, args, ret) in _format_graph(graph, compact=compact).items():
-        dot.node(ret.name, ret.name, shape='box3d' if ret.collapsed else 'rectangle')
+    graph = _format_graph(graph, compact=compact)
+    graph = dict(sorted(graph.items(), key=lambda item: item[1][2].name))
+    subgraphs = _to_subgraphs(graph)
+
+    for i, graph in enumerate(subgraphs):
+        cluster = cluster_generics and len(graph) > 1
+        name = f'cluster{i}' if cluster else None
+        with dot.subgraph(name=name) as subgraph:
+            if cluster:
+                subgraph.attr(rank='same')
+                if cluster_color is None:
+                    subgraph.attr(style='dotted')
+                else:
+                    subgraph.attr(style='filled', color=cluster_color)
+            _add_subgraph(graph, dot, subgraph)
+    return dot
+
+
+def _to_subgraphs(
+    graph: Dict[str, Tuple[str, List[Node], Node]]
+) -> List[Dict[str, Tuple[str, List[Node], Node]]]:
+    def get_subgraph_name(name: str) -> str:
+        return name.split('[')[0]
+
+    subgraphs: Dict[str, Dict[str, Tuple[str, List[Node], Node]]] = {}
+    for p, (p_name, args, ret) in graph.items():
+        subgraph_name = get_subgraph_name(ret.name)
+        if subgraph_name not in subgraphs:
+            subgraphs[subgraph_name] = {}
+        subgraphs[subgraph_name][p] = (p_name, args, ret)
+    return list(subgraphs.values())
+
+
+def _add_subgraph(graph, dot, subgraph):
+    for p, (p_name, args, ret) in graph.items():
+        subgraph.node(
+            ret.name, ret.name, shape='box3d' if ret.collapsed else 'rectangle'
+        )
         # Do not draw dummy providers created by Pipeline when setting instances
         if p_name in (
             f'{_qualname(Pipeline.__setitem__)}.<locals>.<lambda>',
@@ -59,7 +106,6 @@ def to_graphviz(graph: Graph, compact: bool = False, **kwargs: Any) -> Digraph:
             for arg in args:
                 dot.edge(arg.name, p)
             dot.edge(p, ret.name)
-    return dot
 
 
 def _qualname(obj: Any) -> Any:
@@ -107,6 +153,10 @@ def _format_type(tp: Key, compact: bool = False) -> Node:
     """
 
     tp, labels = _extract_type_and_labels(tp, compact=compact)
+    from .pipeline import _get_optional
+
+    if (tp_ := _get_optional(tp)) is not None:
+        tp = tp_
 
     def get_base(tp: type) -> str:
         return tp.__name__ if hasattr(tp, '__name__') else str(tp).split('.')[-1]

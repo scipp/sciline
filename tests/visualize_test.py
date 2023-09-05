@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright (c) 2023 Scipp contributors (https://github.com/scipp)
-from typing import Generic, TypeVar
+from typing import Generic, Optional, TypeVar
 
 import sciline as sl
 from sciline.visualize import to_graphviz
@@ -33,3 +33,7 @@ def test_generic_types_formatted_without_prefixes() -> None:
     assert sl.visualize._format_type(A[float]).name == 'A[float]'
     assert sl.visualize._format_type(SubA[float]).name == 'SubA[float]'
     assert sl.visualize._format_type(B[float]).name == 'B[float]'
+
+
+def test_optional_types_formatted_as_their_content() -> None:
+    assert sl.visualize._format_type(Optional[float]).name == 'float'
