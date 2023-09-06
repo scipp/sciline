@@ -7,13 +7,13 @@ PARAM2 = TypeVar("PARAM2")
 SUPER = TypeVar("SUPER")
 
 
-def _check_supertype(cls: type) -> None:
+def _check_supertype(cls: type, scope_cls: type) -> None:
     # Mypy does not support __orig_bases__ yet(?)
     # See also https://stackoverflow.com/a/73746554 for useful info
     scope = cls.__orig_bases__[0]  # type: ignore[attr-defined]
     # Only check direct subclasses
-    if get_origin(scope) is Scope:
-        supertype = get_args(scope)[1]
+    if get_origin(scope) is scope_cls:
+        supertype = get_args(scope)[-1]
         # Remove potential generic params
         # In Python 3.8, get_origin does not work with numpy.typing.NDArray,
         # but it defines __origin__
@@ -37,7 +37,7 @@ class Scope(Generic[PARAM, SUPER]):
     """
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
-        _check_supertype(cls)
+        _check_supertype(cls, Scope)
         return super().__init_subclass__(**kwargs)
 
     def __new__(cls, x: SUPER) -> SUPER:  # type: ignore[misc]
@@ -51,7 +51,7 @@ class ScopeTwoParams(Generic[PARAM, PARAM2, SUPER]):
     """
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
-        _check_supertype(cls)
+        _check_supertype(cls, ScopeTwoParams)
         return super().__init_subclass__(**kwargs)
 
     def __new__(cls, x: SUPER) -> SUPER:  # type: ignore[misc]
