@@ -40,10 +40,30 @@ def test_mypy_accepts_interface_of_scope_sibling_class() -> None:
     a + a
 
 
-def test_inconsistent_type_and_interface_raises() -> None:
+def test_Scope_inconsistent_type_and_interface_raises() -> None:
     param = TypeVar('param')
 
     with pytest.raises(TypeError, match="Missing or wrong interface for"):
 
         class A(sl.Scope[param, str], float):
             ...
+
+
+def test_ScopeTwoParams_inconsistent_type_and_interface_raises() -> None:
+    Param1 = TypeVar('Param1')
+    Param2 = TypeVar('Param2')
+
+    with pytest.raises(TypeError, match="Missing or wrong interface for"):
+
+        class A(sl.ScopeTwoParams[Param1, Param2, str], float):
+            ...
+
+
+def test_ScopeTwoParams() -> None:
+    Param1 = TypeVar('Param1')
+    Param2 = TypeVar('Param2')
+
+    class A(sl.ScopeTwoParams[Param1, Param2, float], float):
+        ...
+
+    assert isinstance(A[int, int](1.5), float)
