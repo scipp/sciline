@@ -47,3 +47,13 @@ def test_inconsistent_type_and_interface_raises() -> None:
 
         class A(sl.Scope[param, str], float):
             ...
+
+
+def test_ScopeTwoParams() -> None:
+    Param1 = TypeVar('Param1')
+    Param2 = TypeVar('Param2')
+
+    class A(sl.ScopeTwoParams[Param1, Param2, float], float):
+        ...
+
+    assert isinstance(A[int, int](1.5), float)

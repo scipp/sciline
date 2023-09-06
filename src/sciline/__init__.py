@@ -10,7 +10,7 @@ except importlib.metadata.PackageNotFoundError:
     __version__ = "0.0.0"
 
 from . import scheduler
-from .domain import Scope
+from .domain import Scope, ScopeTwoParams
 from .param_table import ParamTable
 from .pipeline import (
     AmbiguousProvider,
@@ -26,6 +26,7 @@ __all__ = [
     "ParamTable",
     "Pipeline",
     "Scope",
+    "ScopeTwoParams",
     "UnboundTypeVar",
     "UnsatisfiedRequirement",
     "scheduler",
