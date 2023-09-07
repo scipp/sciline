@@ -6,6 +6,7 @@ from typing import (
     Callable,
     Dict,
     List,
+    Optional,
     Tuple,
     Type,
     TypeVar,
@@ -17,7 +18,7 @@ from typing import (
 from graphviz import Digraph
 
 from .pipeline import Pipeline, SeriesProvider
-from .typing import Graph, Item, Key
+from .typing import Graph, Item, Key, get_optional
 
 
 @dataclass
@@ -26,7 +27,16 @@ class Node:
     collapsed: bool = False
 
 
-def to_graphviz(graph: Graph, compact: bool = False, **kwargs: Any) -> Digraph:
+FormattedGraph = Dict[str, Tuple[str, List[Node], Node]]
+
+
+def to_graphviz(
+    graph: Graph,
+    compact: bool = False,
+    cluster_generics: bool = True,
+    cluster_color: Optional[str] = '#f0f0ff',
+    **kwargs: Any,
+) -> Digraph:
     """
     Convert output of :py:class:`sciline.Pipeline.get_graph` to a graphviz graph.
 
@@ -36,13 +46,53 @@ def to_graphviz(graph: Graph, compact: bool = False, **kwargs: Any) -> Digraph:
         Output of :py:class:`sciline.Pipeline.get_graph`.
     compact:
         If True, parameter-table-dependent branches are collapsed into a single copy
-        of the branch. Recommendend for large graphs with long parameter tables.
+        of the branch. Recommended for large graphs with long parameter tables.
+    cluster_generics:
+        If True, generic products are grouped into clusters.
+    cluster_color:
+        Background color of clusters. If None, clusters are dotted.
     kwargs:
         Keyword arguments passed to :py:class:`graphviz.Digraph`.
     """
     dot = Digraph(strict=True, **kwargs)
-    for p, (p_name, args, ret) in _format_graph(graph, compact=compact).items():
-        dot.node(ret.name, ret.name, shape='box3d' if ret.collapsed else 'rectangle')
+    formatted_graph = _format_graph(graph, compact=compact)
+    ordered_graph = dict(
+        sorted(formatted_graph.items(), key=lambda item: item[1][2].name)
+    )
+    subgraphs = _to_subgraphs(ordered_graph)
+
+    for origin, subgraph in subgraphs.items():
+        cluster = cluster_generics and len(subgraph) > 1
+        name = f'cluster_{origin}' if cluster else None
+        with dot.subgraph(name=name) as dot_subgraph:
+            if cluster:
+                dot_subgraph.attr(rank='same')
+                if cluster_color is None:
+                    dot_subgraph.attr(style='dotted')
+                else:
+                    dot_subgraph.attr(style='filled', color=cluster_color)
+            _add_subgraph(subgraph, dot, dot_subgraph)
+    return dot
+
+
+def _to_subgraphs(graph: FormattedGraph) -> Dict[str, FormattedGraph]:
+    def get_subgraph_name(name: str) -> str:
+        return name.split('[')[0]
+
+    subgraphs: Dict[str, FormattedGraph] = {}
+    for p, (p_name, args, ret) in graph.items():
+        subgraph_name = get_subgraph_name(ret.name)
+        if subgraph_name not in subgraphs:
+            subgraphs[subgraph_name] = {}
+        subgraphs[subgraph_name][p] = (p_name, args, ret)
+    return subgraphs
+
+
+def _add_subgraph(graph: FormattedGraph, dot: Digraph, subgraph: Digraph) -> None:
+    for p, (p_name, args, ret) in graph.items():
+        subgraph.node(
+            ret.name, ret.name, shape='box3d' if ret.collapsed else 'rectangle'
+        )
         # Do not draw dummy providers created by Pipeline when setting instances
         if p_name in (
             f'{_qualname(Pipeline.__setitem__)}.<locals>.<lambda>',
@@ -59,7 +109,6 @@ def to_graphviz(graph: Graph, compact: bool = False, **kwargs: Any) -> Digraph:
             for arg in args:
                 dot.edge(arg.name, p)
             dot.edge(p, ret.name)
-    return dot
 
 
 def _qualname(obj: Any) -> Any:
@@ -68,9 +117,7 @@ def _qualname(obj: Any) -> Any:
     )
 
 
-def _format_graph(
-    graph: Graph, compact: bool
-) -> Dict[str, Tuple[str, List[Node], Node]]:
+def _format_graph(graph: Graph, compact: bool) -> FormattedGraph:
     return {
         _format_provider(provider, ret, compact=compact): (
             _qualname(provider),
@@ -108,7 +155,10 @@ def _format_type(tp: Key, compact: bool = False) -> Node:
 
     tp, labels = _extract_type_and_labels(tp, compact=compact)
 
-    def get_base(tp: type) -> str:
+    if (tp_ := get_optional(tp)) is not None:
+        tp = tp_
+
+    def get_base(tp: Key) -> str:
         return tp.__name__ if hasattr(tp, '__name__') else str(tp).split('.')[-1]
 
     def format_label(label: Union[type, Tuple[type, Any]]) -> str:

@@ -30,7 +30,7 @@ from .domain import Scope
 from .param_table import ParamTable
 from .scheduler import Scheduler
 from .series import Series
-from .typing import Graph, Item, Key, Label, Provider
+from .typing import Graph, Item, Key, Label, Provider, get_optional
 
 T = TypeVar('T')
 KeyType = TypeVar('KeyType')
@@ -116,15 +116,6 @@ def _find_nodes_in_paths(
     return list(nodes)
 
 
-def _get_optional(tp: Key) -> Optional[Any]:
-    if get_origin(tp) != Union:
-        return None
-    args = get_args(tp)
-    if len(args) != 2 or type(None) not in args:
-        return None
-    return args[0] if args[1] == type(None) else args[1]  # noqa: E721
-
-
 def provide_none() -> None:
     return None
 
@@ -173,7 +164,7 @@ class ReplicatorBase(Generic[IndexType]):
         )
 
     def key(self, i: IndexType, value_name: Union[Type[T], Item[T]]) -> Item[T]:
-        value_name = _get_optional(value_name) or value_name
+        value_name = get_optional(value_name) or value_name
         label = Label(self._index_name, i)
         if isinstance(value_name, Item):
             return Item(value_name.label + (label,), value_name.tp)
@@ -488,7 +479,7 @@ class Pipeline:
             if get_origin(tp) == Series:
                 graph.update(self._build_series(tp))  # type: ignore[arg-type]
                 continue
-            if (optional_arg := _get_optional(tp)) is not None:
+            if (optional_arg := get_optional(tp)) is not None:
                 try:
                     optional_subgraph = self.build(
                         optional_arg, search_param_tables=search_param_tables
