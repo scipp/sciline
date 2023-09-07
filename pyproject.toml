@@ -8,7 +8,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "sciline"
 description = "Build scientific pipelines for your data"
-authors= [{name="Scipp contributors"}]
+authors = [{ name = "Scipp contributors" }]
 license = { file = "LICENSE" }
 readme = "README.md"
 classifiers = [
