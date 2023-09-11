@@ -750,3 +750,29 @@ def test_bind_and_call_generic_function() -> None:
 
     pipeline = sl.Pipeline([], params={G[A]: 3, G[B]: 4})
     assert pipeline.bind_and_call(func) == -12
+
+
+def test_bind_and_call_function_runs_at_end() -> None:
+    calls = []
+
+    def a() -> int:
+        calls.append('a')
+        return 2
+
+    def b() -> float:
+        calls.append('b')
+        return 3.1
+
+    def c(_i: int) -> None:
+        calls.append('c')
+
+    def d(_f: float) -> None:
+        calls.append('d')
+
+    pipeline = sl.Pipeline([a, b])
+    pipeline.bind_and_call([c, d])
+
+    assert calls.index('a') in (0, 1)
+    assert calls.index('b') in (0, 1)
+    assert calls.index('c') in (2, 3)
+    assert calls.index('d') in (2, 3)
