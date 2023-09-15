@@ -26,7 +26,7 @@ from typing import (
 
 from sciline.task_graph import TaskGraph
 
-from .domain import Scope
+from .domain import Scope, ScopeTwoParams
 from .param_table import ParamTable
 from .scheduler import Scheduler
 from .series import Series
@@ -353,11 +353,14 @@ class Pipeline:
                 expected = np_origin
             else:
                 expected = underlying
-        elif issubclass(origin, Scope):
+        elif issubclass(origin, (Scope, ScopeTwoParams)):
             scope = origin.__orig_bases__[0]
-            while (orig := get_origin(scope)) is not None and orig is not Scope:
+            while (orig := get_origin(scope)) is not None and orig not in (
+                Scope,
+                ScopeTwoParams,
+            ):
                 scope = orig.__orig_bases__[0]
-            expected = get_args(scope)[1]
+            expected = get_args(scope)[-1]
         else:
             expected = origin
 
