@@ -81,6 +81,56 @@ def test_multiple_keys_not_in_same_path_use_same_intermediate() -> None:
     assert ncall == 1
 
 
+def test_Scope_subclass_can_be_set_as_param() -> None:
+    Param = TypeVar('Param')
+
+    class Str(sl.Scope[Param, str], str):
+        ...
+
+    pipeline = sl.Pipeline(params={Str[int]: Str[int]('1')})
+    pipeline[Str[float]] = Str[float]('2.0')
+    assert pipeline.compute(Str[int]) == Str[int]('1')
+    assert pipeline.compute(Str[float]) == Str[float]('2.0')
+
+
+def test_Scope_subclass_can_be_set_as_param_with_unbound_typevar() -> None:
+    Param = TypeVar('Param')
+
+    class Str(sl.Scope[Param, str], str):
+        ...
+
+    pipeline = sl.Pipeline()
+    pipeline[Str[Param]] = Str[Param]('1')  # type: ignore[valid-type]
+    assert pipeline.compute(Str[int]) == Str[int]('1')
+    assert pipeline.compute(Str[float]) == Str[float]('1')
+
+
+def test_ScopeTwoParam_subclass_can_be_set_as_param() -> None:
+    Param1 = TypeVar('Param1')
+    Param2 = TypeVar('Param2')
+
+    class Str(sl.ScopeTwoParams[Param1, Param2, str], str):
+        ...
+
+    pipeline = sl.Pipeline(params={Str[int, float]: Str[int, float]('1')})
+    pipeline[Str[float, int]] = Str[float, int]('2.0')
+    assert pipeline.compute(Str[int, float]) == Str[int, float]('1')
+    assert pipeline.compute(Str[float, int]) == Str[float, int]('2.0')
+
+
+def test_ScopeTwoParam_subclass_can_be_set_as_param_with_unbound_typevar() -> None:
+    Param1 = TypeVar('Param1')
+    Param2 = TypeVar('Param2')
+
+    class Str(sl.ScopeTwoParams[Param1, Param2, str], str):
+        ...
+
+    pipeline = sl.Pipeline()
+    pipeline[Str[Param1, Param2]] = Str[Param1, Param2]('1')  # type: ignore[valid-type]
+    assert pipeline.compute(Str[int, float]) == Str[int, float]('1')
+    assert pipeline.compute(Str[float, int]) == Str[float, int]('1')
+
+
 def test_generic_providers_produce_use_dependencies_based_on_bound_typevar() -> None:
     Param = TypeVar('Param')
 
