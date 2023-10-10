@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright (c) 2023 Scipp contributors (https://github.com/scipp)
 from dataclasses import dataclass
-from typing import Generic, List, NewType, TypeVar
+from typing import Any, Callable, Generic, List, NewType, TypeVar
 
 import numpy as np
 import numpy.typing as npt
@@ -638,9 +638,12 @@ def test_get_with_single_key_return_task_graph_that_computes_value() -> None:
     assert task.compute() == '3;1.5'
 
 
-def test_get_with_key_tuple_return_task_graph_that_computes_dict_of_values() -> None:
+@pytest.mark.parametrize('key_type', [tuple, list, iter])
+def test_get_with_key_iterable_return_task_graph_that_computes_dict_of_values(
+    key_type: Callable[[Any], Any],
+) -> None:
     pipeline = sl.Pipeline([int_to_float, make_int])
-    task = pipeline.get((float, int))
+    task = pipeline.get(key_type((float, int)))
     assert task.compute() == {float: 1.5, int: 3}
 
 

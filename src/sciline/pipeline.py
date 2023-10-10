@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from collections.abc import Iterable
 from itertools import chain
 from typing import (
     Any,
@@ -10,7 +11,6 @@ from typing import (
     Collection,
     Dict,
     Generic,
-    Iterable,
     List,
     Mapping,
     Optional,
@@ -114,6 +114,22 @@ def _find_nodes_in_paths(
     for path in paths:
         nodes.update(path)
     return list(nodes)
+
+
+def _is_multiple_keys(
+    keys: type | Iterable[type] | Item[T],
+) -> bool:
+    # Cannot simply use isinstance(keys, Iterable) because that is True for
+    # generic aliases of iterable types, e.g.,
+    #
+    # class Str(sl.Scope[Param, str], str): ...
+    # keys = Str[int]
+    #
+    # And isinstance(keys, type) does not work on its own because
+    # it is False for the above type.
+    return (
+        not isinstance(keys, type) and not get_args(keys) and isinstance(keys, Iterable)
+    )
 
 
 def provide_none() -> None:
@@ -602,14 +618,14 @@ class Pipeline:
         ...
 
     @overload
-    def compute(self, tp: Tuple[Type[T], ...]) -> Dict[Type[T], T]:
+    def compute(self, tp: Iterable[Type[T]]) -> Dict[Type[T], T]:
         ...
 
     @overload
     def compute(self, tp: Item[T]) -> T:
         ...
 
-    def compute(self, tp: type | Tuple[type, ...] | Item[T]) -> Any:
+    def compute(self, tp: type | Iterable[type] | Item[T]) -> Any:
         """
         Compute result for the given keys.
 
@@ -618,12 +634,13 @@ class Pipeline:
         Parameters
         ----------
         tp:
-            Type to compute the result for. Can be a single type or a tuple of types.
+            Type to compute the result for.
+            Can be a single type or an iterable of types.
         """
         return self.get(tp).compute()
 
     def visualize(
-        self, tp: type | Tuple[type, ...], **kwargs: Any
+        self, tp: type | Iterable[type], **kwargs: Any
     ) -> graphviz.Digraph:  # type: ignore[name-defined] # noqa: F821
         """
         Return a graphviz Digraph object representing the graph for the given keys.
@@ -633,7 +650,8 @@ class Pipeline:
         Parameters
         ----------
         tp:
-            Type to visualize the graph for. Can be a single type or a tuple of types.
+            Type to visualize the graph for.
+            Can be a single type or an iterable of types.
         kwargs:
             Keyword arguments passed to :py:class:`graphviz.Digraph`.
         """
@@ -641,7 +659,7 @@ class Pipeline:
 
     def get(
         self,
-        keys: type | Tuple[type, ...] | Item[T],
+        keys: type | Iterable[type] | Item[T],
         *,
         scheduler: Optional[Scheduler] = None,
     ) -> TaskGraph:
@@ -651,19 +669,23 @@ class Pipeline:
         Parameters
         ----------
         keys:
-            Type to compute the result for. Can be a single type or a tuple of types.
+            Type to compute the result for.
+            Can be a single type or an iterable of types.
         scheduler:
             Optional scheduler to use for computing the result. If not given, a
             :py:class:`NaiveScheduler` is used if `dask` is not installed,
             otherwise dask's threaded scheduler is used.
         """
-        if isinstance(keys, tuple):
+        if _is_multiple_keys(keys):
+            keys = tuple(keys)  # type: ignore[arg-type]
             graph: Graph = {}
             for t in keys:
                 graph.update(self.build(t))
         else:
-            graph = self.build(keys)
-        return TaskGraph(graph=graph, keys=keys, scheduler=scheduler)
+            graph = self.build(keys)  # type: ignore[arg-type]
+        return TaskGraph(
+            graph=graph, keys=keys, scheduler=scheduler  # type: ignore[arg-type]
+        )
 
     @overload
     def bind_and_call(self, fns: Callable[..., T], /) -> T:
