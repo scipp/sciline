@@ -16,7 +16,6 @@ from typing import (
     Optional,
     Tuple,
     Type,
-    TypeGuard,
     TypeVar,
     Union,
     get_args,
@@ -119,7 +118,7 @@ def _find_nodes_in_paths(
 
 def _is_multiple_keys(
     keys: type | Iterable[type] | Item[T],
-) -> TypeGuard[Iterable[type]]:
+) -> bool:
     # Cannot simply use isinstance(keys, Iterable) because that is True for
     # generic aliases of iterable types, e.g.,
     #
@@ -678,7 +677,7 @@ class Pipeline:
             otherwise dask's threaded scheduler is used.
         """
         if _is_multiple_keys(keys):
-            keys = tuple(keys)
+            keys = tuple(keys)  # type: ignore[arg-type]
             graph: Graph = {}
             for t in keys:
                 graph.update(self.build(t))
