@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright (c) 2023 Scipp contributors (https://github.com/scipp)
 
 name: Docs
 
@@ -39,27 +41,23 @@ jobs:
     name: Build documentation
     runs-on: 'ubuntu-20.04'
     steps:
-
       - run: sudo apt install --yes graphviz pandoc
       - uses: actions/checkout@v3
         with:
           ref: ${{ inputs.branch == '' && github.ref_name || inputs.branch }}
           fetch-depth: 0  # history required so cmake can determine version
-      - uses: actions/setup-python@v3
+      - uses: actions/setup-python@v4
         with:
-
-          python-version: '3.8'
+          python-version-file: '.github/workflows/python-version-ci'
       - run: python -m pip install --upgrade pip
       - run: python -m pip install -r requirements/ci.txt
-      - run: |
-          tox --skip-pkg-install -e docs -- sciline==${VERSION}
-
-        if: ${{ inputs.publish }}
+      - run: tox -e releasedocs -- ${VERSION}
+        if: ${{ inputs.version != '' }}
       - run: tox -e docs
-        if: ${{ !inputs.publish }}
+        if: ${{ inputs.version == '' }}
       - uses: actions/upload-artifact@v3
         with:
-          name: html
+          name: docs_html
           path: html/
 
       - uses: JamesIves/github-pages-deploy-action@v4.4.3
@@ -68,5 +66,4 @@ jobs:
           branch: gh-pages
           folder: html
           single-commit: true
-          clean-exclude: release
           ssh-key: ${{ secrets.GH_PAGES_DEPLOY_KEY }}

@@ -150,6 +150,8 @@ html_theme_options = {
             "type": "local",
         },
     ],
+    "footer_start": ["copyright", "sphinx-version"],
+    "footer_end": ["doc_version", "theme-version"],
 }
 html_context = {
     "doc_path": "docs",

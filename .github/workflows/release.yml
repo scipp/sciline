@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright (c) 2023 Scipp contributors (https://github.com/scipp)
+
 name: Release
 
 on:
@@ -15,19 +18,23 @@ jobs:
     runs-on: 'ubuntu-20.04'
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         with:
           submodules: true
           fetch-depth: 0  # history required so cmake can determine version
 
-      - uses: conda-incubator/setup-miniconda@v2
-      - run: conda install --yes conda-build
-      - run: conda build --channel conda-forge --channel scipp --python=3.8 --no-anaconda-upload --override-channels --output-folder conda/package conda
+      - uses: mamba-org/setup-micromamba@v1
+        with:
+          environment-name: build-env
+          create-args: >-
+            conda-build
+            boa
+      - run: conda mambabuild --channel conda-forge --channel scipp --no-anaconda-upload --override-channels --output-folder conda/package conda
 
-      - uses: actions/upload-artifact@v2
+      - uses: actions/upload-artifact@v3
         with:
           name: conda-package-noarch
-          path: conda/package/*/sciline*.tar.bz2
+          path: conda/package/noarch/*.tar.bz2
 
   build_wheels:
     name: Wheels
@@ -38,10 +45,9 @@ jobs:
         with:
           fetch-depth: 0  # history required so setuptools_scm can determine version
 
-      - uses: actions/setup-python@v3
+      - uses: actions/setup-python@v4
         with:
-          python-version: '3.8'
-
+          python-version-file: '.github/workflows/python-version-ci'
 
       - run: python -m pip install --upgrade pip
       - run: python -m pip install -r requirements/wheels.txt
@@ -68,18 +74,18 @@ jobs:
       - uses: pypa/gh-action-pypi-publish@v1.8.10
 
   upload_conda:
-    name: Deploy Conda Forge
+    name: Deploy Conda
     needs: [build_wheels, build_conda]
     runs-on: 'ubuntu-20.04'
     if: github.event_name == 'release' && github.event.action == 'published'
 
     steps:
       - uses: actions/download-artifact@v3
-      - uses: conda-incubator/setup-miniconda@v2
+      - uses: mamba-org/setup-micromamba@v1
         with:
-          python-version: '3.8'
-
-      - run: conda install -c conda-forge --yes anaconda-client
+          environment-name: upload-env
+          create-args: >-
+            anaconda-client
       - run: anaconda --token ${{ secrets.ANACONDATOKEN }} upload --user scipp --label main $(ls conda-package-*/*/*.tar.bz2)
 
   docs:
@@ -87,5 +93,22 @@ jobs:
     uses: ./.github/workflows/docs.yml
     with:
       publish: ${{ github.event_name == 'release' && github.event.action == 'published' }}
-      version: ${{ github.ref_name }}
     secrets: inherit
+
+  assets:
+    name: Upload docs
+    needs: docs
+    runs-on: 'ubuntu-20.04'
+    permissions:
+      contents: write  # This is needed so that the action can upload the asset
+    steps:
+    - uses: actions/download-artifact@v3
+    - name: Zip documentation
+      run: |
+        mv docs_html documentation-${{ github.ref_name }}
+        zip -r documentation-${{ github.ref_name }}.zip documentation-${{ github.ref_name }}
+    - name: Upload release assets
+      uses: svenstaro/upload-release-action@v2
+      with:
+        file: ./documentation-${{ github.ref_name }}.zip
+        overwrite: false

@@ -10,7 +10,6 @@ on:
         default: 'ubuntu-20.04'
         type: string
       python-version:
-        default: '3.8'
         type: string
       tox-env:
         default: 'test'
@@ -27,7 +26,6 @@ on:
         default: 'ubuntu-20.04'
         type: string
       python-version:
-        default: '3.8'
         type: string
       tox-env:
         default: 'test'
@@ -56,4 +54,3 @@ jobs:
         with:
           name: CoverageReport
           path: coverage_html/
-
