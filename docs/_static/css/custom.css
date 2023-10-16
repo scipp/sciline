@@ -1,0 +1,21 @@
+html[data-theme="light"] {
+    /* match pst-color-text-muted (used in header buttons) */
+    --scipp-filter-header-icon: saturate(0) brightness(0.696);
+}
+
+html[data-theme="dark"] {
+    /* match pst-color-text-muted (used in header buttons) */
+    --scipp-filter-header-icon: saturate(0) brightness(1.161);
+}
+
+/* This selects custom icon links in the header but not the builtin ones.
+ * Currently, this is only the anaconda logo and the filters are adjusted to it.
+ */
+.bd-header .navbar-nav li a.nav-link .icon-link-image {
+    filter: var(--scipp-filter-header-icon);
+}
+
+.bd-header .navbar-nav li a.nav-link .icon-link-image:hover {
+    /* match primary color */
+    filter: hue-rotate(85deg) saturate(0.829) brightness(0.945);
+}
