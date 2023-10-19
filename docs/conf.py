@@ -122,14 +122,17 @@ html_theme_options = {
     "primary_sidebar_end": ["edit-this-page", "sourcelink"],
     "secondary_sidebar_items": [],
     "show_nav_level": 1,
-    "header_links_before_dropdown": 4,
+    # Adjust this to ensure external links are moved to "Move" menu
+    "header_links_before_dropdown": 5,
     "pygment_light_style": "github-light-high-contrast",
     "pygment_dark_style": "github-dark-high-contrast",
     "logo": {
         "image_light": "_static/logo.svg",
         "image_dark": "_static/logo-dark.svg",
     },
-    "external_links": [],
+    "external_links": [
+        {"name": "Scipp", "url": "https://scipp.github.io"},
+    ],
     "icon_links": [
         {
             "name": "GitHub",

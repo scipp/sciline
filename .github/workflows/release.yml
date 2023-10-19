@@ -86,7 +86,7 @@ jobs:
           environment-name: upload-env
           create-args: >-
             anaconda-client
-      - run: anaconda --token ${{ secrets.ANACONDATOKEN }} upload --user scipp --label main $(ls conda-package-*/*/*.tar.bz2)
+      - run: anaconda --token ${{ secrets.ANACONDATOKEN }} upload --user scipp --label main $(ls conda-package-noarch/*.tar.bz2)
 
   docs:
     needs: [upload_conda, upload_pypi]
