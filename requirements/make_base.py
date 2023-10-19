@@ -36,7 +36,6 @@ def as_nightly(name: str) -> str:
 
 
 nightly = args.nightly.split(",") if args.nightly else []
-print(nightly)
 dependencies = [dep for dep in dependencies if not dep.startswith(tuple(nightly))]
 dependencies += [as_nightly(arg) for arg in nightly]
 

@@ -5,9 +5,6 @@ name: Nightly CI
 
 on:
   workflow_dispatch:
-  push:
-    paths:
-      - '.github/workflows/nightly.yml'
   schedule:
     - cron: '0 0 * * *'
 
