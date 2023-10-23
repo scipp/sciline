@@ -609,6 +609,30 @@ def test_init_with_sciline_Scope_subclass_param_works() -> None:
     assert pl.compute(A[str]) == A(2)
 
 
+def test_sciline_Scope_typevar_constraints_are_considered() -> None:
+    A = NewType('A', str)
+    B = NewType('B', str)
+    C = NewType('C', str)
+
+    V1 = TypeVar('V1', A, B)
+    V2 = TypeVar('V2', A, B, C)
+
+    class H(sl.Scope[V2, str], str):
+        pass
+
+    def p1(x: V1) -> H[V1]:
+        return H[V1](f"H[{x}]")
+
+    def p2(x: C) -> H[C]:
+        return H[C]("H[Clementine]")
+
+    pl = sl.Pipeline([p1, p2], params={A: 'A', B: 'B', C: 'C'})
+
+    assert str(pl.compute(H[A])) == "H[A]"
+    assert str(pl.compute(H[B])) == "H[B]"
+    assert str(pl.compute(H[C])) == "H[Clementine]"
+
+
 def test_building_graph_with_cycle_succeeds() -> None:
     def f(x: int) -> float:
         return float(x)

@@ -53,21 +53,29 @@ class AmbiguousProvider(Exception):
     """Raised when multiple providers are found for a type."""
 
 
+def _is_compatible_type(
+    requested: Key,
+    provided: Key | TypeVar,
+) -> bool:
+    """
+    Check if a type is compatible to a provided type.
+    Types must either by equal, or the provided type must be a TypeVar
+    with constraints satisfied by the requested type."""
+    if isinstance(provided, TypeVar):
+        return len(provided.__constraints__) == 0 or any(
+            _is_compatible_type(requested, c) for c in provided.__constraints__
+        )
+    return requested == provided
+
+
 def _is_compatible_type_tuple(
     requested: tuple[Key, ...],
     provided: tuple[Key | TypeVar, ...],
 ) -> bool:
     """
     Check if a tuple of requested types is compatible with a tuple of provided types.
-
-    Types in the tuples must either by equal, or the provided type must be a TypeVar.
     """
-    for req, prov in zip(requested, provided):
-        if isinstance(prov, TypeVar):
-            continue
-        if req != prov:
-            return False
-    return True
+    return all(map(_is_compatible_type, requested, provided))
 
 
 def _bind_free_typevars(tp: TypeVar | Key, bound: Dict[TypeVar, Key]) -> Key:
