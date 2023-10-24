@@ -6,19 +6,19 @@
 #    pip-compile-multi
 #
 -r test.txt
-click==8.1.5
+click==8.1.7
     # via dask
-cloudpickle==2.2.1
+cloudpickle==3.0.0
     # via dask
 dask==2023.5.0
     # via -r test-dask.in
-fsspec==2023.6.0
+fsspec==2023.9.2
     # via dask
 importlib-metadata==6.8.0
     # via dask
 locket==1.0.0
     # via partd
-partd==1.4.0
+partd==1.4.1
     # via dask
 pyyaml==6.0.1
     # via dask
@@ -26,5 +26,5 @@ toolz==0.12.0
     # via
     #   dask
     #   partd
-zipp==3.16.2
+zipp==3.17.0
     # via importlib-metadata

@@ -31,3 +31,5 @@ __all__ = [
     "UnsatisfiedRequirement",
     "scheduler",
 ]
+
+del importlib
