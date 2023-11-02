@@ -20,6 +20,9 @@ on:
       coverage-report:
         default: false
         type: boolean
+      checkout_ref:
+        default: ''
+        type: string
   workflow_call:
     inputs:
       os-variant:
@@ -36,6 +39,9 @@ on:
       coverage-report:
         default: false
         type: boolean
+      checkout_ref:
+        default: ''
+        type: string
 
 jobs:
   test:
@@ -43,6 +49,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v3
+        with:
+          ref: ${{ inputs.checkout_ref }}
       - uses: actions/setup-python@v3
         with:
           python-version: ${{ inputs.python-version }}

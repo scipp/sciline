@@ -26,13 +26,17 @@ with open("base.in", "w") as f:
     f.write("\n".join(dependencies))
 
 
-def as_nightly(name: str) -> str:
-    if name == "scipp":
+def as_nightly(repo: str) -> str:
+    if "/" in repo:
+        org, repo = repo.split("/")
+    else:
+        org = "scipp"
+    if repo == "scipp":
         version = f"cp{sys.version_info.major}{sys.version_info.minor}"
         base = "https://github.com/scipp/scipp/releases/download/nightly/scipp-nightly"
         suffix = "manylinux_2_17_x86_64.manylinux2014_x86_64.whl"
         return "-".join([base, version, version, suffix])
-    return f"{name} @ git+https://github.com/scipp/{name}@main"
+    return f"{repo} @ git+https://github.com/{org}/{repo}@main"
 
 
 nightly = args.nightly.split(",") if args.nightly else []

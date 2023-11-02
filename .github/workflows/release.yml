@@ -21,7 +21,7 @@ jobs:
       - uses: actions/checkout@v3
         with:
           submodules: true
-          fetch-depth: 0  # history required so cmake can determine version
+          fetch-depth: 0  # history required so setuptools_scm can determine version
 
       - uses: mamba-org/setup-micromamba@v1
         with:
@@ -84,8 +84,10 @@ jobs:
       - uses: mamba-org/setup-micromamba@v1
         with:
           environment-name: upload-env
+          # frozen python due to breaking removal of 'imp' in 3.12
           create-args: >-
             anaconda-client
+            python=3.11
       - run: anaconda --token ${{ secrets.ANACONDATOKEN }} upload --user scipp --label main $(ls conda-package-noarch/*.tar.bz2)
 
   docs:
