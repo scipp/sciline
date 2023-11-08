@@ -12,7 +12,7 @@ alabaster==0.7.13
     # via sphinx
 annotated-types==0.6.0
     # via pydantic
-asttokens==2.4.0
+asttokens==2.4.1
     # via stack-data
 attrs==23.1.0
     # via
@@ -20,7 +20,7 @@ attrs==23.1.0
     #   referencing
 autodoc-pydantic==2.0.1
     # via -r docs.in
-babel==2.13.0
+babel==2.13.1
     # via
     #   pydata-sphinx-theme
     #   sphinx
@@ -34,9 +34,9 @@ bleach==6.1.0
     # via nbconvert
 certifi==2023.7.22
     # via requests
-charset-normalizer==3.3.0
+charset-normalizer==3.3.2
     # via requests
-comm==0.1.4
+comm==0.2.0
     # via ipykernel
 debugpy==1.8.0
     # via ipykernel
@@ -50,7 +50,7 @@ docutils==0.20.1
     #   nbsphinx
     #   pydata-sphinx-theme
     #   sphinx
-executing==2.0.0
+executing==2.0.1
     # via stack-data
 fastjsonschema==2.18.1
     # via nbformat
@@ -66,11 +66,11 @@ importlib-metadata==6.8.0
     #   jupyter-client
     #   nbconvert
     #   sphinx
-importlib-resources==6.1.0
+importlib-resources==6.1.1
     # via
     #   jsonschema
     #   jsonschema-specifications
-ipykernel==6.25.2
+ipykernel==6.26.0
     # via -r docs.in
 ipython==8.12.3
     # via
@@ -84,15 +84,15 @@ jinja2==3.1.2
     #   nbconvert
     #   nbsphinx
     #   sphinx
-jsonschema==4.19.1
+jsonschema==4.19.2
     # via nbformat
 jsonschema-specifications==2023.7.1
     # via jsonschema
-jupyter-client==8.4.0
+jupyter-client==8.6.0
     # via
     #   ipykernel
     #   nbclient
-jupyter-core==5.4.0
+jupyter-core==5.5.0
     # via
     #   ipykernel
     #   jupyter-client
@@ -121,9 +121,9 @@ mistune==3.0.2
     # via nbconvert
 myst-parser==2.0.0
     # via -r docs.in
-nbclient==0.8.0
+nbclient==0.9.0
     # via nbconvert
-nbconvert==7.9.2
+nbconvert==7.11.0
     # via nbsphinx
 nbformat==5.9.2
     # via
@@ -168,7 +168,7 @@ pydantic-core==2.10.1
     # via pydantic
 pydantic-settings==2.0.3
     # via autodoc-pydantic
-pydata-sphinx-theme==0.14.1
+pydata-sphinx-theme==0.14.3
     # via -r docs.in
 pygments==2.16.1
     # via
@@ -195,7 +195,7 @@ referencing==0.30.2
     #   jsonschema-specifications
 requests==2.31.0
     # via sphinx
-rpds-py==0.10.6
+rpds-py==0.12.0
     # via
     #   jsonschema
     #   referencing
@@ -244,7 +244,7 @@ tornado==6.3.3
     # via
     #   ipykernel
     #   jupyter-client
-traitlets==5.11.2
+traitlets==5.13.0
     # via
     #   comm
     #   ipykernel
@@ -265,7 +265,7 @@ typing-extensions==4.8.0
     #   pydata-sphinx-theme
 urllib3==2.0.7
     # via requests
-wcwidth==0.2.8
+wcwidth==0.2.9
     # via prompt-toolkit
 webencodings==0.5.1
     # via
