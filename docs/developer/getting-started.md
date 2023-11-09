@@ -78,14 +78,14 @@ tox -e linkcheck
 Build the documentation using
 
 ```sh
-python -m sphinx -v -b html -d build/.doctrees docs build/html
+python -m sphinx -v -b html -d .tox/docs_doctrees docs html
 ```
 
 Additionally, test the documentation using
 
 ```sh
-python -m sphinx -v -b doctest -d build/.doctrees docs build/html
-python -m sphinx -v -b linkcheck -d build/.doctrees docs build/html
+python -m sphinx -v -b doctest -d .tox/docs_doctrees docs html
+python -m sphinx -v -b linkcheck -d .tox/docs_doctrees docs html
 ```
 ````
 `````

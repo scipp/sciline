@@ -12,7 +12,7 @@ cloudpickle==3.0.0
     # via dask
 dask==2023.5.0
     # via -r test-dask.in
-fsspec==2023.9.2
+fsspec==2023.10.0
     # via dask
 importlib-metadata==6.8.0
     # via dask
