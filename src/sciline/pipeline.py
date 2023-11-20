@@ -305,7 +305,7 @@ class Pipeline:
 
     def __init__(
         self,
-        providers: Optional[List[Provider]] = None,
+        providers: Optional[Iterable[Provider]] = None,
         *,
         params: Optional[Dict[type, Any]] = None,
     ):
