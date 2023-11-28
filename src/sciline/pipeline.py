@@ -457,6 +457,16 @@ class Pipeline:
                 for args, subprovider in subproviders.items()
                 if _is_compatible_type_tuple(requested, args)
             ]
+            typevar_counts = [
+                sum(1 for t in args if isinstance(t, TypeVar)) for args, _ in matches
+            ]
+            min_typevar_count = min(typevar_counts, default=0)
+            matches = [
+                m
+                for count, m in zip(typevar_counts, matches)
+                if count == min_typevar_count
+            ]
+
             if len(matches) == 1:
                 args, provider = matches[0]
                 bound = {
