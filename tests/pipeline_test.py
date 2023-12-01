@@ -1197,3 +1197,7 @@ def test_pipeline_with_generics_setitem_on_copy_does_not_affect_original() -> No
     b[RawData[Sample]] = 7
     assert a.compute(Result) == 29
     assert b.compute(Result) == 53
+
+def test_html_repr() -> None:
+    pipeline = sl.Pipeline([make_int], params={float: 5.0})
+    assert isinstance(pipeline._repr_html_(), str)

@@ -26,6 +26,7 @@ from typing import (
 
 from sciline.task_graph import TaskGraph
 
+from .display import ProviderDisplayData, ProviderKind, pipeline_html_repr
 from .domain import Scope, ScopeTwoParams
 from .handler import (
     ErrorHandler,
@@ -37,6 +38,7 @@ from .param_table import ParamTable
 from .scheduler import Scheduler
 from .series import Series
 from .typing import Graph, Item, Key, Label, Provider, get_optional, get_union
+from .utils import groupby, qualname
 
 T = TypeVar('T')
 KeyType = TypeVar('KeyType')
@@ -136,6 +138,14 @@ def _is_multiple_keys(
 
 def provide_none() -> None:
     return None
+
+
+def _kind_of_provider(p: Callable[..., Any]) -> ProviderKind:
+    if qualname(p) == f'{qualname(Pipeline.__setitem__)}.<locals>.<lambda>':
+        return 'parameter'
+    if qualname(p) == f'{qualname(Pipeline.set_param_table)}.<locals>.<lambda>':
+        return 'table'
+    return 'function'
 
 
 class ReplicatorBase(Generic[IndexType]):
@@ -808,3 +818,42 @@ class Pipeline:
 
     def __copy__(self) -> Pipeline:
         return self.copy()
+
+    def _repr_html_(self) -> str:
+        providers_without_parameters = (
+            (p, tuple(), v) for p, v in self._providers.items()
+        )  # type: ignore[var-annotated]
+        providers_with_parameters = (
+            (p, c, v)
+            for p in self._subproviders
+            for c, v in self._subproviders[p].items()
+        )
+        providers = groupby(
+            lambda p: p.kind,
+            (
+                ProviderDisplayData(
+                    origin,
+                    args,
+                    k := _kind_of_provider(value),
+                    value() if k != 'function' else value,
+                )
+                for origin, args, value in chain(
+                    providers_with_parameters, providers_without_parameters
+                )
+            ),
+        )
+        param_tables_by_name = groupby(
+            lambda p: p.origin.label[0].tp, providers['table']
+        )
+        param_tables = []
+        for table_name, table_cells in param_tables_by_name.items():
+            columns = groupby(lambda p: p.origin.tp, table_cells)
+            index = [p.origin.label[0].index for p in next(iter(columns.values()))]
+            param_tables.append(
+                ParamTable(
+                    table_name,
+                    {k: [v.value for v in col] for k, col in columns.items()},
+                    index=index,
+                )
+            )
+        return pipeline_html_repr(providers, param_tables)
