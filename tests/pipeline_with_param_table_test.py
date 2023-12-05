@@ -594,3 +594,14 @@ def test_params_in_table_can_be_generic() -> None:
 
     assert pipeline.compute(Str[int]) == Str[int]('1,2')
     assert pipeline.compute(Str[float]) == Str[float]('1.5,2.5')
+
+
+def test_compute_time_handler_works_alongside_param_table() -> None:
+    Missing = NewType("Missing", str)
+
+    def process(x: float, missing: Missing) -> str:
+        return str(x) + missing
+
+    pl = sl.Pipeline([process])
+    pl.set_param_table(sl.ParamTable(int, {float: [1.0, 2.0, 3.0]}))
+    pl.get(sl.Series[int, str], handler=sl.HandleAsComputeTimeException())

@@ -17,6 +17,7 @@ from typing import (
 
 import graphviz
 
+from .handler import HandleAsComputeTimeException
 from .pipeline import Pipeline, SeriesProvider
 from .typing import Graph, Item, Key, get_optional
 
@@ -104,13 +105,25 @@ def _to_subgraphs(graph: FormattedGraph) -> Dict[str, FormattedGraph]:
 
 def _add_subgraph(graph: FormattedGraph, dot: Digraph, subgraph: Digraph) -> None:
     for p, (p_name, args, ret) in graph.items():
-        subgraph.node(
-            ret.name, ret.name, shape='box3d' if ret.collapsed else 'rectangle'
-        )
+        unsatisfied = f'{_qualname(HandleAsComputeTimeException.handle_unsatisfied_requirement)}.<locals>.unsatisfied_sentinel'  # noqa: E501
+        if p_name == unsatisfied:
+            subgraph.node(
+                ret.name,
+                ret.name,
+                shape='box3d' if ret.collapsed else 'rectangle',
+                color='red',
+                fontcolor='red',  # Set text color to red
+                style='dashed',
+            )
+        else:
+            subgraph.node(
+                ret.name, ret.name, shape='box3d' if ret.collapsed else 'rectangle'
+            )
         # Do not draw dummy providers created by Pipeline when setting instances
         if p_name in (
             f'{_qualname(Pipeline.__setitem__)}.<locals>.<lambda>',
             f'{_qualname(Pipeline.set_param_table)}.<locals>.<lambda>',
+            unsatisfied,
         ):
             continue
         # Do not draw the internal provider gathering index-dependent results into

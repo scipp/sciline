@@ -3,7 +3,6 @@
 from typing import Generic, Optional, TypeVar
 
 import sciline as sl
-from sciline.visualize import to_graphviz
 
 
 def test_can_visualize_graph_with_cycle() -> None:
@@ -14,8 +13,16 @@ def test_can_visualize_graph_with_cycle() -> None:
         return int(x)
 
     pipeline = sl.Pipeline([int_to_float, float_to_int])
-    graph = pipeline.build(int)
-    to_graphviz(graph)
+    graph = pipeline.get(int)
+    graph.visualize()
+
+
+def test_can_visualize_graph_with_unsatisfied_requirements() -> None:
+    def int_to_float(x: int) -> float:
+        return float(x)
+
+    pipeline = sl.Pipeline([int_to_float])
+    pipeline.visualize(int)
 
 
 def test_generic_types_formatted_without_prefixes() -> None:

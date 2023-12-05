@@ -27,6 +27,12 @@ from typing import (
 from sciline.task_graph import TaskGraph
 
 from .domain import Scope, ScopeTwoParams
+from .handler import (
+    ErrorHandler,
+    HandleAsBuildTimeException,
+    HandleAsComputeTimeException,
+    UnsatisfiedRequirement,
+)
 from .param_table import ParamTable
 from .scheduler import Scheduler
 from .series import Series
@@ -37,10 +43,6 @@ KeyType = TypeVar('KeyType')
 ValueType = TypeVar('ValueType')
 IndexType = TypeVar('IndexType')
 LabelType = TypeVar('LabelType')
-
-
-class UnsatisfiedRequirement(Exception):
-    """Raised when a type cannot be provided."""
 
 
 class UnboundTypeVar(Exception):
@@ -444,8 +446,9 @@ class Pipeline:
             self._providers[key] = provider
 
     def _get_provider(
-        self, tp: Union[Type[T], Item[T]]
+        self, tp: Union[Type[T], Item[T]], handler: Optional[ErrorHandler] = None
     ) -> Tuple[Callable[..., T], Dict[TypeVar, Key]]:
+        handler = handler or HandleAsBuildTimeException()
         if (provider := self._providers.get(tp)) is not None:
             return provider, {}
         elif (origin := get_origin(tp)) is not None and (
@@ -477,10 +480,16 @@ class Pipeline:
                 return provider, bound
             elif len(matches) > 1:
                 raise AmbiguousProvider("Multiple providers found for type", tp)
-        raise UnsatisfiedRequirement("No provider found for type", tp)
+
+        return handler.handle_unsatisfied_requirement(tp), {}
 
     def build(
-        self, tp: Union[Type[T], Item[T]], /, search_param_tables: bool = False
+        self,
+        tp: Union[Type[T], Item[T]],
+        /,
+        *,
+        handler: ErrorHandler,
+        search_param_tables: bool = False,
     ) -> Graph:
         """
         Return a dict of providers required for building the requested type `tp`.
@@ -506,12 +515,15 @@ class Pipeline:
                 graph[tp] = (_param_sentinel, (self._param_name_to_table_key[tp],))
                 continue
             if get_origin(tp) == Series:
-                graph.update(self._build_series(tp))  # type: ignore[arg-type]
+                sub = self._build_series(tp, handler=handler)  # type: ignore[arg-type]
+                graph.update(sub)
                 continue
             if (optional_arg := get_optional(tp)) is not None:
                 try:
                     optional_subgraph = self.build(
-                        optional_arg, search_param_tables=search_param_tables
+                        optional_arg,
+                        search_param_tables=search_param_tables,
+                        handler=HandleAsBuildTimeException(),
                     )
                 except UnsatisfiedRequirement:
                     graph[tp] = (provide_none, ())
@@ -520,7 +532,7 @@ class Pipeline:
                     graph.update(optional_subgraph)
                 continue
             provider: Callable[..., T]
-            provider, bound = self._get_provider(tp)
+            provider, bound = self._get_provider(tp, handler=handler)
             tps = get_type_hints(provider)
             args = tuple(
                 _bind_free_typevars(t, bound=bound)
@@ -533,7 +545,9 @@ class Pipeline:
                     stack.append(arg)
         return graph
 
-    def _build_series(self, tp: Type[Series[KeyType, ValueType]]) -> Graph:
+    def _build_series(
+        self, tp: Type[Series[KeyType, ValueType]], handler: ErrorHandler
+    ) -> Graph:
         """
         Build (sub)graph for a Series type implementing ParamTable-based functionality.
 
@@ -593,7 +607,7 @@ class Pipeline:
         value_type: Type[ValueType]
         index_name, value_type = get_args(tp)
 
-        subgraph = self.build(value_type, search_param_tables=True)
+        subgraph = self.build(value_type, search_param_tables=True, handler=handler)
 
         replicator: ReplicatorBase[KeyType]
         if (
@@ -665,13 +679,14 @@ class Pipeline:
         kwargs:
             Keyword arguments passed to :py:class:`graphviz.Digraph`.
         """
-        return self.get(tp).visualize(**kwargs)
+        return self.get(tp, handler=HandleAsComputeTimeException()).visualize(**kwargs)
 
     def get(
         self,
         keys: type | Iterable[type] | Item[T],
         *,
         scheduler: Optional[Scheduler] = None,
+        handler: Optional[ErrorHandler] = None,
     ) -> TaskGraph:
         """
         Return a TaskGraph for the given keys.
@@ -685,14 +700,21 @@ class Pipeline:
             Optional scheduler to use for computing the result. If not given, a
             :py:class:`NaiveScheduler` is used if `dask` is not installed,
             otherwise dask's threaded scheduler is used.
+        handler:
+            Handler for unsatisfied requirements. If not provided,
+            :py:class:`HandleAsBuildTimeException` is used, which raises an exception.
+            During development and debugging it can be helpful to use a handler that
+            raises an exception only when the graph is computed. This can be achieved
+            by passing :py:class:`HandleAsComputeTimeException` as the handler.
         """
+        handler = handler or HandleAsBuildTimeException()
         if _is_multiple_keys(keys):
             keys = tuple(keys)  # type: ignore[arg-type]
             graph: Graph = {}
             for t in keys:
-                graph.update(self.build(t))
+                graph.update(self.build(t, handler=handler))
         else:
-            graph = self.build(keys)  # type: ignore[arg-type]
+            graph = self.build(keys, handler=handler)  # type: ignore[arg-type]
         return TaskGraph(
             graph=graph, keys=keys, scheduler=scheduler  # type: ignore[arg-type]
         )
