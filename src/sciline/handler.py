@@ -13,7 +13,7 @@ class UnsatisfiedRequirement(Exception):
     """Raised when a type cannot be provided."""
 
 
-class Handler(Protocol):
+class ErrorHandler(Protocol):
     """Error handling protocol for pipelines."""
 
     def handle_unsatisfied_requirement(
@@ -22,7 +22,7 @@ class Handler(Protocol):
         ...
 
 
-class HandleAsBuildTimeException(Handler):
+class HandleAsBuildTimeException(ErrorHandler):
     """
     Error handler used by default.
 
@@ -35,7 +35,7 @@ class HandleAsBuildTimeException(Handler):
         raise UnsatisfiedRequirement('No provider found for type', tp)
 
 
-class HandleAsComputeTimeException(Handler):
+class HandleAsComputeTimeException(ErrorHandler):
     """
     Error handler used for Pipeline.visualize().
 

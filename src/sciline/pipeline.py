@@ -28,9 +28,9 @@ from sciline.task_graph import TaskGraph
 
 from .domain import Scope, ScopeTwoParams
 from .handler import (
+    ErrorHandler,
     HandleAsBuildTimeException,
     HandleAsComputeTimeException,
-    Handler,
     UnsatisfiedRequirement,
 )
 from .param_table import ParamTable
@@ -446,7 +446,7 @@ class Pipeline:
             self._providers[key] = provider
 
     def _get_provider(
-        self, tp: Union[Type[T], Item[T]], handler: Optional[Handler] = None
+        self, tp: Union[Type[T], Item[T]], handler: Optional[ErrorHandler] = None
     ) -> Tuple[Callable[..., T], Dict[TypeVar, Key]]:
         handler = handler or HandleAsBuildTimeException()
         if (provider := self._providers.get(tp)) is not None:
@@ -487,7 +487,7 @@ class Pipeline:
         self,
         tp: Union[Type[T], Item[T]],
         /,
-        handler: Handler,
+        handler: ErrorHandler,
         search_param_tables: bool = False,
     ) -> Graph:
         """
@@ -684,7 +684,7 @@ class Pipeline:
         keys: type | Iterable[type] | Item[T],
         *,
         scheduler: Optional[Scheduler] = None,
-        handler: Optional[Handler] = None,
+        handler: Optional[ErrorHandler] = None,
     ) -> TaskGraph:
         """
         Return a TaskGraph for the given keys.
