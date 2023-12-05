@@ -11,6 +11,7 @@ except importlib.metadata.PackageNotFoundError:
 
 from . import scheduler
 from .domain import Scope, ScopeTwoParams
+from .handler import HandleAsBuildTimeException, HandleAsComputeTimeException
 from .param_table import ParamTable
 from .pipeline import (
     AmbiguousProvider,

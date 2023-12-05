@@ -13,7 +13,7 @@ def as_float(x: int) -> float:
 
 def make_task_graph() -> Graph:
     pl = sl.Pipeline([as_float], params={int: 1})
-    return pl.build(float)
+    return pl.build(float, handler=sl.HandleAsBuildTimeException())
 
 
 def test_default_scheduler_is_dask_when_dask_available() -> None:

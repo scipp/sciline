@@ -617,7 +617,7 @@ def test_building_graph_with_cycle_succeeds() -> None:
         return int(x)
 
     pipeline = sl.Pipeline([f, g])
-    _ = pipeline.build(int)
+    _ = pipeline.get(int)
 
 
 def test_computing_graph_with_cycle_raises_CycleError() -> None:
@@ -907,3 +907,13 @@ def test_prioritizes_specialized_provider_raises() -> None:
 
     with pytest.raises(sl.UnsatisfiedRequirement):
         pl.compute(C[B, A])
+
+
+def test_compute_time_handler_allows_for_building_but_not_computing() -> None:
+    def func(x: int) -> float:
+        return 0.5 * x
+
+    pipeline = sl.Pipeline([func])
+    graph = pipeline.get(float, handler=sl.HandleAsComputeTimeException())
+    with pytest.raises(sl.UnsatisfiedRequirement):
+        graph.compute()
