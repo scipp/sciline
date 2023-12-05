@@ -515,7 +515,8 @@ class Pipeline:
                 graph[tp] = (_param_sentinel, (self._param_name_to_table_key[tp],))
                 continue
             if get_origin(tp) == Series:
-                graph.update(self._build_series(tp))  # type: ignore[arg-type]
+                sub = self._build_series(tp, handler=handler)  # type: ignore[arg-type]
+                graph.update(sub)
                 continue
             if (optional_arg := get_optional(tp)) is not None:
                 try:
@@ -544,7 +545,9 @@ class Pipeline:
                     stack.append(arg)
         return graph
 
-    def _build_series(self, tp: Type[Series[KeyType, ValueType]]) -> Graph:
+    def _build_series(
+        self, tp: Type[Series[KeyType, ValueType]], handler: ErrorHandler
+    ) -> Graph:
         """
         Build (sub)graph for a Series type implementing ParamTable-based functionality.
 
@@ -604,9 +607,7 @@ class Pipeline:
         value_type: Type[ValueType]
         index_name, value_type = get_args(tp)
 
-        subgraph = self.build(
-            value_type, search_param_tables=True, handler=HandleAsBuildTimeException()
-        )
+        subgraph = self.build(value_type, search_param_tables=True, handler=handler)
 
         replicator: ReplicatorBase[KeyType]
         if (
