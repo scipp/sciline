@@ -113,6 +113,7 @@ def _add_subgraph(graph: FormattedGraph, dot: Digraph, subgraph: Digraph) -> Non
                 shape='box3d' if ret.collapsed else 'rectangle',
                 color='red',
                 fontcolor='red',  # Set text color to red
+                style='dashed',
             )
         else:
             subgraph.node(
