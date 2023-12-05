@@ -298,14 +298,6 @@ class SeriesProvider(Generic[KeyType]):
         return Series(self.row_dim, dict(zip(self.labels, vals)))
 
 
-class unsatisfied_sentinel:
-    def __init__(self, tp: Type[T]) -> None:
-        self.tp = tp
-
-    def __call__(self) -> None:
-        raise UnsatisfiedRequirement(f'No provider found for type {self.tp}')
-
-
 class _param_sentinel:
     ...
 
