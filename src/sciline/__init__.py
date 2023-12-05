@@ -11,14 +11,13 @@ except importlib.metadata.PackageNotFoundError:
 
 from . import scheduler
 from .domain import Scope, ScopeTwoParams
-from .handler import HandleAsBuildTimeException, HandleAsComputeTimeException
-from .param_table import ParamTable
-from .pipeline import (
-    AmbiguousProvider,
-    Pipeline,
-    UnboundTypeVar,
+from .handler import (
+    HandleAsBuildTimeException,
+    HandleAsComputeTimeException,
     UnsatisfiedRequirement,
 )
+from .param_table import ParamTable
+from .pipeline import AmbiguousProvider, Pipeline, UnboundTypeVar
 from .series import Series
 
 __all__ = [
@@ -31,6 +30,8 @@ __all__ = [
     "UnboundTypeVar",
     "UnsatisfiedRequirement",
     "scheduler",
+    "HandleAsBuildTimeException",
+    "HandleAsComputeTimeException",
 ]
 
 del importlib

@@ -2,7 +2,7 @@
 # Copyright (c) 2023 Scipp contributors (https://github.com/scipp)
 from __future__ import annotations
 
-from typing import Callable, Protocol, Type, TypeVar, Union
+from typing import Callable, NoReturn, Protocol, Type, TypeVar, Union
 
 from .typing import Item
 
@@ -16,7 +16,9 @@ class UnsatisfiedRequirement(Exception):
 class Handler(Protocol):
     """Error handling protocol for pipelines."""
 
-    def handle_unsatisfied_requirement(self, tp: Union[Type[T], Item[T]]):
+    def handle_unsatisfied_requirement(
+        self, tp: Union[Type[T], Item[T]]
+    ) -> Callable[[], T]:
         ...
 
 
@@ -28,7 +30,7 @@ class HandleAsBuildTimeException(Handler):
     ensuring that errors are caught early, before starting costly computation.
     """
 
-    def handle_unsatisfied_requirement(self, tp: Union[Type[T], Item[T]]):
+    def handle_unsatisfied_requirement(self, tp: Union[Type[T], Item[T]]) -> NoReturn:
         """Raise an exception when a type cannot be provided."""
         raise UnsatisfiedRequirement('No provider found for type', tp)
 
@@ -46,7 +48,7 @@ class HandleAsComputeTimeException(Handler):
     ) -> Callable[[], T]:
         """Return a function that raises an exception when called."""
 
-        def unsatisfied_sentinel() -> None:
+        def unsatisfied_sentinel() -> NoReturn:
             raise UnsatisfiedRequirement('No provider found for type', tp)
 
         return unsatisfied_sentinel
