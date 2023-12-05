@@ -487,6 +487,7 @@ class Pipeline:
         self,
         tp: Union[Type[T], Item[T]],
         /,
+        *,
         handler: ErrorHandler,
         search_param_tables: bool = False,
     ) -> Graph:
