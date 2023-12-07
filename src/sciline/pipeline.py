@@ -479,7 +479,11 @@ class Pipeline:
                 }
                 return provider, bound
             elif len(matches) > 1:
-                raise AmbiguousProvider("Multiple providers found for type", tp)
+                matching_providers = [m[1].__name__ for m in matches]
+                raise AmbiguousProvider(
+                    f"Multiple providers found for type {tp}."
+                    f" Matching providers are: {matching_providers}."
+                )
 
         return handler.handle_unsatisfied_requirement(tp), {}
 
