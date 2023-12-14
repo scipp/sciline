@@ -72,6 +72,20 @@ def _is_compatible_type_tuple(
     return True
 
 
+def _qualname(obj: Any) -> Any:
+    return (
+        obj.__qualname__ if hasattr(obj, '__qualname__') else obj.__class__.__qualname__
+    )
+
+
+def _kind_of_provider(p: Callable[..., Any]) -> str:
+    if _qualname(p) == f'{_qualname(Pipeline.__setitem__)}.<locals>.<lambda>':
+        return 'parameter'
+    if _qualname(p) == f'{_qualname(Pipeline.set_param_table)}.<locals>.<lambda>':
+        return 'table'
+    return 'function'
+
+
 def _bind_free_typevars(tp: TypeVar | Key, bound: Dict[TypeVar, Key]) -> Key:
     if isinstance(tp, TypeVar):
         if (result := bound.get(tp)) is None:
@@ -642,18 +656,18 @@ class Pipeline:
         return graph
 
     @overload
-    def compute(self, tp: Type[T]) -> T:
+    def compute(self, tp: Type[T], check: bool) -> T:
         ...
 
     @overload
-    def compute(self, tp: Iterable[Type[T]]) -> Dict[Type[T], T]:
+    def compute(self, tp: Iterable[Type[T]], check: bool) -> Dict[Type[T], T]:
         ...
 
     @overload
-    def compute(self, tp: Item[T]) -> T:
+    def compute(self, tp: Item[T], check: bool) -> T:
         ...
 
-    def compute(self, tp: type | Iterable[type] | Item[T]) -> Any:
+    def compute(self, tp: type | Iterable[type] | Item[T], check: bool = False) -> Any:
         """
         Compute result for the given keys.
 
@@ -665,7 +679,7 @@ class Pipeline:
             Type to compute the result for.
             Can be a single type or an iterable of types.
         """
-        return self.get(tp).compute()
+        return self.get(tp, check=check).compute()
 
     def visualize(
         self, tp: type | Iterable[type], **kwargs: Any
@@ -691,6 +705,7 @@ class Pipeline:
         *,
         scheduler: Optional[Scheduler] = None,
         handler: Optional[ErrorHandler] = None,
+        check=False,
     ) -> TaskGraph:
         """
         Return a TaskGraph for the given keys.
@@ -710,6 +725,8 @@ class Pipeline:
             During development and debugging it can be helpful to use a handler that
             raises an exception only when the graph is computed. This can be achieved
             by passing :py:class:`HandleAsComputeTimeException` as the handler.
+        check:
+            Checks if the constructed graph uses all available parameters.
         """
         handler = handler or HandleAsBuildTimeException()
         if _is_multiple_keys(keys):
@@ -719,6 +736,23 @@ class Pipeline:
                 graph.update(self.build(t, handler=handler))
         else:
             graph = self.build(keys, handler=handler)  # type: ignore[arg-type]
+
+        if check:
+            all_providers = chain(
+                (
+                    (p[c], v)
+                    for p in self._subproviders
+                    for c, v in self._subproviders[p].items()
+                ),
+                ((p, v) for p, v in self._providers.items()),
+            )
+
+            for p, v in all_providers:
+                if p not in graph and _kind_of_provider(v) == 'parameter':
+                    raise RuntimeError(
+                        'Graph was expected to use all available parameters.'
+                    )
+
         return TaskGraph(
             graph=graph, keys=keys, scheduler=scheduler  # type: ignore[arg-type]
         )

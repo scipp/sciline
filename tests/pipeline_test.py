@@ -917,3 +917,12 @@ def test_compute_time_handler_allows_for_building_but_not_computing() -> None:
     graph = pipeline.get(float, handler=sl.HandleAsComputeTimeException())
     with pytest.raises(sl.UnsatisfiedRequirement):
         graph.compute()
+
+
+def test_pipeline_with_unused_parameter_raises_if_check() -> None:
+    Unused = NewType('Unused', str)
+    pipeline = sl.Pipeline([int_to_float, make_int])
+    pipeline[Unused] = 'Should raise'
+    assert pipeline.compute(float) == 1.5
+    with pytest.raises(RuntimeError):
+        assert pipeline.compute(float, check=True) == 1.5
