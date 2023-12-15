@@ -656,15 +656,15 @@ class Pipeline:
         return graph
 
     @overload
-    def compute(self, tp: Type[T], check: bool) -> T:
+    def compute(self, tp: Type[T], check: bool = ...) -> T:
         ...
 
     @overload
-    def compute(self, tp: Iterable[Type[T]], check: bool) -> Dict[Type[T], T]:
+    def compute(self, tp: Iterable[Type[T]], check: bool = ...) -> Dict[Type[T], T]:
         ...
 
     @overload
-    def compute(self, tp: Item[T], check: bool) -> T:
+    def compute(self, tp: Item[T], check: bool = ...) -> T:
         ...
 
     def compute(self, tp: type | Iterable[type] | Item[T], check: bool = False) -> Any:
@@ -705,7 +705,7 @@ class Pipeline:
         *,
         scheduler: Optional[Scheduler] = None,
         handler: Optional[ErrorHandler] = None,
-        check=False,
+        check: bool = False,
     ) -> TaskGraph:
         """
         Return a TaskGraph for the given keys.
