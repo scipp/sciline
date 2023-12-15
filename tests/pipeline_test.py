@@ -922,7 +922,8 @@ def test_compute_time_handler_allows_for_building_but_not_computing() -> None:
 def test_pipeline_with_unused_parameter_raises_if_check() -> None:
     Unused = NewType('Unused', str)
     pipeline = sl.Pipeline([int_to_float, make_int])
+    assert pipeline.compute(float, check=True) == 1.5
     pipeline[Unused] = 'Should raise'
-    assert pipeline.compute(float) == 1.5
     with pytest.raises(RuntimeError):
         assert pipeline.compute(float, check=True) == 1.5
+    assert pipeline.compute(float) == 1.5
