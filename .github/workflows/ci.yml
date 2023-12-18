@@ -13,7 +13,7 @@ on:
 jobs:
   formatting:
     name: Formatting and static analysis
-    runs-on: 'ubuntu-20.04'
+    runs-on: 'ubuntu-22.04'
     outputs:
       min_python: ${{ steps.vars.outputs.min_python }}
       min_tox_env: ${{ steps.vars.outputs.min_tox_env }}
@@ -39,7 +39,7 @@ jobs:
     needs: formatting
     strategy:
       matrix:
-        os: ['ubuntu-20.04']
+        os: ['ubuntu-22.04']
         tox-env: ['${{needs.formatting.outputs.min_tox_env}}', dask, mypy]
         include:
           - python-version: '${{needs.formatting.outputs.min_python}}'
@@ -54,4 +54,5 @@ jobs:
     uses: ./.github/workflows/docs.yml
     with:
       publish: false
+      linkcheck: ${{ contains(matrix.variant.os, 'ubuntu') && github.ref == 'refs/heads/main' }}
       branch: ${{ github.head_ref == '' && github.ref_name || github.head_ref }}

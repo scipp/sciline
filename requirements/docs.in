@@ -1,12 +1,11 @@
 -r base.in
-autodoc_pydantic
 graphviz
 ipykernel
 ipython!=8.7.0  # Breaks syntax highlighting in Jupyter code cells.
 myst-parser
 nbsphinx
-pydata-sphinx-theme>=0.13
+pydata-sphinx-theme>=0.14
 sphinx
-sphinx-autodoc-typehints==1.23.0  # Higher versions require sphinx-7, which is not supported by sphinx-design yet
+sphinx-autodoc-typehints
 sphinx-copybutton
 sphinx-design
