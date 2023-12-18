@@ -487,24 +487,26 @@ class Pipeline:
 
         return handler.handle_unsatisfied_requirement(tp), {}
 
-    def _get_union_provider(
-        self, tps: list[Union[Type[T], Item[T]]], handler: Optional[ErrorHandler] = None
+    def _get_unique_provider(
+        self, tp: Union[Type[T], Item[T]], handler: ErrorHandler
     ) -> Tuple[Callable[..., T], Dict[TypeVar, Key]]:
-        """Get a unique provider for a Union type."""
+        """Get a unique provider for a potential Union type."""
+        if (union_args := get_union(tp)) is None:
+            return self._get_provider(tp, handler=handler)
         provider: Callable[..., T]
         matching_types: list[Union[Type[T], Item[T]]] = []
-        for tp in tps:
+        for option in union_args:
             try:
-                provider, bound = self._get_provider(tp, handler=None)
+                provider, bound = self._get_provider(option, handler=None)
             except UnsatisfiedRequirement:
                 continue
             else:
-                matching_types.append(tp)
+                matching_types.append(option)
         if len(matching_types) == 0:
-            return handler.handle_unsatisfied_requirement(tps), {}
+            return handler.handle_unsatisfied_requirement(tp), {}
         if len(matching_types) > 1:
             raise AmbiguousProvider(
-                f"Multiple providers found for Union type {tps}."
+                f"Multiple providers found for Union type {tp}."
                 f" Matching types are: {matching_types}."
             )
         return provider, bound
@@ -557,11 +559,7 @@ class Pipeline:
                     graph[tp] = optional_subgraph.pop(optional_arg)
                     graph.update(optional_subgraph)
                 continue
-            provider: Callable[..., T]
-            if (union_args := get_union(tp)) is None:
-                provider, bound = self._get_provider(tp, handler=handler)
-            else:
-                provider, bound = self._get_union_provider(union_args, handler=handler)
+            provider, bound = self._get_unique_provider(tp, handler=handler)
             tps = get_type_hints(provider)
             args = tuple(
                 _bind_free_typevars(t, bound=bound)
