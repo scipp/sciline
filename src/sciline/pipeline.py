@@ -36,7 +36,7 @@ from .handler import (
 from .param_table import ParamTable
 from .scheduler import Scheduler
 from .series import Series
-from .typing import Graph, Item, Key, Label, Provider, get_optional
+from .typing import Graph, Item, Key, Label, Provider, get_optional, get_union
 
 T = TypeVar('T')
 KeyType = TypeVar('KeyType')
@@ -536,7 +536,23 @@ class Pipeline:
                     graph.update(optional_subgraph)
                 continue
             provider: Callable[..., T]
-            provider, bound = self._get_provider(tp, handler=handler)
+            if (union_args := get_union(tp)) is None:
+                provider, bound = self._get_provider(tp, handler=handler)
+            else:
+                # When requiring a Union we look for a unique match among the union args
+                matches = 0
+                for arg in union_args:
+                    try:
+                        provider, bound = self._get_provider(arg, handler=None)
+                        matches += 1
+                    except UnsatisfiedRequirement:
+                        continue
+                if matches == 0:
+                    handler.handle_unsatisfied_requirement(tp)
+                if matches > 1:
+                    raise AmbiguousProvider(
+                        f"Multiple providers found for Union type {tp}."
+                    )
             tps = get_type_hints(provider)
             args = tuple(
                 _bind_free_typevars(t, bound=bound)
