@@ -7,7 +7,7 @@
 #
 build==1.0.3
     # via -r wheels.in
-importlib-metadata==6.8.0
+importlib-metadata==7.0.0
     # via build
 packaging==23.2
     # via build

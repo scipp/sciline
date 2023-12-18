@@ -43,7 +43,7 @@ def write_dependencies(dependency_name: str, dependencies: List[str]) -> None:
 with open("../pyproject.toml", "rb") as toml_file:
     pyproject = tomli.load(toml_file)
     dependencies = pyproject["project"].get("dependencies")
-    if not dependencies:
+    if dependencies is None:
         raise RuntimeError("No dependencies found in pyproject.toml")
     dependencies = [dep.strip().strip('"') for dep in dependencies]
 
