@@ -493,8 +493,7 @@ class Pipeline:
         """Get a unique provider for a potential Union type."""
         if (union_args := get_union(tp)) is None:
             return self._get_provider(tp, handler=handler)
-        provider: Callable[..., T]
-        matching_types: list[Union[Type[T], Item[T]]] = []
+        matching_types = []
         for option in union_args:
             try:
                 provider, bound = self._get_provider(option, handler=None)
