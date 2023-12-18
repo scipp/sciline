@@ -487,6 +487,28 @@ class Pipeline:
 
         return handler.handle_unsatisfied_requirement(tp), {}
 
+    def _get_union_provider(
+        self, tps: list[Union[Type[T], Item[T]]], handler: Optional[ErrorHandler] = None
+    ) -> Tuple[Callable[..., T], Dict[TypeVar, Key]]:
+        """Get a unique provider for a Union type."""
+        provider: Callable[..., T]
+        matching_types: list[Union[Type[T], Item[T]]] = []
+        for tp in tps:
+            try:
+                provider, bound = self._get_provider(tp, handler=None)
+            except UnsatisfiedRequirement:
+                continue
+            else:
+                matching_types.append(tp)
+        if len(matching_types) == 0:
+            return handler.handle_unsatisfied_requirement(tps), {}
+        if len(matching_types) > 1:
+            raise AmbiguousProvider(
+                f"Multiple providers found for Union type {tps}."
+                f" Matching types are: {matching_types}."
+            )
+        return provider, bound
+
     def build(
         self,
         tp: Union[Type[T], Item[T]],
@@ -539,20 +561,7 @@ class Pipeline:
             if (union_args := get_union(tp)) is None:
                 provider, bound = self._get_provider(tp, handler=handler)
             else:
-                # When requiring a Union we look for a unique match among the union args
-                matches = 0
-                for arg in union_args:
-                    try:
-                        provider, bound = self._get_provider(arg, handler=None)
-                        matches += 1
-                    except UnsatisfiedRequirement:
-                        continue
-                if matches == 0:
-                    handler.handle_unsatisfied_requirement(tp)
-                if matches > 1:
-                    raise AmbiguousProvider(
-                        f"Multiple providers found for Union type {tp}."
-                    )
+                provider, bound = self._get_union_provider(union_args, handler=handler)
             tps = get_type_hints(provider)
             args = tuple(
                 _bind_free_typevars(t, bound=bound)
