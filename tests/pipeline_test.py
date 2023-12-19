@@ -577,11 +577,114 @@ def test_setitem_raises_TypeError_if_instance_does_not_match_key() -> None:
         pl[B[int]] = 1.0
 
 
-def test_setitem_raises_if_key_exists() -> None:
+def test_setitem_can_replace_param_with_param() -> None:
     pl = sl.Pipeline()
     pl[int] = 1
-    with pytest.raises(ValueError):
-        pl[int] = 2
+    pl[int] = 2
+    assert pl.compute(int) == 2
+
+
+def test_insert_can_replace_param_with_provider() -> None:
+    def func() -> int:
+        return 2
+
+    pl = sl.Pipeline()
+    pl[int] = 1
+    pl.insert(func)
+    assert pl.compute(int) == 2
+
+
+def test_setitem_can_replace_provider_with_param() -> None:
+    def func() -> int:
+        return 2
+
+    pl = sl.Pipeline()
+    pl.insert(func)
+    pl[int] = 1
+    assert pl.compute(int) == 1
+
+
+def test_insert_can_replace_provider_with_provider() -> None:
+    def func1() -> int:
+        return 1
+
+    def func2() -> int:
+        return 2
+
+    pl = sl.Pipeline()
+    pl.insert(func1)
+    pl.insert(func2)
+    assert pl.compute(int) == 2
+
+
+def test_insert_can_replace_generic_provider_with_generic_provider() -> None:
+    T = TypeVar('T', int, float)
+
+    @dataclass
+    class A(Generic[T]):
+        value: T
+
+    def func1(x: T) -> A[T]:
+        return A[T](x)
+
+    def func2(x: T) -> A[T]:
+        return A[T](x + x)
+
+    pl = sl.Pipeline()
+    pl[int] = 1
+    pl.insert(func1)
+    pl.insert(func2)
+    assert pl.compute(A[int]) == A[int](2)
+
+
+def test_insert_can_replace_generic_param_with_generic_provider() -> None:
+    T = TypeVar('T', int, float)
+
+    @dataclass
+    class A(Generic[T]):
+        value: T
+
+    def func(x: T) -> A[T]:
+        return A[T](x + x)
+
+    pl = sl.Pipeline()
+    pl[int] = 1
+    pl[A[T]] = A[T](1)  # type: ignore[valid-type]
+    assert pl.compute(A[int]) == A[int](1)
+    pl.insert(func)
+    assert pl.compute(A[int]) == A[int](2)
+
+
+def test_setitem_can_replace_generic_provider_with_generic_param() -> None:
+    T = TypeVar('T', int, float)
+
+    @dataclass
+    class A(Generic[T]):
+        value: T
+
+    def func(x: T) -> A[T]:
+        return A[T](x + x)
+
+    pl = sl.Pipeline()
+    pl[int] = 1
+    pl.insert(func)
+    assert pl.compute(A[int]) == A[int](2)
+    pl[A[T]] = A[T](1)  # type: ignore[valid-type]
+    assert pl.compute(A[int]) == A[int](1)
+
+
+def test_setitem_can_replace_generic_param_with_generic_param() -> None:
+    T = TypeVar('T')
+
+    @dataclass
+    class A(Generic[T]):
+        value: T
+
+    pl = sl.Pipeline()
+    pl[A[T]] = A[T](1)  # type: ignore[valid-type]
+    assert pl.compute(A[int]) == A[int](1)
+    pl[A[T]] = A[T](2)  # type: ignore[valid-type]
+    assert pl.compute(A[int]) == A[int](2)
 
 
 def test_init_with_params() -> None:

@@ -437,12 +437,8 @@ class Pipeline:
         if (origin := get_origin(key)) is not None:
             subproviders = self._subproviders.setdefault(origin, {})
             args = get_args(key)
-            if args in subproviders:
-                raise ValueError(f'Provider for {key} already exists')
             subproviders[args] = provider
         else:
-            if key in self._providers:
-                raise ValueError(f'Provider for {key} already exists')
             self._providers[key] = provider
 
     def _get_provider(
