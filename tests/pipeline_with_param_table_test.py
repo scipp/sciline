@@ -605,3 +605,11 @@ def test_compute_time_handler_works_alongside_param_table() -> None:
     pl = sl.Pipeline([process])
     pl.set_param_table(sl.ParamTable(int, {float: [1.0, 2.0, 3.0]}))
     pl.get(sl.Series[int, str], handler=sl.HandleAsComputeTimeException())
+
+
+def test_param_table_column_and_param_of_same_type_can_coexist() -> None:
+    pl = sl.Pipeline()
+    pl[float] = 1.0
+    pl.set_param_table(sl.ParamTable(int, {float: [2.0, 3.0]}))
+    assert pl.compute(float) == 1.0
+    assert pl.compute(sl.Series[int, float]) == sl.Series(int, {0: 2.0, 1: 3.0})
