@@ -36,7 +36,7 @@ from .handler import (
 from .param_table import ParamTable
 from .scheduler import Scheduler
 from .series import Series
-from .typing import Graph, Item, Key, Label, Provider, get_optional
+from .typing import Graph, Item, Key, Label, Provider, get_optional, get_union
 
 T = TypeVar('T')
 KeyType = TypeVar('KeyType')
@@ -483,6 +483,29 @@ class Pipeline:
 
         return handler.handle_unsatisfied_requirement(tp), {}
 
+    def _get_unique_provider(
+        self, tp: Union[Type[T], Item[T]], handler: ErrorHandler
+    ) -> Tuple[Callable[..., T], Dict[TypeVar, Key]]:
+        """Get a unique provider for a potential Union type."""
+        if (union_args := get_union(tp)) is None:
+            return self._get_provider(tp, handler=handler)
+        matching_types = []
+        for option in union_args:
+            try:
+                provider, bound = self._get_provider(option, handler=None)
+            except UnsatisfiedRequirement:
+                continue
+            else:
+                matching_types.append(option)
+        if len(matching_types) == 0:
+            return handler.handle_unsatisfied_requirement(tp), {}
+        if len(matching_types) > 1:
+            raise AmbiguousProvider(
+                f"Multiple providers found for Union type {tp}."
+                f" Matching types are: {matching_types}."
+            )
+        return provider, bound
+
     def build(
         self,
         tp: Union[Type[T], Item[T]],
@@ -531,8 +554,7 @@ class Pipeline:
                     graph[tp] = optional_subgraph.pop(optional_arg)
                     graph.update(optional_subgraph)
                 continue
-            provider: Callable[..., T]
-            provider, bound = self._get_provider(tp, handler=handler)
+            provider, bound = self._get_unique_provider(tp, handler=handler)
             tps = get_type_hints(provider)
             args = tuple(
                 _bind_free_typevars(t, bound=bound)

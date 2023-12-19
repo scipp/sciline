@@ -31,13 +31,23 @@ def test_parameter_type_union_or_optional_disallowed() -> None:
         pipeline[Optional[int]] = 3  # type: ignore[index]
 
 
-def test_union_requirement_leads_to_UnsatisfiedRequirement() -> None:
+def test_union_requirement_satisfied_by_unique_match() -> None:
     def require_union(x: Union[int, float]) -> str:
         return f'{x}'
 
     pipeline = sl.Pipeline([require_union])
     pipeline[int] = 1
-    with pytest.raises(sl.UnsatisfiedRequirement):
+    assert pipeline.compute(str) == '1'
+
+
+def test_union_requirement_with_multiple_matches_raises_AmbiguousProvider() -> None:
+    def require_union(x: Union[int, float]) -> str:
+        return f'{x}'
+
+    pipeline = sl.Pipeline([require_union])
+    pipeline[int] = 1
+    pipeline[float] = 1.5
+    with pytest.raises(sl.AmbiguousProvider):
         pipeline.compute(str)
 
 
