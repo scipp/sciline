@@ -15,25 +15,11 @@ from typing import (
     get_origin,
 )
 
-import graphviz
+from graphviz import Digraph
 
 from .handler import HandleAsComputeTimeException
 from .pipeline import Pipeline, SeriesProvider
 from .typing import Graph, Item, Key, get_optional
-
-
-class Digraph(graphviz.Digraph):  # type: ignore[misc]
-    '''Replace the default `_repr_mimebundle_` implementation from graphviz.Digraph.
-    The default implementation does not return a 'text/html' mimetype.
-    The 'image/svg+xml' mimetype renders as an <img> node in Jupyter.
-    We want graphs to render a <svg> node to enable text selection in the graph.
-    '''
-
-    def _repr_mimebundle_(self, *args, **kwargs):  # type: ignore[no-untyped-def]
-        data = super()._repr_mimebundle_(*args, **kwargs)
-        if 'image/svg+xml' in data:
-            data['text/html'] = data['image/svg+xml']
-        return data
 
 
 @dataclass
