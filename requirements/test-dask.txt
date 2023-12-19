@@ -10,11 +10,11 @@ click==8.1.7
     # via dask
 cloudpickle==3.0.0
     # via dask
-dask==2023.5.0
+dask==2023.12.1
     # via -r test-dask.in
-fsspec==2023.10.0
+fsspec==2023.12.2
     # via dask
-importlib-metadata==6.8.0
+importlib-metadata==7.0.0
     # via dask
 locket==1.0.0
     # via partd

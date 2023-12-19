@@ -1,4 +1,4 @@
+# Add test dependencies in basetest.in
+
 -r base.in
-graphviz
-numpy
-pytest
+-r basetest.in

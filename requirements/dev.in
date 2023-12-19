@@ -5,6 +5,7 @@
 -r static.in
 -r test.in
 -r wheels.in
+copier
 jupyterlab
 pip-compile-multi
 pre-commit

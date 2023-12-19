@@ -9,7 +9,7 @@ import sciline
 sys.path.insert(0, os.path.abspath('.'))
 
 # General information about the project.
-project = u'sciline'
+project = u'Sciline'
 copyright = u'2023 Scipp contributors'
 author = u'Scipp contributors'
 
@@ -25,7 +25,7 @@ extensions = [
     'sphinx.ext.napoleon',
     'sphinx_autodoc_typehints',
     'sphinx_copybutton',
-    "sphinx_design",
+    'sphinx_design',
     'nbsphinx',
     'myst_parser',
 ]
@@ -121,6 +121,7 @@ html_theme = "pydata_sphinx_theme"
 html_theme_options = {
     "primary_sidebar_end": ["edit-this-page", "sourcelink"],
     "secondary_sidebar_items": [],
+    "navbar_persistent": ["search-button"],
     "show_nav_level": 1,
     # Adjust this to ensure external links are moved to "Move" menu
     "header_links_before_dropdown": 5,
@@ -148,9 +149,9 @@ html_theme_options = {
         },
         {
             "name": "Conda",
-            "url": "https://anaconda.org/conda-forge/sciline",
-            "icon": "_static/anaconda-logo.svg",
-            "type": "local",
+            "url": "https://anaconda.org/scipp/sciline",
+            "icon": "fa-custom fa-anaconda",
+            "type": "fontawesome",
         },
     ],
     "footer_start": ["copyright", "sphinx-version"],
@@ -163,7 +164,7 @@ html_sidebars = {
     "**": ["sidebar-nav-bs", "page-toc"],
 }
 
-html_title = "sciline"
+html_title = "Sciline"
 html_logo = "_static/logo.svg"
 html_favicon = "_static/favicon.ico"
 
@@ -171,7 +172,8 @@ html_favicon = "_static/favicon.ico"
 # relative to this directory. They are copied after the builtin static files,
 # so a file named "default.css" will overwrite the builtin "default.css".
 html_static_path = ['_static']
-html_css_files = ["css/custom.css"]
+html_css_files: list[str] = []
+html_js_files = ["anaconda-icon.js"]
 
 # -- Options for HTMLHelp output ------------------------------------------
 
@@ -181,13 +183,34 @@ htmlhelp_basename = 'scilinedoc'
 # -- Options for Matplotlib in notebooks ----------------------------------
 
 nbsphinx_execute_arguments = [
-    "--Session.metadata=scipp_docs_build=True",
+    "--Session.metadata=scipp_sphinx_build=True",
 ]
 
 # -- Options for doctest --------------------------------------------------
 
+# sc.plot returns a Figure object and doctest compares that against the
+# output written in the docstring. But we only want to show an image of the
+# figure, not its `repr`.
+# In addition, there is no need to make plots in doctest as the documentation
+# build already tests if those plots can be made.
+# So we simply disable plots in doctests.
 doctest_global_setup = '''
 import numpy as np
+
+try:
+    import scipp as sc
+
+    def do_not_plot(*args, **kwargs):
+        pass
+
+    sc.plot = do_not_plot
+    sc.Variable.plot = do_not_plot
+    sc.DataArray.plot = do_not_plot
+    sc.DataGroup.plot = do_not_plot
+    sc.Dataset.plot = do_not_plot
+except ImportError:
+    # Scipp is not needed by docs if it is not installed.
+    pass
 '''
 
 # Using normalize whitespace because many __str__ functions in scipp produce

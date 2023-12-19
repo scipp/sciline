@@ -34,7 +34,7 @@ class Item(Generic[T]):
 Provider = Callable[..., Any]
 
 
-Key = Union[type, Item]
+Key = Union[type, Item[Any]]
 Graph = Dict[Key, Tuple[Provider, Tuple[Key, ...]]]
 
 

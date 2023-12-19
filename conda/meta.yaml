@@ -11,8 +11,7 @@ requirements:
     - setuptools
     - setuptools_scm
   run:
-    - graphlib-backport
-    - python>=3.8
+    - python>=3.9
 
 test:
   imports:
@@ -26,12 +25,13 @@ test:
     - pyproject.toml
     - tests/
   commands:
-    - python -m pytest tests
+    # We ignore warnings during release package builds
+    - python -m pytest -Wignore tests
 
 build:
   noarch: python
   script:
-    - pip install .
+    - python -m pip install .
 
 about:
   home: https://github.com/scipp/sciline

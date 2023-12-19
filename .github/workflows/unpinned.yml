@@ -11,7 +11,7 @@ on:
 jobs:
   setup:
     name: Setup variables
-    runs-on: 'ubuntu-20.04'
+    runs-on: 'ubuntu-22.04'
     outputs:
       min_python: ${{ steps.vars.outputs.min_python }}
       release_tag: ${{ steps.release.outputs.release_tag }}
@@ -31,7 +31,7 @@ jobs:
     needs: setup
     strategy:
       matrix:
-        os: ['ubuntu-20.04']
+        os: ['ubuntu-22.04']
         python:
           - version: '${{needs.setup.outputs.min_python}}'
             tox-env: 'unpinned'
