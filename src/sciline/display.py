@@ -35,7 +35,7 @@ def _provider_name(p: ProviderDisplayData) -> str:
             ('*' if isinstance(arg, TypeVar) else f'{qualname(arg)}' for arg in p.args)
         )
         name += f'[{args}]'
-    return escape(str(name))
+    return escape(name)
 
 
 def _provider_source(p: ProviderDisplayData) -> str:
@@ -94,11 +94,9 @@ def provider_table(
 
 def _parameter_tables(parameter_tables: Sequence[ParamTable]) -> str:
     def parameter_table(p: ParamTable) -> str:
-        name = escape(qualname(p.row_dim))
         html = p._repr_html_()
         return f'''
         <div>
-          <h5>{name}</h5>
           {html}
         </div>
         '''
