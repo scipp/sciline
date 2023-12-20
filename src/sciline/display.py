@@ -27,7 +27,9 @@ def _details(summary: str, body: str) -> str:
     '''
 
 
-def _provider_name(p: Union[ProviderDisplayData, Tuple]) -> str:
+def _provider_name(
+    p: Union[ProviderDisplayData, Tuple[Tuple[Any, Any], Sequence[ProviderDisplayData]]]
+) -> str:
     if isinstance(p, tuple):
         (name, cname), values = p
         return escape(f'{qualname(cname)}({qualname(name)})')
@@ -37,10 +39,12 @@ def _provider_name(p: Union[ProviderDisplayData, Tuple]) -> str:
             ('*' if isinstance(arg, TypeVar) else f'{qualname(arg)}' for arg in p.args)
         )
         name += f'[{args}]'
-    return escape(name)
+    return escape(f'{name}')
 
 
-def _provider_source(p: Union[ProviderDisplayData, Tuple]) -> str:
+def _provider_source(
+    p: Union[ProviderDisplayData, Tuple[Tuple[Any, Any], Sequence[ProviderDisplayData]]]
+) -> str:
     if isinstance(p, tuple) or p.kind != 'function':
         return ''
     module = getattr(inspect.getmodule(p.value), '__name__', '')
@@ -50,7 +54,9 @@ def _provider_source(p: Union[ProviderDisplayData, Tuple]) -> str:
     )
 
 
-def _provider_value(p: Union[ProviderDisplayData, Tuple]) -> str:
+def _provider_value(
+    p: Union[ProviderDisplayData, Tuple[Tuple[Any, Any], Sequence[ProviderDisplayData]]]
+) -> str:
     if isinstance(p, tuple):
         (name, cname), values = p
         return escape(f'length: {len(values)}')

@@ -12,7 +12,7 @@ def groupby(f: Callable[[T], G], a: Iterable[T]) -> DefaultDict[G, list[T]]:
     return g
 
 
-def qualname(obj: Any) -> Any:
-    return (
+def qualname(obj: Any) -> str:
+    return str(
         obj.__qualname__ if hasattr(obj, '__qualname__') else obj.__class__.__qualname__
     )
