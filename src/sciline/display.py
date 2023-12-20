@@ -80,8 +80,8 @@ def pipeline_html_repr(
             f'''
         <tr>
           <td scope="row">{_provider_name(p)}</td>
-          <td scope="row">{_provider_source(p)}</th>
           <td scope="row">{_provider_value(p)}</td>
+          <td scope="row">{_provider_source(p)}</th>
         </tr>'''
             for p in sorted(
                 chain(
@@ -99,8 +99,8 @@ def pipeline_html_repr(
         <thead>
           <tr>
             <th scope="col">Name</th>
-            <th scope="col">Source</th>
             <th scope="col">Value</th>
+            <th scope="col">Source</th>
           </tr>
         </thead>
         <tbody>
