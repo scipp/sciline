@@ -842,18 +842,4 @@ class Pipeline:
                 )
             ),
         )
-        param_tables_by_name = groupby(
-            lambda p: p.origin.label[0].tp, providers['table']
-        )
-        param_tables = []
-        for table_name, table_cells in param_tables_by_name.items():
-            columns = groupby(lambda p: p.origin.tp, table_cells)
-            index = [p.origin.label[0].index for p in next(iter(columns.values()))]
-            param_tables.append(
-                ParamTable(
-                    table_name,
-                    {k: [v.value for v in col] for k, col in columns.items()},
-                    index=index,
-                )
-            )
-        return pipeline_html_repr(providers, param_tables)
+        return pipeline_html_repr(providers)
