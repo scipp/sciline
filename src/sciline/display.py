@@ -45,26 +45,24 @@ def _provider_name(
 def _provider_source(
     p: Union[ProviderDisplayData, Tuple[Tuple[Any, Any], Sequence[ProviderDisplayData]]]
 ) -> str:
-    if isinstance(p, tuple) or p.kind != 'function':
-        return ''
-    module = getattr(inspect.getmodule(p.value), '__name__', '')
-    return _details(
-        escape(p.value.__name__),
-        escape(f'{module}.{p.value.__name__}'),
-    )
+    if isinstance(p, tuple):
+        (name, cname), values = p
+        return escape(f'ParamTable({qualname(name)}, length={len(values)})')
+    if p.kind == 'function':
+        module = getattr(inspect.getmodule(p.value), '__name__', '')
+        return _details(
+            escape(p.value.__name__),
+            escape(f'{module}.{p.value.__name__}'),
+        )
+    return ''
 
 
 def _provider_value(
     p: Union[ProviderDisplayData, Tuple[Tuple[Any, Any], Sequence[ProviderDisplayData]]]
 ) -> str:
-    if isinstance(p, tuple):
-        (name, cname), values = p
-        return escape(f'length: {len(values)}')
-    if p.kind != 'parameter':
-        return ''
-    if hasattr(p.value, '_repr_html_'):
-        return _details('', p.value._repr_html_())
-    return escape(str(p.value))
+    if not isinstance(p, tuple) and p.kind == 'parameter':
+        return escape(str(p.value))
+    return ''
 
 
 def pipeline_html_repr(
