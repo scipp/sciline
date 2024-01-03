@@ -13,7 +13,7 @@ ProviderKind = Literal['function', 'parameter', 'table']
 @dataclass
 class ProviderDisplayData:
     origin: Key
-    args: Tuple[Key | TypeVar, ...]
+    args: Tuple[Union[Key, TypeVar], ...]
     kind: ProviderKind
     value: Any
 
