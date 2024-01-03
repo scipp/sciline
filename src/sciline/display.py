@@ -61,7 +61,8 @@ def _provider_value(
     p: Union[ProviderDisplayData, Tuple[Tuple[Any, Any], Sequence[ProviderDisplayData]]]
 ) -> str:
     if not isinstance(p, tuple) and p.kind == 'parameter':
-        return escape(str(p.value))
+        html = escape(str(p.value))
+        return _details('', html) if len(html.strip()) > 40 else html
     return ''
 
 
