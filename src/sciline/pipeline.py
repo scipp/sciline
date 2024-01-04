@@ -821,12 +821,12 @@ class Pipeline:
 
     def _repr_html_(self) -> str:
         providers_without_parameters = (
-            (p, tuple(), v) for p, v in self._providers.items()
+            (origin, tuple(), value) for origin, value in self._providers.items()
         )  # type: ignore[var-annotated]
         providers_with_parameters = (
-            (p, c, v)
-            for p in self._subproviders
-            for c, v in self._subproviders[p].items()
+            (origin, args, value)
+            for origin in self._subproviders
+            for args, value in self._subproviders[origin].items()
         )
         providers = groupby(
             lambda p: p.kind,
@@ -834,8 +834,8 @@ class Pipeline:
                 ProviderDisplayData(
                     origin,
                     args,
-                    k := _kind_of_provider(value),
-                    value() if k != 'function' else value,
+                    kind := _kind_of_provider(value),
+                    value() if kind != 'function' else value,
                 )
                 for origin, args, value in chain(
                     providers_with_parameters, providers_without_parameters
