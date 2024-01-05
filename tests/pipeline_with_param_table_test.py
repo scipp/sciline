@@ -613,3 +613,10 @@ def test_param_table_column_and_param_of_same_type_can_coexist() -> None:
     pl.set_param_table(sl.ParamTable(int, {float: [2.0, 3.0]}))
     assert pl.compute(float) == 1.0
     assert pl.compute(sl.Series[int, float]) == sl.Series(int, {0: 2.0, 1: 3.0})
+
+
+def test_pipeline_copy_with_param_table() -> None:
+    a = sl.Pipeline()
+    a.set_param_table(sl.ParamTable(int, {float: [1.0, 2.0, 3.0]}))
+    b = a.copy()
+    assert b.compute(sl.Series[int, float]) == sl.Series(int, {0: 1.0, 1: 2.0, 2: 3.0})

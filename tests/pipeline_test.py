@@ -1020,3 +1020,33 @@ def test_compute_time_handler_allows_for_building_but_not_computing() -> None:
     graph = pipeline.get(float, handler=sl.HandleAsComputeTimeException())
     with pytest.raises(sl.UnsatisfiedRequirement):
         graph.compute()
+
+
+def test_pipeline_copy_simple() -> None:
+    a = sl.Pipeline([int_to_float, make_int])
+    b = a.copy()
+    assert b.compute(float) == 1.5
+    assert b.compute(int) == 3
+
+
+def test_pipeline_copy_with_params() -> None:
+    a = sl.Pipeline([int_to_float], params={int: 99})
+    b = a.copy()
+    assert b.compute(float) == 1.5
+    assert b.compute(int) == 99
+
+
+def test_pipeline_copy_after_insert() -> None:
+    a = sl.Pipeline([int_to_float])
+    a.insert(make_int)
+    b = a.copy()
+    assert b.compute(float) == 1.5
+    assert b.compute(int) == 3
+
+
+def test_pipeline_copy_after_setitem() -> None:
+    a = sl.Pipeline([int_to_float])
+    a[int] = 99
+    b = a.copy()
+    assert b.compute(float) == 1.5
+    assert b.compute(int) == 99
