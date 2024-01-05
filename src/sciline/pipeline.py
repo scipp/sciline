@@ -322,6 +322,9 @@ class Pipeline:
         params:
             Dictionary of concrete values to provide for types.
         """
+        self._original_providers = list(providers or [])
+        self._original_params = (params or {}).copy()
+
         self._providers: Dict[Key, Provider] = {}
         self._subproviders: Dict[type, Dict[Tuple[Key | TypeVar, ...], Provider]] = {}
         self._param_tables: Dict[Key, ParamTable] = {}
@@ -794,3 +797,15 @@ class Pipeline:
         if not return_tuple:
             return results[0]
         return results
+
+    def copy(self) -> Pipeline:
+        """
+        Make a copy of the pipeline.
+        """
+        out = Pipeline(
+            providers=self._original_providers,
+            params=self._original_params,
+        )
+        for table in self._param_tables.values():
+            out.set_param_table(table)
+        return out
