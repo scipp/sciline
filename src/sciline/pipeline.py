@@ -323,7 +323,7 @@ class Pipeline:
             Dictionary of concrete values to provide for types.
         """
         self._copy_providers = list(providers or [])
-        self._copy_params = {}
+        self._copy_params: Dict[type, Any] = {}
 
         self._providers: Dict[Key, Provider] = {}
         self._subproviders: Dict[type, Dict[Tuple[Key | TypeVar, ...], Provider]] = {}
