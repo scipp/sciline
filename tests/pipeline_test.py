@@ -1025,28 +1025,28 @@ def test_compute_time_handler_allows_for_building_but_not_computing() -> None:
 def test_pipeline_copy_simple() -> None:
     a = sl.Pipeline([int_to_float, make_int])
     b = a.copy()
-    assert b.compute(float) == 1.5
     assert b.compute(int) == 3
+    assert b.compute(float) == 1.5
 
 
 def test_pipeline_copy_with_params() -> None:
     a = sl.Pipeline([int_to_float], params={int: 99})
     b = a.copy()
-    assert b.compute(float) == 1.5
     assert b.compute(int) == 99
+    assert b.compute(float) == 49.5
 
 
 def test_pipeline_copy_after_insert() -> None:
     a = sl.Pipeline([int_to_float])
     a.insert(make_int)
     b = a.copy()
-    assert b.compute(float) == 1.5
     assert b.compute(int) == 3
+    assert b.compute(float) == 1.5
 
 
 def test_pipeline_copy_after_setitem() -> None:
     a = sl.Pipeline([int_to_float])
     a[int] = 99
     b = a.copy()
-    assert b.compute(float) == 1.5
     assert b.compute(int) == 99
+    assert b.compute(float) == 49.5
