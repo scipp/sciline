@@ -1050,3 +1050,47 @@ def test_pipeline_copy_after_setitem() -> None:
     b = a.copy()
     assert b.compute(int) == 99
     assert b.compute(float) == 49.5
+
+
+def test_pipeline_insert_on_copy_does_not_affect_original() -> None:
+    a = sl.Pipeline([int_to_float])
+    with pytest.raises(sl.UnsatisfiedRequirement):
+        a.compute(int)
+    b = a.copy()
+    b.insert(make_int)
+    assert b.compute(int) == 3
+    assert b.compute(float) == 1.5
+    with pytest.raises(sl.UnsatisfiedRequirement):
+        a.compute(int)
+
+
+def test_pipeline_insert_on_original_does_not_affect_copy() -> None:
+    a = sl.Pipeline([int_to_float])
+    b = a.copy()
+    a.insert(make_int)
+    assert a.compute(int) == 3
+    assert a.compute(float) == 1.5
+    with pytest.raises(sl.UnsatisfiedRequirement):
+        b.compute(int)
+
+
+def test_pipeline_setitem_on_copy_does_not_affect_original() -> None:
+    a = sl.Pipeline([int_to_float])
+    with pytest.raises(sl.UnsatisfiedRequirement):
+        a.compute(int)
+    b = a.copy()
+    b[int] = 99
+    assert b.compute(int) == 99
+    assert b.compute(float) == 49.5
+    with pytest.raises(sl.UnsatisfiedRequirement):
+        a.compute(int)
+
+
+def test_pipeline_setitem_on_original_does_not_affect_copy() -> None:
+    a = sl.Pipeline([int_to_float])
+    b = a.copy()
+    a[int] = 99
+    assert a.compute(int) == 99
+    assert a.compute(float) == 49.5
+    with pytest.raises(sl.UnsatisfiedRequirement):
+        b.compute(int)
