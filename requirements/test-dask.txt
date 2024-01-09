@@ -14,7 +14,7 @@ dask==2023.12.1
     # via -r test-dask.in
 fsspec==2023.12.2
     # via dask
-importlib-metadata==7.0.0
+importlib-metadata==7.0.1
     # via dask
 locket==1.0.0
     # via partd

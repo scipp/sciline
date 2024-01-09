@@ -10,7 +10,7 @@ sys.path.insert(0, os.path.abspath('.'))
 
 # General information about the project.
 project = u'Sciline'
-copyright = u'2023 Scipp contributors'
+copyright = u'2024 Scipp contributors'
 author = u'Scipp contributors'
 
 html_show_sourcelink = True
