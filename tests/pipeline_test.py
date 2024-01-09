@@ -1052,6 +1052,28 @@ def test_pipeline_copy_after_setitem() -> None:
     assert b.compute(float) == 49.5
 
 
+def test_copy_with_generic_providers() -> None:
+    Param = TypeVar('Param')
+
+    class Str(sl.Scope[Param, str], str):
+        ...
+
+    def parametrized(x: Param) -> Str[Param]:
+        return Str(f'{x}')
+
+    def make_float() -> float:
+        return 1.5
+
+    def combine(x: Str[int], y: Str[float]) -> str:
+        return f"{x};{y}"
+
+    a = sl.Pipeline([make_int, make_float, combine, parametrized])
+    b = a.copy()
+    assert b.compute(Str[int]) == Str[int]('3')
+    assert b.compute(Str[float]) == Str[float]('1.5')
+    assert b.compute(str) == '3;1.5'
+
+
 def test_pipeline_insert_on_copy_does_not_affect_original() -> None:
     a = sl.Pipeline([int_to_float])
     with pytest.raises(sl.UnsatisfiedRequirement):
@@ -1094,3 +1116,73 @@ def test_pipeline_setitem_on_original_does_not_affect_copy() -> None:
     assert a.compute(float) == 49.5
     with pytest.raises(sl.UnsatisfiedRequirement):
         b.compute(int)
+
+
+def test_pipeline_with_generics_setitem_on_original_does_not_affect_copy() -> None:
+    RunType = TypeVar('RunType')
+
+    class RawData(sl.Scope[RunType, int], int):
+        ...
+
+    class SquaredData(sl.Scope[RunType, int], int):
+        ...
+
+    Sample = NewType('Sample', int)
+    Background = NewType('Background', int)
+    Result = NewType('Result', int)
+
+    def square(x: RawData[RunType]) -> SquaredData[RunType]:
+        return SquaredData[RunType](x * x)
+
+    def process(
+        sample: SquaredData[Sample], background: SquaredData[Background]
+    ) -> Result:
+        return Result(sample + background)
+
+    providers = [square, process]
+    params = {
+        RawData[Sample]: 5,
+        RawData[Background]: 2,
+    }
+    a = sl.Pipeline(providers, params=params)
+    assert a.compute(Result) == 29
+    b = a.copy()
+    assert b.compute(Result) == 29
+    a[RawData[Sample]] = 7
+    assert a.compute(Result) == 53
+    assert b.compute(Result) == 29
+
+
+def test_pipeline_with_generics_setitem_on_copy_does_not_affect_original() -> None:
+    RunType = TypeVar('RunType')
+
+    class RawData(sl.Scope[RunType, int], int):
+        ...
+
+    class SquaredData(sl.Scope[RunType, int], int):
+        ...
+
+    Sample = NewType('Sample', int)
+    Background = NewType('Background', int)
+    Result = NewType('Result', int)
+
+    def square(x: RawData[RunType]) -> SquaredData[RunType]:
+        return SquaredData[RunType](x * x)
+
+    def process(
+        sample: SquaredData[Sample], background: SquaredData[Background]
+    ) -> Result:
+        return Result(sample + background)
+
+    providers = [square, process]
+    params = {
+        RawData[Sample]: 5,
+        RawData[Background]: 2,
+    }
+    a = sl.Pipeline(providers, params=params)
+    assert a.compute(Result) == 29
+    b = a.copy()
+    assert b.compute(Result) == 29
+    b[RawData[Sample]] = 7
+    assert a.compute(Result) == 29
+    assert b.compute(Result) == 53

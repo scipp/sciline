@@ -801,9 +801,7 @@ class Pipeline:
         """
         out = Pipeline()
         out._providers = self._providers.copy()
-        out._subproviders = {
-            k: {kk: vv for kk, vv in v.items()} for k, v in self._subproviders.items()
-        }
+        out._subproviders = {k: v.copy() for k, v in self._subproviders.items()}
         out._param_tables = self._param_tables.copy()
         out._param_name_to_table_key = self._param_name_to_table_key.copy()
         return out
