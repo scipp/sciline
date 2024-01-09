@@ -322,9 +322,6 @@ class Pipeline:
         params:
             Dictionary of concrete values to provide for types.
         """
-        self._copy_providers = list(providers or [])
-        self._copy_params: Dict[type, Any] = {}
-
         self._providers: Dict[Key, Provider] = {}
         self._subproviders: Dict[type, Dict[Tuple[Key | TypeVar, ...], Provider]] = {}
         self._param_tables: Dict[Key, ParamTable] = {}
@@ -347,7 +344,6 @@ class Pipeline:
         if (key := get_type_hints(provider).get('return')) is None:
             raise ValueError(f'Provider {provider} lacks type-hint for return value')
         self._set_provider(key, provider)
-        self._copy_providers.append(provider)
 
     def __setitem__(self, key: Type[T], param: T) -> None:
         """
@@ -391,7 +387,6 @@ class Pipeline:
                 f'Key {key} incompatible to value {param} of type {type(param)}'
             )
         self._set_provider(key, lambda: param)
-        self._copy_params[key] = param
 
     def set_param_table(self, params: ParamTable) -> None:
         """
@@ -804,10 +799,11 @@ class Pipeline:
         """
         Make a copy of the pipeline.
         """
-        out = Pipeline(
-            providers=self._copy_providers,
-            params=self._copy_params,
-        )
-        for table in self._param_tables.values():
-            out.set_param_table(table)
+        out = Pipeline()
+        out._providers = self._providers.copy()
+        out._subproviders = {
+            k: {kk: vv for kk, vv in v.items()} for k, v in self._subproviders.items()
+        }
+        out._param_tables = self._param_tables.copy()
+        out._param_name_to_table_key = self._param_name_to_table_key.copy()
         return out
