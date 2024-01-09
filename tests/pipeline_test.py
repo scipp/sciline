@@ -1029,6 +1029,15 @@ def test_pipeline_copy_simple() -> None:
     assert b.compute(float) == 1.5
 
 
+def test_pipeline_copy_dunder() -> None:
+    a = sl.Pipeline([int_to_float, make_int])
+    from copy import copy
+
+    b = copy(a)
+    assert b.compute(int) == 3
+    assert b.compute(float) == 1.5
+
+
 def test_pipeline_copy_with_params() -> None:
     a = sl.Pipeline([int_to_float], params={int: 99})
     b = a.copy()
@@ -1139,12 +1148,13 @@ def test_pipeline_with_generics_setitem_on_original_does_not_affect_copy() -> No
     ) -> Result:
         return Result(sample + background)
 
-    providers = [square, process]
-    params = {
-        RawData[Sample]: 5,
-        RawData[Background]: 2,
-    }
-    a = sl.Pipeline(providers, params=params)
+    a = sl.Pipeline(
+        [square, process],
+        params={
+            RawData[Sample]: 5,
+            RawData[Background]: 2,
+        },
+    )
     assert a.compute(Result) == 29
     b = a.copy()
     assert b.compute(Result) == 29
@@ -1174,12 +1184,13 @@ def test_pipeline_with_generics_setitem_on_copy_does_not_affect_original() -> No
     ) -> Result:
         return Result(sample + background)
 
-    providers = [square, process]
-    params = {
-        RawData[Sample]: 5,
-        RawData[Background]: 2,
-    }
-    a = sl.Pipeline(providers, params=params)
+    a = sl.Pipeline(
+        [square, process],
+        params={
+            RawData[Sample]: 5,
+            RawData[Background]: 2,
+        },
+    )
     assert a.compute(Result) == 29
     b = a.copy()
     assert b.compute(Result) == 29

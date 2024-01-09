@@ -805,3 +805,6 @@ class Pipeline:
         out._param_tables = self._param_tables.copy()
         out._param_name_to_table_key = self._param_name_to_table_key.copy()
         return out
+
+    def __copy__(self) -> Pipeline:
+        return self.copy()
