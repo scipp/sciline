@@ -1020,3 +1020,180 @@ def test_compute_time_handler_allows_for_building_but_not_computing() -> None:
     graph = pipeline.get(float, handler=sl.HandleAsComputeTimeException())
     with pytest.raises(sl.UnsatisfiedRequirement):
         graph.compute()
+
+
+def test_pipeline_copy_simple() -> None:
+    a = sl.Pipeline([int_to_float, make_int])
+    b = a.copy()
+    assert b.compute(int) == 3
+    assert b.compute(float) == 1.5
+
+
+def test_pipeline_copy_dunder() -> None:
+    a = sl.Pipeline([int_to_float, make_int])
+    from copy import copy
+
+    b = copy(a)
+    assert b.compute(int) == 3
+    assert b.compute(float) == 1.5
+
+
+def test_pipeline_copy_with_params() -> None:
+    a = sl.Pipeline([int_to_float], params={int: 99})
+    b = a.copy()
+    assert b.compute(int) == 99
+    assert b.compute(float) == 49.5
+
+
+def test_pipeline_copy_after_insert() -> None:
+    a = sl.Pipeline([int_to_float])
+    a.insert(make_int)
+    b = a.copy()
+    assert b.compute(int) == 3
+    assert b.compute(float) == 1.5
+
+
+def test_pipeline_copy_after_setitem() -> None:
+    a = sl.Pipeline([int_to_float])
+    a[int] = 99
+    b = a.copy()
+    assert b.compute(int) == 99
+    assert b.compute(float) == 49.5
+
+
+def test_copy_with_generic_providers() -> None:
+    Param = TypeVar('Param')
+
+    class Str(sl.Scope[Param, str], str):
+        ...
+
+    def parametrized(x: Param) -> Str[Param]:
+        return Str(f'{x}')
+
+    def make_float() -> float:
+        return 1.5
+
+    def combine(x: Str[int], y: Str[float]) -> str:
+        return f"{x};{y}"
+
+    a = sl.Pipeline([make_int, make_float, combine, parametrized])
+    b = a.copy()
+    assert b.compute(Str[int]) == Str[int]('3')
+    assert b.compute(Str[float]) == Str[float]('1.5')
+    assert b.compute(str) == '3;1.5'
+
+
+def test_pipeline_insert_on_copy_does_not_affect_original() -> None:
+    a = sl.Pipeline([int_to_float])
+    with pytest.raises(sl.UnsatisfiedRequirement):
+        a.compute(int)
+    b = a.copy()
+    b.insert(make_int)
+    assert b.compute(int) == 3
+    assert b.compute(float) == 1.5
+    with pytest.raises(sl.UnsatisfiedRequirement):
+        a.compute(int)
+
+
+def test_pipeline_insert_on_original_does_not_affect_copy() -> None:
+    a = sl.Pipeline([int_to_float])
+    b = a.copy()
+    a.insert(make_int)
+    assert a.compute(int) == 3
+    assert a.compute(float) == 1.5
+    with pytest.raises(sl.UnsatisfiedRequirement):
+        b.compute(int)
+
+
+def test_pipeline_setitem_on_copy_does_not_affect_original() -> None:
+    a = sl.Pipeline([int_to_float])
+    with pytest.raises(sl.UnsatisfiedRequirement):
+        a.compute(int)
+    b = a.copy()
+    b[int] = 99
+    assert b.compute(int) == 99
+    assert b.compute(float) == 49.5
+    with pytest.raises(sl.UnsatisfiedRequirement):
+        a.compute(int)
+
+
+def test_pipeline_setitem_on_original_does_not_affect_copy() -> None:
+    a = sl.Pipeline([int_to_float])
+    b = a.copy()
+    a[int] = 99
+    assert a.compute(int) == 99
+    assert a.compute(float) == 49.5
+    with pytest.raises(sl.UnsatisfiedRequirement):
+        b.compute(int)
+
+
+def test_pipeline_with_generics_setitem_on_original_does_not_affect_copy() -> None:
+    RunType = TypeVar('RunType')
+
+    class RawData(sl.Scope[RunType, int], int):
+        ...
+
+    class SquaredData(sl.Scope[RunType, int], int):
+        ...
+
+    Sample = NewType('Sample', int)
+    Background = NewType('Background', int)
+    Result = NewType('Result', int)
+
+    def square(x: RawData[RunType]) -> SquaredData[RunType]:
+        return SquaredData[RunType](x * x)
+
+    def process(
+        sample: SquaredData[Sample], background: SquaredData[Background]
+    ) -> Result:
+        return Result(sample + background)
+
+    a = sl.Pipeline(
+        [square, process],
+        params={
+            RawData[Sample]: 5,
+            RawData[Background]: 2,
+        },
+    )
+    assert a.compute(Result) == 29
+    b = a.copy()
+    assert b.compute(Result) == 29
+    a[RawData[Sample]] = 7
+    assert a.compute(Result) == 53
+    assert b.compute(Result) == 29
+
+
+def test_pipeline_with_generics_setitem_on_copy_does_not_affect_original() -> None:
+    RunType = TypeVar('RunType')
+
+    class RawData(sl.Scope[RunType, int], int):
+        ...
+
+    class SquaredData(sl.Scope[RunType, int], int):
+        ...
+
+    Sample = NewType('Sample', int)
+    Background = NewType('Background', int)
+    Result = NewType('Result', int)
+
+    def square(x: RawData[RunType]) -> SquaredData[RunType]:
+        return SquaredData[RunType](x * x)
+
+    def process(
+        sample: SquaredData[Sample], background: SquaredData[Background]
+    ) -> Result:
+        return Result(sample + background)
+
+    a = sl.Pipeline(
+        [square, process],
+        params={
+            RawData[Sample]: 5,
+            RawData[Background]: 2,
+        },
+    )
+    assert a.compute(Result) == 29
+    b = a.copy()
+    assert b.compute(Result) == 29
+    b[RawData[Sample]] = 7
+    assert a.compute(Result) == 29
+    assert b.compute(Result) == 53

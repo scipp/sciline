@@ -794,3 +794,17 @@ class Pipeline:
         if not return_tuple:
             return results[0]
         return results
+
+    def copy(self) -> Pipeline:
+        """
+        Make a copy of the pipeline.
+        """
+        out = Pipeline()
+        out._providers = self._providers.copy()
+        out._subproviders = {k: v.copy() for k, v in self._subproviders.items()}
+        out._param_tables = self._param_tables.copy()
+        out._param_name_to_table_key = self._param_name_to_table_key.copy()
+        return out
+
+    def __copy__(self) -> Pipeline:
+        return self.copy()
