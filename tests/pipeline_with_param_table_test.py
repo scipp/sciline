@@ -638,3 +638,9 @@ def test_pipeline_set_param_table_on_copy_does_not_affect_original() -> None:
     assert b.compute(sl.Series[int, float]) == sl.Series(int, {0: 1.0, 1: 2.0, 2: 3.0})
     with pytest.raises(sl.UnsatisfiedRequirement):
         a.compute(sl.Series[int, float])
+
+
+def test_can_make_html_repr_with_param_table() -> None:
+    pl = sl.Pipeline()
+    pl.set_param_table(sl.ParamTable(int, {float: [1.0, 2.0, 3.0]}))
+    assert pl._repr_html_()
