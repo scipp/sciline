@@ -55,8 +55,8 @@ def _provider_source(p: Any) -> str:
 
 def _provider_value(p: Any) -> str:
     if not isinstance(p, tuple) and p.kind == 'parameter':
-        html = escape(str(p.value))
-        return _details('', html) if len(html.strip()) > 40 else html
+        html = escape(str(p.value)).strip()
+        return _details(f'{html[:30]}...', html) if len(html) > 30 else html
     return ''
 
 
