@@ -2,9 +2,9 @@ import inspect
 from dataclasses import dataclass
 from html import escape
 from itertools import chain
-from typing import Any, Literal, Mapping, Sequence, Tuple, TypeVar, Union
+from typing import Any, Literal, Mapping, Optional, Sequence, Tuple, TypeVar, Union
 
-from .typing import Key
+from .typing import Item, Key
 from .utils import groupby, qualname
 
 ProviderKind = Literal['function', 'parameter', 'table']
@@ -27,9 +27,7 @@ def _details(summary: str, body: str) -> str:
     '''
 
 
-def _provider_name(
-    p: Union[ProviderDisplayData, Tuple[Tuple[Any, Any], Sequence[ProviderDisplayData]]]
-) -> str:
+def _provider_name(p: Any) -> str:
     if isinstance(p, tuple):
         (name, cname), values = p
         return escape(f'{qualname(cname)}({qualname(name)})')
@@ -42,9 +40,7 @@ def _provider_name(
     return escape(f'{name}')
 
 
-def _provider_source(
-    p: Union[ProviderDisplayData, Tuple[Tuple[Any, Any], Sequence[ProviderDisplayData]]]
-) -> str:
+def _provider_source(p: Any) -> str:
     if isinstance(p, tuple):
         (name, cname), values = p
         return escape(f'ParamTable({qualname(name)}, length={len(values)})')
@@ -57,9 +53,7 @@ def _provider_source(
     return ''
 
 
-def _provider_value(
-    p: Union[ProviderDisplayData, Tuple[Tuple[Any, Any], Sequence[ProviderDisplayData]]]
-) -> str:
+def _provider_value(p: Any) -> str:
     if not isinstance(p, tuple) and p.kind == 'parameter':
         html = escape(str(p.value))
         return _details('', html) if len(html.strip()) > 40 else html
@@ -69,11 +63,15 @@ def _provider_value(
 def pipeline_html_repr(
     providers: Mapping[ProviderKind, Sequence[ProviderDisplayData]]
 ) -> str:
+    def table_name_and_column_name(p: ProviderDisplayData) -> Optional[Tuple[Any, Any]]:
+        if isinstance(p.origin, Item):
+            return (p.origin.label[0].tp, p.origin.tp)
+        return None
+
     param_table_columns_by_name_colname = groupby(
-        lambda p: (p.origin.label[0].tp, p.origin.tp),
+        table_name_and_column_name,
         providers['table'],
     )
-
     provider_rows = '\n'.join(
         (
             f'''
@@ -88,7 +86,7 @@ def pipeline_html_repr(
                     providers['parameter'],
                     param_table_columns_by_name_colname.items(),
                 ),
-                key=lambda p: _provider_name(p),
+                key=_provider_name,
             )
         )
     )
