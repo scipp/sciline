@@ -2,12 +2,60 @@
 # Copyright (c) 2023 Scipp contributors (https://github.com/scipp)
 from __future__ import annotations
 
-from typing import Any, Optional, Tuple, TypeVar, Union
+from html import escape
+from typing import Any, Optional, Sequence, Tuple, TypeVar, Union
 
 from .scheduler import DaskScheduler, NaiveScheduler, Scheduler
 from .typing import Graph, Item
+from .utils import keyname, kind_of_provider
 
 T = TypeVar("T")
+
+
+def _list_items(items: Sequence[str]) -> str:
+    return '\n'.join(
+        (
+            '<ul>',
+            ('\n'.join((f'<li>{escape(it)}</li>' for it in items))),
+            '</ul>',
+        )
+    )
+
+
+def _list_max_n_then_hide(items: Sequence[str], n: int = 5, header: str = '') -> str:
+    def wrap(s: str) -> str:
+        return '\n'.join(
+            (
+                '<div class="task-graph-detail-list">'
+                '<style> .task-graph-detail-list ul { margin-top: 0; } </style>',
+                s,
+                '</div>',
+            )
+        )
+
+    return wrap(
+        '\n'.join(
+            (
+                header,
+                _list_items(items),
+            )
+        )
+        if len(items) <= n
+        else '\n'.join(
+            (
+                '<details>',
+                '<style>',
+                'details[open] .task-graph-summary ul { display: none; }',
+                '</style>',
+                '<summary class="task-graph-summary">',
+                header,
+                _list_items((*items[:n], '...')),
+                '</summary>',
+                _list_items(items),
+                '</details>',
+            )
+        )
+    )
 
 
 class TaskGraph:
@@ -79,3 +127,39 @@ class TaskGraph:
         from .visualize import to_graphviz
 
         return to_graphviz(self._graph, **kwargs)
+
+    def _repr_html_(self) -> str:
+        leafs = sorted(
+            [
+                escape(keyname(key))
+                for key in (
+                    self._keys if isinstance(self._keys, tuple) else [self._keys]
+                )
+            ]
+        )
+        roots = sorted(
+            {
+                escape(keyname(key))
+                for key, (value, _) in self._graph.items()
+                if kind_of_provider(value) != 'function'
+            }
+        )
+        scheduler = escape(str(self._scheduler))
+
+        def head(word: str) -> str:
+            return f'<h5>{word}</h5>'
+
+        return '\n'.join(
+            (
+                '<style>.task-graph-repr h5 { display: inline; }</style>',
+                '<div class="task-graph-repr">',
+                head('Output keys: '),
+                ','.join(leafs),
+                '<br>',
+                head('Scheduler: '),
+                scheduler,
+                '<br>',
+                _list_max_n_then_hide(roots, header=head('Input keys:')),
+                '</div>',
+            )
+        )

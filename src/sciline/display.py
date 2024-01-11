@@ -2,12 +2,10 @@ import inspect
 from dataclasses import dataclass
 from html import escape
 from itertools import chain
-from typing import Any, Literal, Mapping, Optional, Sequence, Tuple, TypeVar, Union
+from typing import Any, Mapping, Optional, Sequence, Tuple, TypeVar, Union
 
-from .typing import Item, Key
+from .typing import Item, Key, ProviderKind
 from .utils import groupby, qualname
-
-ProviderKind = Literal['function', 'parameter', 'table']
 
 
 @dataclass

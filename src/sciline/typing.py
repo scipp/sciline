@@ -6,6 +6,7 @@ from typing import (
     Callable,
     Dict,
     Generic,
+    Literal,
     Optional,
     Tuple,
     Type,
@@ -32,6 +33,7 @@ class Item(Generic[T]):
 
 
 Provider = Callable[..., Any]
+ProviderKind = Literal['function', 'parameter', 'table']
 
 
 Key = Union[type, Item[Any]]

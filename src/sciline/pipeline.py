@@ -26,7 +26,7 @@ from typing import (
 
 from sciline.task_graph import TaskGraph
 
-from .display import ProviderDisplayData, ProviderKind, pipeline_html_repr
+from .display import ProviderDisplayData, pipeline_html_repr
 from .domain import Scope, ScopeTwoParams
 from .handler import (
     ErrorHandler,
@@ -38,7 +38,7 @@ from .param_table import ParamTable
 from .scheduler import Scheduler
 from .series import Series
 from .typing import Graph, Item, Key, Label, Provider, get_optional, get_union
-from .utils import groupby, qualname
+from .utils import groupby, kind_of_provider
 
 T = TypeVar('T')
 KeyType = TypeVar('KeyType')
@@ -138,14 +138,6 @@ def _is_multiple_keys(
 
 def provide_none() -> None:
     return None
-
-
-def _kind_of_provider(p: Callable[..., Any]) -> ProviderKind:
-    if qualname(p) == f'{qualname(Pipeline.__setitem__)}.<locals>.<lambda>':
-        return 'parameter'
-    if qualname(p) == f'{qualname(Pipeline.set_param_table)}.<locals>.<lambda>':
-        return 'table'
-    return 'function'
 
 
 class ReplicatorBase(Generic[IndexType]):
@@ -834,7 +826,7 @@ class Pipeline:
                 ProviderDisplayData(
                     origin,
                     args,
-                    kind := _kind_of_provider(value),
+                    kind := kind_of_provider(value),
                     value() if kind != 'function' else value,
                 )
                 for origin, args, value in chain(
