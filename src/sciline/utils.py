@@ -1,5 +1,5 @@
 from collections import defaultdict
-from typing import Any, Callable, DefaultDict, Iterable, TypeVar, get_args
+from typing import Any, Callable, DefaultDict, Iterable, TypeVar, Union, get_args
 
 from .typing import Item, Key, ProviderKind
 
@@ -20,7 +20,9 @@ def qualname(obj: Any) -> str:
     )
 
 
-def keyname(key: Key) -> str:
+def keyname(key: Union[Key, TypeVar]) -> str:
+    if isinstance(key, TypeVar):
+        return str(key)
     if isinstance(key, Item):
         return f'{keyname(key.tp)}({keyname(key.label[0].tp)})'
     args = get_args(key)

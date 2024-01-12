@@ -1,19 +1,9 @@
 import inspect
-from dataclasses import dataclass
 from html import escape
-from itertools import chain
-from typing import Any, Mapping, Optional, Sequence, Tuple, TypeVar, Union
+from typing import Iterable, List, Tuple, TypeVar, Union
 
-from .typing import Item, Key, ProviderKind
-from .utils import groupby, qualname
-
-
-@dataclass
-class ProviderDisplayData:
-    origin: Key
-    args: Tuple[Union[Key, TypeVar], ...]
-    kind: ProviderKind
-    value: Any
+from .typing import Item, Key, Provider
+from .utils import groupby, keyname, kind_of_provider
 
 
 def _details(summary: str, body: str) -> str:
@@ -25,50 +15,65 @@ def _details(summary: str, body: str) -> str:
     '''
 
 
-def _provider_name(p: Any) -> str:
-    if isinstance(p, tuple):
-        (name, cname), values = p
-        return escape(f'{qualname(cname)}({qualname(name)})')
-    name = f'{qualname(p.origin)}'
-    if p.args:
-        args = ','.join(
-            ('*' if isinstance(arg, TypeVar) else f'{qualname(arg)}' for arg in p.args)
-        )
-        name += f'[{args}]'
-    return escape(f'{name}')
+def _provider_name(
+    p: Tuple[Key, Tuple[Union[Key, TypeVar], ...], List[Provider]]
+) -> str:
+    key, args, _ = p
+    if args:
+        # This is always the case, but mypy complains
+        if hasattr(key, '__getitem__'):
+            return escape(keyname(key[args]))
+    return escape(keyname(key))
 
 
-def _provider_source(p: Any) -> str:
-    if isinstance(p, tuple):
-        (name, cname), values = p
-        return escape(f'ParamTable({qualname(name)}, length={len(values)})')
-    if p.kind == 'function':
-        module = getattr(inspect.getmodule(p.value), '__name__', '')
+def _provider_source(
+    p: Tuple[Key, Tuple[Union[Key, TypeVar], ...], List[Provider]]
+) -> str:
+    key, _, (v, *rest) = p
+    kind = kind_of_provider(v)
+    if kind == 'table':
+        # This is always the case, but mypy complains
+        if isinstance(key, Item):
+            return escape(
+                f'ParamTable({keyname(key.label[0].tp)}, length={len((v, *rest))})'
+            )
+    if kind == 'function':
+        module = getattr(inspect.getmodule(v), '__name__', '')
         return _details(
-            escape(p.value.__name__),
-            escape(f'{module}.{p.value.__name__}'),
+            escape(v.__name__),
+            escape(f'{module}.{v.__name__}'),
         )
     return ''
 
 
-def _provider_value(p: Any) -> str:
-    if not isinstance(p, tuple) and p.kind == 'parameter':
-        html = escape(str(p.value)).strip()
+def _provider_value(
+    p: Tuple[Key, Tuple[Union[Key, TypeVar], ...], List[Provider]]
+) -> str:
+    _, _, (v, *_) = p
+    kind = kind_of_provider(v)
+    if kind == 'parameter':
+        html = escape(str(v())).strip()
         return _details(f'{html[:30]}...', html) if len(html) > 30 else html
     return ''
 
 
 def pipeline_html_repr(
-    providers: Mapping[ProviderKind, Sequence[ProviderDisplayData]]
+    providers: Iterable[Tuple[Key, Tuple[Union[Key, TypeVar], ...], Provider]]
 ) -> str:
-    def table_name_and_column_name(p: ProviderDisplayData) -> Optional[Tuple[Any, Any]]:
-        if isinstance(p.origin, Item):
-            return (p.origin.label[0].tp, p.origin.tp)
-        return None
+    def associate_table_values(
+        p: Tuple[Key, Tuple[Union[Key, TypeVar], ...], Provider]
+    ) -> Tuple[Key, Union[type, Tuple[Union[Key, TypeVar], ...]]]:
+        key, args, v = p
+        if isinstance(key, Item):
+            return (key.label[0].tp, key.tp)
+        return (key, args)
 
-    param_table_columns_by_name_colname = groupby(
-        table_name_and_column_name,
-        providers['table'],
+    providers_collected = (
+        (key, args, [value, *(v for _, _, v in rest)])
+        for ((key, args, value), *rest) in groupby(
+            associate_table_values,
+            providers,
+        ).values()
     )
     provider_rows = '\n'.join(
         (
@@ -79,11 +84,7 @@ def pipeline_html_repr(
           <td scope="row">{_provider_source(p)}</th>
         </tr>'''
             for p in sorted(
-                chain(
-                    providers['function'],
-                    providers['parameter'],
-                    param_table_columns_by_name_colname.items(),
-                ),
+                providers_collected,
                 key=_provider_name,
             )
         )
