@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright (c) 2023 Scipp contributors (https://github.com/scipp)
+import inspect
 from typing import Any, Callable, Dict, List, Optional, Protocol, Tuple
 
 from sciline.typing import Graph, Key
@@ -49,6 +50,9 @@ class NaiveScheduler:
             results[t] = provider(*[results[arg] for arg in args])
         return tuple(results[key] for key in keys)
 
+    def __repr__(self) -> str:
+        return f'{self.__class__.__name__}()'
+
 
 class DaskScheduler:
     """Wrapper for a Dask scheduler.
@@ -80,3 +84,8 @@ class DaskScheduler:
             if str(e).startswith("Cycle detected"):
                 raise CycleError from e
             raise
+
+    def __repr__(self) -> str:
+        module = getattr(inspect.getmodule(self._dask_get), '__name__', '')
+        name = self._dask_get.__name__
+        return f'{self.__class__.__name__}({module}.{name})'
