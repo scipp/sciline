@@ -108,7 +108,7 @@ hidden:
 ---
 
 user-guide/index
-recipes/recipes
+recipes/index
 api-reference/index
 developer/index
 about/index
