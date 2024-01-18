@@ -661,18 +661,18 @@ class Pipeline:
         return graph
 
     @overload
-    def compute(self, tp: Type[T]) -> T:
+    def compute(self, tp: Type[T], **kwargs: Any) -> T:
         ...
 
     @overload
-    def compute(self, tp: Iterable[Type[T]]) -> Dict[Type[T], T]:
+    def compute(self, tp: Iterable[Type[T]], **kwargs: Any) -> Dict[Type[T], T]:
         ...
 
     @overload
-    def compute(self, tp: Item[T]) -> T:
+    def compute(self, tp: Item[T], **kwargs: Any) -> T:
         ...
 
-    def compute(self, tp: type | Iterable[type] | Item[T]) -> Any:
+    def compute(self, tp: type | Iterable[type] | Item[T], **kwargs: Any) -> Any:
         """
         Compute result for the given keys.
 
@@ -683,8 +683,10 @@ class Pipeline:
         tp:
             Type to compute the result for.
             Can be a single type or an iterable of types.
+        kwargs:
+            Keyword arguments passed to the ``.get()`` method.
         """
-        return self.get(tp).compute()
+        return self.get(tp, **kwargs).compute()
 
     def visualize(
         self, tp: type | Iterable[type], **kwargs: Any

@@ -777,6 +777,12 @@ def test_get_with_NaiveScheduler() -> None:
     assert task.compute() == 1.5
 
 
+def test_compute_with_NaiveScheduler() -> None:
+    pipeline = sl.Pipeline([int_to_float, make_int])
+    res = pipeline.compute(float, scheduler=sl.scheduler.NaiveScheduler())
+    assert res == 1.5
+
+
 def test_bind_and_call_no_function() -> None:
     pipeline = sl.Pipeline([make_int])
     assert pipeline.bind_and_call(()) == ()
