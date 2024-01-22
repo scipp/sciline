@@ -32,11 +32,16 @@ class ParamTable(Mapping[type, Collection[Any]]):
             generated, as the integer range of the column length.
         """
         sizes = set(len(v) for v in columns.values())
-        if len(sizes) != 1:
+        if len(sizes) > 1:
             raise ValueError(
                 f"Columns in param table must all have same size, got {sizes}"
             )
-        size = sizes.pop()
+        if sizes:
+            size = sizes.pop()
+        elif index is None:
+            raise ValueError("Cannot create param table with zero columns and no index")
+        else:
+            size = len(index)
         if index is not None:
             if len(index) != size:
                 raise ValueError(

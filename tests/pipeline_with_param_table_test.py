@@ -18,14 +18,15 @@ def test_set_param_table_raises_if_param_names_are_duplicate() -> None:
         pl.compute(Item((Label(str, 1),), float))
 
 
-def test_set_param_table_raises_if_row_dim_is_duplicate() -> None:
+def test_set_param_table_removes_columns_of_replaced_table() -> None:
     pl = sl.Pipeline()
     pl.set_param_table(sl.ParamTable(int, {float: [1.0, 2.0, 3.0]}))
-    with pytest.raises(ValueError):
-        pl.set_param_table(sl.ParamTable(int, {str: ['a', 'b', 'c']}))
-    assert pl.compute(Item((Label(int, 1),), float)) == 2.0
+    # We could imagine that this would be allowed if the index
+    # (here: automatic index as range(3)) is the same. For now we do not.
+    pl.set_param_table(sl.ParamTable(int, {str: ['a', 'b', 'c']}))
+    assert pl.compute(Item((Label(int, 1),), str)) == 'b'
     with pytest.raises(sl.UnsatisfiedRequirement):
-        pl.compute(Item((Label(int, 1),), str))
+        pl.compute(Item((Label(int, 1),), float))
 
 
 def test_can_get_elements_of_param_table() -> None:
@@ -38,6 +39,46 @@ def test_can_get_elements_of_param_table_with_explicit_index() -> None:
     pl = sl.Pipeline()
     pl.set_param_table(sl.ParamTable(int, {float: [1.0, 2.0, 3.0]}, index=[11, 12, 13]))
     assert pl.compute(Item((Label(int, 12),), float)) == 2.0
+
+
+def test_can_replace_param_table() -> None:
+    pl = sl.Pipeline()
+    table1 = sl.ParamTable(int, {float: [1.0, 2.0, 3.0]}, index=[11, 12, 13])
+    pl.set_param_table(table1)
+    assert pl.compute(Item((Label(int, 12),), float)) == 2.0
+    table2 = sl.ParamTable(int, {float: [4.0, 5.0, 6.0]}, index=[21, 22, 23])
+    pl.set_param_table(table2)
+    assert pl.compute(Item((Label(int, 22),), float)) == 5.0
+
+
+def test_can_replace_param_table_with_table_of_different_length() -> None:
+    pl = sl.Pipeline()
+    table1 = sl.ParamTable(int, {float: [1.0, 2.0, 3.0]}, index=[11, 12, 13])
+    pl.set_param_table(table1)
+    assert pl.compute(Item((Label(int, 13),), float)) == 3.0
+    table2 = sl.ParamTable(int, {float: [4.0, 5.0]}, index=[21, 22])
+    pl.set_param_table(table2)
+    assert pl.compute(Item((Label(int, 22),), float)) == 5.0
+    # Make sure rows beyond the new table are not accessible
+    with pytest.raises(sl.UnsatisfiedRequirement):
+        pl.compute(Item((Label(int, 13),), float))
+
+
+def test_failed_replace_due_to_column_clash_in_other_table() -> None:
+    Row1 = NewType("Row1", int)
+    Row2 = NewType("Row2", int)
+    table1 = sl.ParamTable(Row1, {float: [1.0, 2.0, 3.0]})
+    table2 = sl.ParamTable(Row2, {str: ['a', 'b', 'c']})
+    table1_replacement = sl.ParamTable(
+        Row1, {float: [1.1, 2.2, 3.3], str: ['a', 'b', 'c']}
+    )
+    pl = sl.Pipeline()
+    pl.set_param_table(table1)
+    pl.set_param_table(table2)
+    with pytest.raises(ValueError):
+        pl.set_param_table(table1_replacement)
+    # Make sure the original table is still accessible
+    assert pl.compute(Item((Label(Row1, 1),), float)) == 2.0
 
 
 def test_can_depend_on_elements_of_param_table() -> None:
@@ -644,3 +685,14 @@ def test_can_make_html_repr_with_param_table() -> None:
     pl = sl.Pipeline()
     pl.set_param_table(sl.ParamTable(int, {float: [1.0, 2.0, 3.0]}))
     assert pl._repr_html_()
+
+
+def test_set_param_series_sets_up_pipeline_so_derived_series_can_be_computed() -> None:
+    ints = [1, 2, 3]
+
+    def to_str(x: int) -> str:
+        return str(x)
+
+    pl = sl.Pipeline((to_str,))
+    pl.set_param_series(int, ints)
+    assert pl.compute(sl.Series[int, str]) == sl.Series(int, {1: '1', 2: '2', 3: '3'})

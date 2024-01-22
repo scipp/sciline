@@ -404,11 +404,17 @@ class Pipeline:
         params:
             Parameter table to set.
         """
-        if params.row_dim in self._param_tables:
-            raise ValueError(f'Parameter table for {params.row_dim} already set')
         for param_name in params:
-            if param_name in self._param_name_to_table_key:
+            if (existing := self._param_name_to_table_key.get(param_name)) is not None:
+                if (
+                    existing == params.row_dim
+                    and param_name in self._param_tables[existing]
+                ):
+                    # Column will be removed by del_param_table below, clash is ok
+                    continue
                 raise ValueError(f'Parameter {param_name} already set')
+        if params.row_dim in self._param_tables:
+            self.del_param_table(params.row_dim)
         self._param_tables[params.row_dim] = params
         for param_name in params:
             self._param_name_to_table_key[param_name] = params.row_dim
@@ -418,6 +424,50 @@ class Pipeline:
                     Item((Label(tp=params.row_dim, index=index),), param_name),
                     lambda label=label: label,
                 )
+        for index, label in zip(params.index, params.index):
+            self._set_provider(
+                Item((Label(tp=params.row_dim, index=index),), params.row_dim),
+                lambda label=label: label,
+            )
+
+    def del_param_table(self, row_dim: type) -> None:
+        """
+        Remove a parameter table.
+
+        Parameters
+        ----------
+        row_dim:
+            Row dimension of the parameter table to remove.
+        """
+        # 1. Remove providers pointing to table cells
+        params = self._param_tables[row_dim]
+        for index in params.index:
+            label = (Label(tp=row_dim, index=index),)
+            for param_name in params:
+                del self._providers[Item(label, param_name)]
+            del self._providers[Item(label, row_dim)]
+        # 2. Remove column to table mapping
+        for param_name in list(self._param_name_to_table_key):
+            if self._param_name_to_table_key[param_name] == row_dim:
+                del self._param_name_to_table_key[param_name]
+        # 3. Remove table
+        del self._param_tables[row_dim]
+
+    def set_param_series(self, row_dim: type, index: Collection[Any]) -> None:
+        """
+        Set a series of parameters.
+
+        This is a convenience method for creating and setting a parameter table with
+        no columns and an index given by `index`.
+
+        Parameters
+        ----------
+        row_dim:
+            Row dimension of the parameter table to set.
+        index:
+            Index of the parameter table to set.
+        """
+        self.set_param_table(ParamTable(row_dim, columns={}, index=index))
 
     def _set_provider(
         self, key: Union[Type[T], Item[T]], provider: Callable[..., T]
@@ -535,8 +585,14 @@ class Pipeline:
         stack: List[Union[Type[T], Item[T]]] = [tp]
         while stack:
             tp = stack.pop()
+            # First look in column labels of param tables
             if search_param_tables and tp in self._param_name_to_table_key:
                 graph[tp] = (_param_sentinel, (self._param_name_to_table_key[tp],))
+                continue
+            # Then also indices of param tables. This comes second because we need to
+            # prefer column labels over indices for multi-level grouping.
+            if search_param_tables and tp in self._param_tables:
+                graph[tp] = (_param_sentinel, (tp,))
                 continue
             if get_origin(tp) == Series:
                 sub = self._build_series(tp, handler=handler)  # type: ignore[arg-type]
@@ -634,6 +690,8 @@ class Pipeline:
 
         replicator: ReplicatorBase[KeyType]
         if (
+            # For multi-level grouping a type is an index as well as a column label.
+            # In this case we do not want to replicate the graph, but group it (elif).
             index_name not in self._param_name_to_table_key
             and (params := self._param_tables.get(index_name)) is not None
         ):

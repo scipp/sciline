@@ -160,7 +160,9 @@ def test_presence_of_optional_does_not_affect_related_exception() -> None:
 
 
 def test_optional_dependency_in_node_depending_on_param_table() -> None:
-    def use_optional(x: float, y: Optional[int]) -> str:
+    Int = NewType('Int', int)
+
+    def use_optional(x: float, y: Optional[Int]) -> str:
         return f'{x} {y or 123}'
 
     pl = sl.Pipeline([use_optional])
@@ -168,7 +170,7 @@ def test_optional_dependency_in_node_depending_on_param_table() -> None:
     assert pl.compute(sl.Series[int, str]) == sl.Series(
         int, {0: '1.0 123', 1: '2.0 123', 2: '3.0 123'}
     )
-    pl[int] = 11
+    pl[Int] = 11
     assert pl.compute(sl.Series[int, str]) == sl.Series(
         int, {0: '1.0 11', 1: '2.0 11', 2: '3.0 11'}
     )
