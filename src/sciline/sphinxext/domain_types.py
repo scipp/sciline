@@ -43,19 +43,23 @@ Options
   are added to the defaults but don't override them.
 """
 
+from typing import Any, NewType, Optional
+
 from sphinx.application import Sphinx
 from sphinx.config import Config
-from typing import Optional, Any, NewType
 
 
-def setup(app: Sphinx)->dict[str,Any]:
+def setup(app: Sphinx) -> dict[str, Any]:
     """Setup sciline.sphinxext.domain_types."""
-    app.add_config_value('sciline_domain_types_prefix',
-                         default='',
-                         rebuild='env', types=str)
-    app.add_config_value('sciline_domain_types_extra_aliases',
-                         default={},
-                         rebuild='env', types=dict[str,str])
+    app.add_config_value(
+        'sciline_domain_types_prefix', default='', rebuild='env', types=str
+    )
+    app.add_config_value(
+        'sciline_domain_types_extra_aliases',
+        default={},
+        rebuild='env',
+        types=dict[str, str],
+    )
     app.config.typehints_formatter = _typehints_formatter
     return {'version': 1, 'parallel_read_safe': True, 'parallel_write_safe': True}
 
@@ -88,7 +92,7 @@ def _is_new_type(annotation: Any) -> bool:
     return hasattr(annotation, '__supertype__')
 
 
-def _format_new_type(annotation: NewType, prefix: str,aliases:dict[str,str]) -> str:
+def _format_new_type(annotation: NewType, prefix: str, aliases: dict[str, str]) -> str:
     return (
         f'{_internal_link(annotation, "class", prefix)}'
         f' ({_link(annotation.__supertype__, "class",aliases)})'
@@ -104,9 +108,13 @@ def _is_type_alias_type(annotation: Any) -> bool:
         return False  # pre python 3.12
 
 
-def _format_type_alias_type(annotation: Any, prefix: str,aliases:dict[str,str]) -> str:
+def _format_type_alias_type(
+    annotation: Any, prefix: str, aliases: dict[str, str]
+) -> str:
     alias = _internal_link(annotation, "class", prefix, annotation.__type_params__)
-    value = _link(annotation.__value__, "class", aliases, _get_type_args(annotation.__value__))
+    value = _link(
+        annotation.__value__, "class", aliases, _get_type_args(annotation.__value__)
+    )
     return f'{alias} ({value})'
 
 
@@ -129,7 +137,12 @@ def _internal_link(
     return f':{kind}:`{label} <{target}>`'
 
 
-def _link(ty: type, kind: str,aliases:dict[str,str], type_params: Optional[tuple[type, ...]] = None) -> str:
+def _link(
+    ty: type,
+    kind: str,
+    aliases: dict[str, str],
+    type_params: Optional[tuple[type, ...]] = None,
+) -> str:
     if ty.__module__ == 'builtins':
         target = ty.__name__
     else:
