@@ -43,7 +43,7 @@ Options
   are added to the defaults but don't override them.
 """
 
-from typing import Any, NewType, Optional
+from typing import Any, Optional
 
 from sphinx.application import Sphinx
 from sphinx.config import Config
@@ -74,7 +74,7 @@ _DEFAULT_ALIASES = {
 }
 
 
-def _typehints_formatter(annotation, config: Config) -> Optional[str]:
+def _typehints_formatter(annotation: Any, config: Config) -> Optional[str]:
     """Format typehints with improved NewType handling."""
     prefix = config.sciline_domain_types_prefix
     aliases = _DEFAULT_ALIASES | config.sciline_domain_types_extra_aliases
@@ -92,7 +92,7 @@ def _is_new_type(annotation: Any) -> bool:
     return hasattr(annotation, '__supertype__')
 
 
-def _format_new_type(annotation: NewType, prefix: str, aliases: dict[str, str]) -> str:
+def _format_new_type(annotation: Any, prefix: str, aliases: dict[str, str]) -> str:
     return (
         f'{_internal_link(annotation, "class", prefix)}'
         f' ({_link(annotation.__supertype__, "class",aliases)})'
@@ -101,7 +101,7 @@ def _format_new_type(annotation: NewType, prefix: str, aliases: dict[str, str]) 
 
 def _is_type_alias_type(annotation: Any) -> bool:
     try:
-        from typing import TypeAliasType
+        from typing import TypeAliasType  # type: ignore[attr-defined]
 
         return isinstance(annotation, TypeAliasType)
     except ImportError:
@@ -118,10 +118,10 @@ def _format_type_alias_type(
     return f'{alias} ({value})'
 
 
-def _get_type_args(ty: type) -> tuple[type, ...]:
+def _get_type_args(ty: Any) -> tuple[type, ...]:
     if (args := getattr(ty, '__args__', None)) is not None:
-        return args  # e.g. list[int]
-    return ty.__type_params__
+        return args  # type: ignore[no-any-return]  # e.g. list[int]
+    return ty.__type_params__  # type: ignore[no-any-return]
 
 
 def _internal_link(
