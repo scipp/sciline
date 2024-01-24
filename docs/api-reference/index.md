@@ -32,3 +32,14 @@
    UnboundTypeVar
    UnsatisfiedRequirement
 ```
+
+## Submodules
+
+```{eval-rst}
+.. autosummary::
+   :toctree: ../generated/modules
+   :template: module-template.rst
+   :recursive:
+
+   sphinxext
+```
