@@ -111,7 +111,7 @@ pipeline.compute(Result)
 
 Continue reading about Sciline on the [Getting Started](user-guide/getting-started) page of the [User Guide](user-guide/index).
 It provides more context and explanation for the above example.
-The [User Guide](user-guide/index) also contains a description of more advances features such as [Parameter Tables](user-guide/parameter-tables) and [Generic Providers](user-guide/generic-providers).
+The [User Guide](user-guide/index) also contains a description of more advanced features such as [Parameter Tables](user-guide/parameter-tables) and [Generic Providers](user-guide/generic-providers).
 
 At first it may feel unclear how to apply Sciline to your own code and workflows, given only the above documentation.
 Consider the following concrete examples of how we use Sciline in our own projects:
