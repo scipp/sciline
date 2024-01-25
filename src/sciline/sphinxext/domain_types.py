@@ -5,7 +5,7 @@
 `sphinx-autodoc-typehints <https://github.com/tox-dev/sphinx-autodoc-typehints>`_
 implements formatting for typehints but often results in hard-to-read annotations
 for :class:`typing.NewType`.
-As those are ubiquitous when using Sciline, this extension improves formatting.
+As those may be ubiquitous when using Sciline, this extension improves formatting.
 
 Usage
 -----
