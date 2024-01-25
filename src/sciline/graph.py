@@ -2,20 +2,34 @@
 # Copyright (c) 2023 Scipp contributors (https://github.com/scipp)
 from __future__ import annotations
 
+from typing import TypeVar
+
 import networkx as nx
 
 from sciline import HandleAsComputeTimeException, Pipeline
+from sciline.typing import get_optional
 from sciline.visualize import _format_type as format_type
+
+T = TypeVar('T')
 
 
 class Graph:
-    def __init__(self, p: Pipeline):
-        self._graph = self._to_networkx(p)
+    def __init__(self, p: Pipeline, keys=None):
+        self._graph = self._to_networkx(p, keys=keys)
 
-    def _to_networkx(self, p: Pipeline) -> Graph:
-        tg = p.get(p._providers.keys(), handler=HandleAsComputeTimeException())
+    def _to_networkx(self, p: Pipeline, keys=None) -> Graph:
+        keys = keys or []
+        tg = p.get(
+            list(p._providers.keys()) + keys,
+            # list(p._providers.keys()) + list(p._subproviders.keys()),
+            handler=HandleAsComputeTimeException(),
+        )
         g = nx.DiGraph()
         for res, (provider, args) in tg._graph.items():
+            # When a provider depends on Optional[T], this will result in an item
+            # with res=Optional[T]. However, we also directly request T above, so
+            # there is some duplication that we need to avoid.
+            res = get_optional(res) or res
             result_name = format_type(res).name
             provider_name = provider.__qualname__
 
@@ -23,7 +37,12 @@ class Graph:
             if result_name.endswith(']'):
                 i = result_name.rfind('[')
                 provider_name = provider_name + result_name[i:]
-            g.add_node(hash(res), label=result_name, type='data')
+            is_input_data = provider_name.startswith('Pipeline.__setitem__.')
+            g.add_node(
+                hash(res), label=result_name, type='input' if is_input_data else 'data'
+            )
+            if is_input_data:
+                continue
             if provider_name.startswith(
                 'HandleAsComputeTimeException.handle_unsatisfied_requirement.'
             ):
@@ -33,6 +52,7 @@ class Graph:
             g.add_node(hash(provider_name), label=provider_name, type='provider')
             g.add_edge(hash(provider_name), hash(res))
             for arg in args:
+                arg = get_optional(arg) or arg
                 g.add_edge(hash(arg), hash(provider_name))
         return g
 
@@ -70,7 +90,7 @@ class Graph:
         agraph = nx.nx_agraph.to_agraph(self._graph)
 
         for node in agraph.nodes():
-            if node.attr['type'] == 'data':
+            if node.attr['type'] in ['data', 'input']:
                 node.attr['shape'] = 'rectangle'
 
         for node in self.unsatisfied_requirement_nodes():
