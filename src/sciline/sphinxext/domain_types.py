@@ -33,14 +33,17 @@ Options
   For example, if a type is defined as ``mypackage.types.SomeType``, setting
   ``sciline_domain_types_prefix = 'mypackage'`` results in this type being rendered
   as ``types.SomeType``.
-- ``sciline_domain_types_extra_aliases`` (default ``{}``):
-  ``sciline.sphinxext.domain_types`` can render aliases instead of the regular
-  type names. This is useful, e.g., for abbreviating long types or types defined
-  in internal modules. ``sciline.sphinxext.domain_types`` defines some default
-  aliases for Scipp, e.g., ``{'scipp._scipp.core.DataArray': 'scipp.DataArray', ...}``
-  which means that occurrences of ``scipp._scipp.core.DataArray`` are rendered as
-  ``scipp.DataArray``. Aliases defined in ``sciline_domain_types_extra_aliases``
-  are added to the defaults but don't override them.
+- ``sciline_domain_types_aliases`` (default ``{}``):
+  This extension can render aliases instead of the regular type names.
+  This is useful, e.g., for abbreviating long types or types defined
+  in internal modules. For example,
+
+  .. code-block:: python
+
+      sciline_domain_types_aliases = {'mypackage._types.SomeType': 'mypackage.SomeType'}
+
+  Renders occurrences of ``SomeType`` as ``mypackage.types.SomeType`` instead of using
+  the fully qualified name.
 """
 
 from typing import Any, Optional
@@ -55,7 +58,7 @@ def setup(app: Sphinx) -> dict[str, Any]:
         'sciline_domain_types_prefix', default='', rebuild='env', types=str
     )
     app.add_config_value(
-        'sciline_domain_types_extra_aliases',
+        'sciline_domain_types_aliases',
         default={},
         rebuild='env',
         types=dict[str, str],
@@ -64,20 +67,10 @@ def setup(app: Sphinx) -> dict[str, Any]:
     return {'version': 1, 'parallel_read_safe': True, 'parallel_write_safe': True}
 
 
-_DEFAULT_ALIASES = {
-    'scipp._scipp.core.DataArray': 'scipp.DataArray',
-    'scipp._scipp.core.Dataset': 'scipp.Dataset',
-    'scipp._scipp.core.DType': 'scipp.DType',
-    'scipp._scipp.core.Unit': 'scipp.Unit',
-    'scipp._scipp.core.Variable': 'scipp.Variable',
-    'scipp.core.data_group.DataGroup': 'scipp.DataGroup',
-}
-
-
 def _typehints_formatter(annotation: Any, config: Config) -> Optional[str]:
     """Format typehints with improved NewType handling."""
     prefix = config.sciline_domain_types_prefix
-    aliases = _DEFAULT_ALIASES | config.sciline_domain_types_extra_aliases
+    aliases = config.sciline_domain_types_aliases
 
     if _is_new_type(annotation):
         return _format_new_type(annotation, prefix, aliases)
