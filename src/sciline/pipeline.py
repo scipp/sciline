@@ -327,6 +327,7 @@ class Pipeline:
         self._subproviders: Dict[type, Dict[Tuple[Key | TypeVar, ...], Provider]] = {}
         self._param_tables: Dict[Key, ParamTable] = {}
         self._param_name_to_table_key: Dict[Key, Key] = {}
+        self._generic_keys = []
         for provider in providers or []:
             self.insert(provider)
         for tp, param in (params or {}).items():
@@ -489,6 +490,7 @@ class Pipeline:
             subproviders = self._subproviders.setdefault(origin, {})
             args = get_args(key)
             subproviders[args] = provider
+            self._generic_keys.append(key)
         else:
             self._providers[key] = provider
 

@@ -20,8 +20,7 @@ class Graph:
     def _to_networkx(self, p: Pipeline, keys=None) -> Graph:
         keys = keys or []
         tg = p.get(
-            list(p._providers.keys()) + keys,
-            # list(p._providers.keys()) + list(p._subproviders.keys()),
+            list(p._providers.keys()) + keys + p._generic_keys,
             handler=HandleAsComputeTimeException(),
         )
         g = nx.DiGraph()
