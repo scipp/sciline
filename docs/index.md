@@ -25,7 +25,15 @@ Sciline takes a *declarative* approach, inspired by [dependency injection](https
 By relying on Python's type-hinting, a [domain-specific language](https://en.wikipedia.org/wiki/Domain-specific_language) is used to describe the workflow.
 This enforces a clear expression of intent, aiding readability and enabling automatic assembly of a task graph that can compute desired outputs.
 
+The task graphs Sciline assembles can then be executed, e.g., using [Dask](https://dask.org/).
+
 ## FAQ
+
+### Does Sciline depend on Dask?
+
+No.
+Sciline is a Python library with minimal dependencies and does not depend on [Dask](https://dask.org/).
+However, it is designed to work well with Dask, and we currently recommend using Dask to execute the task graphs Sciline assembles.
 
 ### Is Sciline an alternative to Snakemake?
 
@@ -99,7 +107,20 @@ pipeline = sciline.Pipeline(providers, params=params)
 pipeline.compute(Result)
 ```
 
-See [Getting Started](user-guide/getting-started) for context and explanation.
+## Continue reading
+
+Continue reading about Sciline on the [Getting Started](user-guide/getting-started) page of the [User Guide](user-guide/index).
+It provides more context and explanation for the above example.
+The [User Guide](user-guide/index) also contains a description of more advanced features such as [Parameter Tables](user-guide/parameter-tables) and [Generic Providers](user-guide/generic-providers).
+
+At first it may feel unclear how to apply Sciline to your own code and workflows, given only the above documentation.
+Consider the following concrete examples of how we use Sciline in our own projects:
+
+ - [Small Angle Neutron Scattering](https://scipp.github.io/esssans/examples/sans2d.html)
+ - [Neutron Powder Diffraction](https://scipp.github.io/essdiffraction/examples/POWGEN_data_reduction.html)
+ - [Neutron Reflectometry](https://scipp.github.io/essreflectometry/examples/amor.html)
+
+ As Sciline is still a young project, we are still in the process of uncovering best practices, but we hope the above can at least provide some ideas.
 
 
 ```{toctree}
