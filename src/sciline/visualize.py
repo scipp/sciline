@@ -78,7 +78,11 @@ def to_graphviz(
 
 def _to_subgraphs(graph: FormattedGraph) -> Dict[str, FormattedGraph]:
     def get_subgraph_name(name: str) -> str:
-        return name.split('[')[0]
+        sgname = name.split('[')[0]
+        if sgname == 'Series':
+            # Example: Series[RowId, Material[Country]] -> RowId, Material[Country]
+            return name.partition('[')[-1].rpartition(']')[0]
+        return sgname
 
     subgraphs: Dict[str, FormattedGraph] = {}
     for p, (p_name, args, ret) in graph.items():
