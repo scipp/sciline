@@ -2,6 +2,7 @@
 # Copyright (c) 2023 Scipp contributors (https://github.com/scipp)
 from __future__ import annotations
 
+import inspect
 from collections import defaultdict
 from collections.abc import Iterable
 from itertools import chain
@@ -85,6 +86,18 @@ def _bind_free_typevars(tp: TypeVar | Key, bound: Dict[TypeVar, Key]) -> Key:
         return result
     else:
         return tp
+
+
+def _get_arg_spec(
+    provider: Callable[..., Key], bound: Dict[TypeVar, Key]
+) -> Tuple[Tuple[Key, ...], Dict[str, Key]]:
+    hints = get_type_hints(provider)
+    sig = inspect.getfullargspec(provider)
+    args = tuple(_bind_free_typevars(hints[key], bound=bound) for key in sig.args)
+    kwargs = {
+        key: _bind_free_typevars(hints[key], bound=bound) for key in sig.kwonlyargs
+    }
+    return args, kwargs
 
 
 def _find_all_paths(
@@ -587,12 +600,12 @@ class Pipeline:
             tp = stack.pop()
             # First look in column labels of param tables
             if search_param_tables and tp in self._param_name_to_table_key:
-                graph[tp] = (_param_sentinel, (self._param_name_to_table_key[tp],))
+                graph[tp] = (_param_sentinel, (self._param_name_to_table_key[tp],), {})
                 continue
             # Then also indices of param tables. This comes second because we need to
             # prefer column labels over indices for multi-level grouping.
             if search_param_tables and tp in self._param_tables:
-                graph[tp] = (_param_sentinel, (tp,))
+                graph[tp] = (_param_sentinel, (tp,), {})
                 continue
             if get_origin(tp) == Series:
                 sub = self._build_series(tp, handler=handler)  # type: ignore[arg-type]
@@ -606,20 +619,15 @@ class Pipeline:
                         handler=HandleAsBuildTimeException(),
                     )
                 except UnsatisfiedRequirement:
-                    graph[tp] = (provide_none, ())
+                    graph[tp] = (provide_none, (), {})
                 else:
                     graph[tp] = optional_subgraph.pop(optional_arg)
                     graph.update(optional_subgraph)
                 continue
             provider, bound = self._get_unique_provider(tp, handler=handler)
-            tps = get_type_hints(provider)
-            args = tuple(
-                _bind_free_typevars(t, bound=bound)
-                for name, t in tps.items()
-                if name != 'return'
-            )
-            graph[tp] = (provider, args)
-            for arg in args:
+            args, kwargs = _get_arg_spec(provider, bound)
+            graph[tp] = (provider, args, kwargs)
+            for arg in (*args, *kwargs.values()):
                 if arg not in graph:
                     stack.append(arg)
         return graph

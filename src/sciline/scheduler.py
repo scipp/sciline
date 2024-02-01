@@ -47,7 +47,6 @@ class NaiveScheduler:
         results: Dict[Key, Any] = {}
         for t in tasks:
             provider, args = graph[t]
-            # TODO
             results[t] = provider(*[results[arg] for arg in args])
         return tuple(results[key] for key in keys)
 
