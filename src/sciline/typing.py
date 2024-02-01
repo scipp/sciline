@@ -16,6 +16,8 @@ from typing import (
     get_origin,
 )
 
+from ._provider import ArgSpec
+
 
 @dataclass(frozen=True)
 class Label:
@@ -37,7 +39,7 @@ ProviderKind = Literal['function', 'parameter', 'table']
 
 
 Key = Union[type, Item[Any]]
-Graph = Dict[Key, Tuple[Provider, Tuple[Key, ...], Dict[str, Key]]]
+Graph = Dict[Key, Tuple[Provider, ArgSpec]]
 
 
 def get_optional(tp: Key) -> Optional[Any]:

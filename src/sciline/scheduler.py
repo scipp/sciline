@@ -37,9 +37,7 @@ class NaiveScheduler:
     def get(self, graph: Graph, keys: List[Key]) -> Tuple[Any, ...]:
         import graphlib
 
-        dependencies = {
-            tp: (*args, *kwargs.values()) for tp, (_, args, kwargs) in graph.items()
-        }
+        dependencies = {tp: tuple(args.keys()) for tp, (_, args) in graph.items()}
         ts = graphlib.TopologicalSorter(dependencies)
         try:
             # Create list from generator to force early exception if there is a cycle
@@ -48,11 +46,8 @@ class NaiveScheduler:
             raise CycleError from e
         results: Dict[Key, Any] = {}
         for t in tasks:
-            provider, args, kwargs = graph[t]
-            results[t] = provider(
-                *[results[arg] for arg in args],
-                **{key: results[arg] for key, arg in kwargs.items()},
-            )
+            provider, args = graph[t]
+            results[t] = args.call(provider, results)
         return tuple(results[key] for key in keys)
 
     def __repr__(self) -> str:
@@ -88,10 +83,10 @@ class DaskScheduler:
             tp: (
                 apply,
                 provider,
-                list(args),
-                (dict, [[key, val] for key, val in kwargs.items()]),
+                list(args.args),
+                (dict, [[key, val] for key, val in args.kwargs.items()]),
             )
-            for tp, (provider, args, kwargs) in graph.items()
+            for tp, (provider, args) in graph.items()
         }
         try:
             return self._dask_get(dsk, keys)

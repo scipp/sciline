@@ -2,7 +2,6 @@
 # Copyright (c) 2023 Scipp contributors (https://github.com/scipp)
 from __future__ import annotations
 
-import inspect
 from collections import defaultdict
 from collections.abc import Iterable
 from itertools import chain
@@ -27,6 +26,7 @@ from typing import (
 
 from sciline.task_graph import TaskGraph
 
+from ._provider import ArgSpec
 from .display import pipeline_html_repr
 from .domain import Scope, ScopeTwoParams
 from .handler import (
@@ -45,12 +45,6 @@ KeyType = TypeVar('KeyType')
 ValueType = TypeVar('ValueType')
 IndexType = TypeVar('IndexType')
 LabelType = TypeVar('LabelType')
-
-
-class UnboundTypeVar(Exception):
-    """
-    Raised when a parameter of a generic provider is not bound to a concrete type.
-    """
 
 
 class AmbiguousProvider(Exception):
@@ -72,32 +66,6 @@ def _is_compatible_type_tuple(
         if req != prov:
             return False
     return True
-
-
-def _bind_free_typevars(tp: TypeVar | Key, bound: Dict[TypeVar, Key]) -> Key:
-    if isinstance(tp, TypeVar):
-        if (result := bound.get(tp)) is None:
-            raise UnboundTypeVar(f'Unbound type variable {tp}')
-        return result
-    elif (origin := get_origin(tp)) is not None:
-        result = origin[tuple(_bind_free_typevars(arg, bound) for arg in get_args(tp))]
-        if result is None:
-            raise ValueError(f'Binding type variables in {tp} resulted in `None`')
-        return result
-    else:
-        return tp
-
-
-def _get_arg_spec(
-    provider: Callable[..., Key], bound: Dict[TypeVar, Key]
-) -> Tuple[Tuple[Key, ...], Dict[str, Key]]:
-    hints = get_type_hints(provider)
-    sig = inspect.getfullargspec(provider)
-    args = tuple(_bind_free_typevars(hints[key], bound=bound) for key in sig.args)
-    kwargs = {
-        key: _bind_free_typevars(hints[key], bound=bound) for key in sig.kwonlyargs
-    }
-    return args, kwargs
 
 
 def _find_all_paths(
@@ -625,11 +593,9 @@ class Pipeline:
                     graph.update(optional_subgraph)
                 continue
             provider, bound = self._get_unique_provider(tp, handler=handler)
-            args, kwargs = _get_arg_spec(provider, bound)
-            graph[tp] = (provider, args, kwargs)
-            for arg in (*args, *kwargs.values()):
-                if arg not in graph:
-                    stack.append(arg)
+            args = ArgSpec.from_provider(provider, bound)
+            graph[tp] = (provider, args)
+            stack.extend(args.keys() - graph.keys())
         return graph
 
     def _build_series(
