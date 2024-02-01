@@ -1208,3 +1208,11 @@ def test_pipeline_with_generics_setitem_on_copy_does_not_affect_original() -> No
 def test_html_repr() -> None:
     pipeline = sl.Pipeline([make_int], params={float: 5.0})
     assert isinstance(pipeline._repr_html_(), str)
+
+
+def test_pipeline_keyword_arguments() -> None:
+    def fn_with_kwarg(*, x: int) -> float:
+        return 0.1 * x
+
+    pipeline = sl.Pipeline([fn_with_kwarg], params={int: 5})
+    assert pipeline.compute(float) == 0.5

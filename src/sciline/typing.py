@@ -37,7 +37,7 @@ ProviderKind = Literal['function', 'parameter', 'table']
 
 
 Key = Union[type, Item[Any]]
-Graph = Dict[Key, Tuple[Provider, Tuple[Key, ...]]]
+Graph = Dict[Key, Tuple[Provider, Tuple[Key, ...], Dict[str, Key]]]
 
 
 def get_optional(tp: Key) -> Optional[Any]:
