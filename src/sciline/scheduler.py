@@ -84,7 +84,7 @@ class DaskScheduler:
                 apply,
                 provider,
                 list(args.args),
-                (dict, [[key, val] for key, val in args.kwargs.items()]),
+                (dict, [[key, val] for key, val in args.kwargs]),
             )
             for tp, (provider, args) in graph.items()
         }
