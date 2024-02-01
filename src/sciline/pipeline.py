@@ -69,8 +69,8 @@ def _is_compatible_type_tuple(
 
 
 def _find_all_paths(
-    dependencies: Mapping[T, Collection[T]], start: T, end: T
-) -> List[List[T]]:
+    dependencies: Mapping[Key, Collection[Key]], start: Key, end: Key
+) -> List[List[Key]]:
     """Find all paths from start to end in a DAG."""
     if start == end:
         return [[start]]
@@ -83,16 +83,13 @@ def _find_all_paths(
     return paths
 
 
-def _find_nodes_in_paths(
-    graph: Mapping[T, Tuple[Callable[..., Any], Collection[T]]], end: T
-) -> List[T]:
+def _find_nodes_in_paths(graph: Graph, end: Key) -> List[Key]:
     """
     Helper for Pipeline. Finds all nodes that need to be duplicated since they depend
     on a value from a param table.
     """
     start = next(iter(graph))
-    # 0 is the provider, 1 is the args
-    dependencies = {k: v[1] for k, v in graph.items()}
+    dependencies = {k: tuple(args.keys()) for k, (_, args) in graph.items()}
     paths = _find_all_paths(dependencies, start, end)
     nodes = set()
     for path in paths:
@@ -146,7 +143,7 @@ class ReplicatorBase(Generic[IndexType]):
         for idx in self.index:
             subkey = self.key(idx, key)
             if provider == _param_sentinel:
-                graph[subkey] = (get_provider(subkey)[0], ())
+                graph[subkey] = (get_provider(subkey)[0], ArgSpec.null())
             else:
                 graph[subkey] = self._copy_node(key, provider, args, idx)
         return graph
@@ -155,13 +152,10 @@ class ReplicatorBase(Generic[IndexType]):
         self,
         key: Key,
         provider: Union[Provider, SeriesProvider[IndexType]],
-        args: Tuple[Key, ...],
+        args: ArgSpec,
         idx: IndexType,
-    ) -> Tuple[Provider, Tuple[Key, ...]]:
-        return (
-            provider,
-            tuple(self.key(idx, arg) if arg in self else arg for arg in args),
-        )
+    ) -> tuple[Provider, ArgSpec]:
+        return (provider, args.filter_in_keys(self._path))
 
     def key(self, i: IndexType, value_name: Union[Type[T], Item[T]]) -> Item[T]:
         value_name = get_optional(value_name) or value_name
@@ -241,9 +235,9 @@ class GroupingReplicator(ReplicatorBase[LabelType], Generic[IndexType, LabelType
         self,
         key: Key,
         provider: Union[Provider, SeriesProvider[IndexType]],
-        args: Tuple[Key, ...],
+        args: ArgSpec,
         idx: LabelType,
-    ) -> Tuple[Provider, Tuple[Key, ...]]:
+    ) -> Tuple[Provider, ArgSpec]:
         if (not isinstance(provider, SeriesProvider)) or key != self._group_node:
             return super()._copy_node(key, provider, args, idx)
         labels = self._groups[idx]
@@ -568,12 +562,15 @@ class Pipeline:
             tp = stack.pop()
             # First look in column labels of param tables
             if search_param_tables and tp in self._param_name_to_table_key:
-                graph[tp] = (_param_sentinel, (self._param_name_to_table_key[tp],), {})
+                graph[tp] = (
+                    _param_sentinel,
+                    ArgSpec.from_arg(self._param_name_to_table_key[tp]),
+                )
                 continue
             # Then also indices of param tables. This comes second because we need to
             # prefer column labels over indices for multi-level grouping.
             if search_param_tables and tp in self._param_tables:
-                graph[tp] = (_param_sentinel, (tp,), {})
+                graph[tp] = (_param_sentinel, ArgSpec.from_arg(tp))
                 continue
             if get_origin(tp) == Series:
                 sub = self._build_series(tp, handler=handler)  # type: ignore[arg-type]
@@ -587,7 +584,7 @@ class Pipeline:
                         handler=HandleAsBuildTimeException(),
                     )
                 except UnsatisfiedRequirement:
-                    graph[tp] = (provide_none, (), {})
+                    graph[tp] = (provide_none, ArgSpec.null())
                 else:
                     graph[tp] = optional_subgraph.pop(optional_arg)
                     graph.update(optional_subgraph)

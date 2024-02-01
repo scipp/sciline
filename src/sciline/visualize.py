@@ -138,7 +138,7 @@ def _format_graph(graph: Graph, compact: bool) -> FormattedGraph:
     return {
         _format_provider(provider, ret, compact=compact): (
             _qualname(provider),
-            [_format_type(a, compact=compact) for a in args],
+            [_format_type(a, compact=compact) for a in args.keys()],
             _format_type(ret, compact=compact),
         )
         for ret, (provider, args) in graph.items()
