@@ -239,17 +239,24 @@ class GroupingReplicator(ReplicatorBase[LabelType], Generic[IndexType, LabelType
         provider: Union[Provider, SeriesProvider[IndexType]],
         args: ArgSpec,
         idx: LabelType,
-    ) -> Tuple[Provider, ArgSpec]:
+    ) -> tuple[Provider, ArgSpec]:
         if (not isinstance(provider, SeriesProvider)) or key != self._group_node:
             return super()._copy_node(key, provider, args, idx)
         labels = self._groups[idx]
         if set(labels) - set(provider.labels):
             raise ValueError(f'{labels} is not a subset of {provider.labels}')
+        if tuple(args.kwargs):
+            raise RuntimeError(
+                'A Series was provided with keyword arguments. This should not happen '
+                'and is an internal error of Sciline.'
+            )
         selected = {
-            label: arg for label, arg in zip(provider.labels, args) if label in labels
+            label: arg
+            for label, arg in zip(provider.labels, args.args)
+            if label in labels
         }
         split_provider = SeriesProvider(selected, provider.row_dim)
-        return (split_provider, tuple(selected.values()))
+        return split_provider, ArgSpec.from_args(*selected.values())
 
     def _find_grouping_node(self, index_name: Key, subgraph: Graph) -> type:
         ends: List[type] = []
@@ -399,12 +406,12 @@ class Pipeline:
             for index, label in zip(params.index, values):
                 self._set_provider(
                     Item((Label(tp=params.row_dim, index=index),), param_name),
-                    lambda label=label: label,
+                    _provider_for_constant(label),
                 )
         for index, label in zip(params.index, params.index):
             self._set_provider(
                 Item((Label(tp=params.row_dim, index=index),), params.row_dim),
-                lambda label=label: label,
+                _provider_for_constant(label),
             )
 
     def del_param_table(self, row_dim: type) -> None:
@@ -566,13 +573,13 @@ class Pipeline:
             if search_param_tables and tp in self._param_name_to_table_key:
                 graph[tp] = (
                     _param_sentinel,
-                    ArgSpec.from_arg(self._param_name_to_table_key[tp]),
+                    ArgSpec.from_args(self._param_name_to_table_key[tp]),
                 )
                 continue
             # Then also indices of param tables. This comes second because we need to
             # prefer column labels over indices for multi-level grouping.
             if search_param_tables and tp in self._param_tables:
-                graph[tp] = (_param_sentinel, ArgSpec.from_arg(tp))
+                graph[tp] = (_param_sentinel, ArgSpec.from_args(tp))
                 continue
             if get_origin(tp) == Series:
                 sub = self._build_series(tp, handler=handler)  # type: ignore[arg-type]
@@ -678,11 +685,14 @@ class Pipeline:
         else:
             raise KeyError(f'No parameter table found for label {index_name}')
 
-        graph: Graph = {}
-        graph[tp] = (
-            SeriesProvider(list(replicator.index), index_name),
-            tuple(replicator.key(idx, value_type) for idx in replicator.index),
-        )
+        graph: Graph = {
+            tp: (
+                SeriesProvider(list(replicator.index), index_name),
+                ArgSpec.from_args(
+                    *(replicator.key(idx, value_type) for idx in replicator.index)
+                ),
+            )
+        }
 
         for key, value in subgraph.items():
             if key in replicator:
@@ -855,3 +865,12 @@ class Pipeline:
         return pipeline_html_repr(
             chain(providers_without_parameters, providers_with_parameters)
         )
+
+
+def _provider_for_constant(x: T) -> Callable[[], T]:
+    # Create a closure that returns the given object.
+    # This can be used in loops where `lambda: x` would not bind `x` correctly.
+    def constant_provider() -> T:
+        return x
+
+    return constant_provider

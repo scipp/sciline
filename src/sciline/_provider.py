@@ -70,11 +70,11 @@ class ArgSpec:
         yield from self._args.values()
         yield from self._kwargs.values()
 
-    def map_keys(self, callback: Callable[[Key], Key]) -> ArgSpec:
+    def map_keys(self, transform: Callable[[Key], Key]) -> ArgSpec:
         """Return a new ArgSpec with the keys mapped by ``callback``."""
         return ArgSpec(
-            args={name: callback(arg) for name, arg in self._args.items()},
-            kwargs={name: callback(arg) for name, arg in self._kwargs.items()},
+            args={name: transform(arg) for name, arg in self._args.items()},
+            kwargs={name: transform(arg) for name, arg in self._kwargs.items()},
         )
 
     def call(self, provider: Provider, values: dict[Key, Any]) -> Any:
