@@ -82,8 +82,20 @@ def test_failed_replace_due_to_column_clash_in_other_table() -> None:
 
 
 def test_can_depend_on_elements_of_param_table() -> None:
-    # This is not a valid type annotation, notsure why it works with get_type_hints
+    # This is not a valid type annotation, not sure why it works with get_type_hints
     def use_elem(x: Item((Label(int, 1),), float)) -> str:  # type: ignore[valid-type]
+        return str(x)
+
+    pl = sl.Pipeline([use_elem])
+    pl.set_param_table(sl.ParamTable(int, {float: [1.0, 2.0, 3.0]}))
+    assert pl.compute(str) == "2.0"
+
+
+def test_can_depend_on_elements_of_param_table_kwarg() -> None:
+    # This is not a valid type annotation, not sure why it works with get_type_hints
+    def use_elem(
+        *, x: Item((Label(int, 1),), float)  # type: ignore[valid-type]
+    ) -> str:
         return str(x)
 
     pl = sl.Pipeline([use_elem])
@@ -112,6 +124,17 @@ def test_cannot_compute_series_of_non_table_param() -> None:
 
 def test_can_compute_series_of_derived_values() -> None:
     def process(x: float) -> str:
+        return str(x)
+
+    pl = sl.Pipeline([process])
+    pl.set_param_table(sl.ParamTable(int, {float: [1.0, 2.0, 3.0]}))
+    assert pl.compute(sl.Series[int, str]) == sl.Series(
+        int, {0: "1.0", 1: "2.0", 2: "3.0"}
+    )
+
+
+def test_can_compute_series_of_derived_values_kwarg() -> None:
+    def process(*, x: float) -> str:
         return str(x)
 
     pl = sl.Pipeline([process])
