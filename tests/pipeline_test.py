@@ -1222,13 +1222,13 @@ def test_pipeline_mixed_arguments(scheduler: sl.scheduler.Scheduler) -> None:
     def no_args() -> float:
         return 1.2
 
-    def pos_only(a: float) -> list:
+    def pos_only(a: float) -> list[float]:
         return [a, a]
 
-    def kwarg_only(*, lst: list) -> int:
+    def kwarg_only(*, lst: list[float]) -> int:
         return len(lst)
 
-    def mixed_args(i: int, *, lst: list) -> str:
+    def mixed_args(i: int, *, lst: list[float]) -> str:
         return f'i = {i}, lst[0] = {lst[0]}'
 
     pipeline = sl.Pipeline([no_args, pos_only, kwarg_only, mixed_args])

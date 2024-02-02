@@ -25,9 +25,9 @@ def dask_scheduler() -> Optional[DaskScheduler]:
 @pytest.fixture(params=['naive', 'dask'])
 def scheduler(request: pytest.FixtureRequest) -> Scheduler:
     if request.param == 'naive':
-        return request.getfixturevalue('naive_scheduler')
+        return request.getfixturevalue('naive_scheduler')  # type: ignore[no-any-return]
 
     sched = request.getfixturevalue('dask_scheduler')
     if sched is None:
         pytest.skip("Test requires Dask")
-    return sched
+    return sched  # type: ignore[no-any-return]
