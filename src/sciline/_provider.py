@@ -6,8 +6,8 @@ import inspect
 from typing import (
     TYPE_CHECKING,
     Any,
+    Callable,
     Generator,
-    Sequence,
     TypeVar,
     get_args,
     get_origin,
@@ -48,9 +48,9 @@ class ArgSpec:
         return cls(args=args, kwargs=kwargs)
 
     @classmethod
-    def from_arg(cls, arg: Key) -> ArgSpec:
-        """Create ArgSpec from a single positional argument."""
-        return cls(args={'unknown': arg}, kwargs={})
+    def from_args(cls, *args: Key) -> ArgSpec:
+        """Create ArgSpec from positional arguments."""
+        return cls(args={f'unknown_{i}': arg for i, arg in enumerate(args)}, kwargs={})
 
     @classmethod
     def null(cls) -> ArgSpec:
@@ -70,15 +70,11 @@ class ArgSpec:
         yield from self._args.values()
         yield from self._kwargs.values()
 
-    def filter_in_keys(self, select: Sequence[Key]) -> ArgSpec:
-        """Return a new ArgSpec that only has keys that are present in ``select``."""
-
-        def do_filter(d: dict[str, Key]) -> dict[str, Key]:
-            return {name: arg for name, arg in d.items() if arg in select}
-
+    def map_keys(self, callback: Callable[[Key], Key]) -> ArgSpec:
+        """Return a new ArgSpec with the keys mapped by ``callback``."""
         return ArgSpec(
-            args=do_filter(self._args),
-            kwargs=do_filter(self._kwargs),
+            args={name: callback(arg) for name, arg in self._args.items()},
+            kwargs={name: callback(arg) for name, arg in self._kwargs.items()},
         )
 
     def call(self, provider: Provider, values: dict[Key, Any]) -> Any:

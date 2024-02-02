@@ -155,7 +155,9 @@ class ReplicatorBase(Generic[IndexType]):
         args: ArgSpec,
         idx: IndexType,
     ) -> tuple[Provider, ArgSpec]:
-        return (provider, args.filter_in_keys(self._path))
+        return provider, args.map_keys(
+            lambda arg: self.key(idx, arg) if arg in self else arg
+        )
 
     def key(self, i: IndexType, value_name: Union[Type[T], Item[T]]) -> Item[T]:
         value_name = get_optional(value_name) or value_name
