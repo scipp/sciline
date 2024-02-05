@@ -3,10 +3,7 @@
 from dataclasses import dataclass
 from typing import (
     Any,
-    Callable,
-    Dict,
     Generic,
-    Literal,
     Optional,
     Tuple,
     Type,
@@ -16,7 +13,7 @@ from typing import (
     get_origin,
 )
 
-from ._provider import ArgSpec
+from ._provider import Provider
 
 
 @dataclass(frozen=True)
@@ -34,12 +31,8 @@ class Item(Generic[T]):
     tp: Type[T]
 
 
-Provider = Callable[..., Any]
-ProviderKind = Literal['function', 'parameter', 'table']
-
-
 Key = Union[type, Item[Any]]
-Graph = Dict[Key, Tuple[Provider, ArgSpec]]
+Graph = dict[Key, Provider]
 
 
 def get_optional(tp: Key) -> Optional[Any]:

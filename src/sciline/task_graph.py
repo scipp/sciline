@@ -7,7 +7,8 @@ from typing import Any, Optional, Sequence, Tuple, TypeVar, Union
 
 from .scheduler import DaskScheduler, NaiveScheduler, Scheduler
 from .typing import Graph, Item
-from .utils import keyname, kind_of_provider
+
+# from .utils import keyname, kind_of_provider
 
 T = TypeVar("T")
 

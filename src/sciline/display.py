@@ -1,9 +1,11 @@
-import inspect
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright (c) 2023 Scipp contributors (https://github.com/scipp)
 from html import escape
 from typing import Iterable, List, Tuple, TypeVar, Union
 
-from .typing import Item, Key, Provider
-from .utils import groupby, keyname, kind_of_provider
+from ._provider import Provider
+from .typing import Item, Key
+from .utils import groupby, keyname
 
 
 def _details(summary: str, body: str) -> str:
@@ -30,18 +32,16 @@ def _provider_source(
     p: Tuple[Key, Tuple[Union[Key, TypeVar], ...], List[Provider]]
 ) -> str:
     key, _, (v, *rest) = p
-    kind = kind_of_provider(v)
-    if kind == 'table':
+    if v.kind == 'table':
         # This is always the case, but mypy complains
         if isinstance(key, Item):
             return escape(
                 f'ParamTable({keyname(key.label[0].tp)}, length={len((v, *rest))})'
             )
-    if kind == 'function':
-        module = getattr(inspect.getmodule(v), '__name__', '')
+    if v.kind == 'function':
         return _details(
-            escape(v.__name__),
-            escape(f'{module}.{v.__name__}'),
+            escape(v.location.name),
+            escape(f'{v.location.module}.{v.location.name}'),
         )
     return ''
 
@@ -50,9 +50,8 @@ def _provider_value(
     p: Tuple[Key, Tuple[Union[Key, TypeVar], ...], List[Provider]]
 ) -> str:
     _, _, (v, *_) = p
-    kind = kind_of_provider(v)
-    if kind == 'parameter':
-        html = escape(str(v())).strip()
+    if v.kind == 'parameter':
+        html = escape(str(v.call({}))).strip()
         return _details(f'{html[:30]}...', html) if len(html) > 30 else html
     return ''
 

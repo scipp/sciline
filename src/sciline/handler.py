@@ -2,9 +2,10 @@
 # Copyright (c) 2023 Scipp contributors (https://github.com/scipp)
 from __future__ import annotations
 
-from typing import Callable, NoReturn, Protocol, Type, TypeVar, Union
+from typing import NoReturn, Protocol, TypeVar
 
-from .typing import Item
+from ._provider import ArgSpec, Provider
+from .typing import Key
 
 T = TypeVar('T')
 
@@ -16,9 +17,7 @@ class UnsatisfiedRequirement(Exception):
 class ErrorHandler(Protocol):
     """Error handling protocol for pipelines."""
 
-    def handle_unsatisfied_requirement(
-        self, tp: Union[Type[T], Item[T]]
-    ) -> Callable[[], T]:
+    def handle_unsatisfied_requirement(self, tp: Key) -> Provider:
         ...
 
 
@@ -30,7 +29,7 @@ class HandleAsBuildTimeException(ErrorHandler):
     ensuring that errors are caught early, before starting costly computation.
     """
 
-    def handle_unsatisfied_requirement(self, tp: Union[Type[T], Item[T]]) -> NoReturn:
+    def handle_unsatisfied_requirement(self, tp: Key) -> NoReturn:
         """Raise an exception when a type cannot be provided."""
         raise UnsatisfiedRequirement('No provider found for type', tp)
 
@@ -43,12 +42,12 @@ class HandleAsComputeTimeException(ErrorHandler):
     visualization. This is helpful when visualizing a graph that is not yet complete.
     """
 
-    def handle_unsatisfied_requirement(
-        self, tp: Union[Type[T], Item[T]]
-    ) -> Callable[[], T]:
+    def handle_unsatisfied_requirement(self, tp: Key) -> Provider:
         """Return a function that raises an exception when called."""
 
         def unsatisfied_sentinel() -> NoReturn:
             raise UnsatisfiedRequirement('No provider found for type', tp)
 
-        return unsatisfied_sentinel
+        return Provider(
+            func=unsatisfied_sentinel, arg_spec=ArgSpec.null(), kind='sentinel'
+        )
