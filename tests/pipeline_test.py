@@ -1210,7 +1210,9 @@ def test_html_repr() -> None:
     assert isinstance(pipeline._repr_html_(), str)
 
 
-def test_pipeline_keyword_argument_and_param(scheduler: sl.scheduler.Scheduler) -> None:
+def test_pipeline_keyword_only_argument_and_param(
+    scheduler: sl.scheduler.Scheduler,
+) -> None:
     def fn_with_kwarg(*, y: int) -> str:
         return f'y = {y}'
 
@@ -1235,7 +1237,7 @@ def test_pipeline_mixed_arguments(scheduler: sl.scheduler.Scheduler) -> None:
     assert pipeline.compute(str, scheduler=scheduler) == 'i = 2, lst[0] = 1.2'
 
 
-def test_pipeline_generic_keyword(scheduler: sl.scheduler.Scheduler) -> None:
+def test_pipeline_generic_keyword_only(scheduler: sl.scheduler.Scheduler) -> None:
     T = TypeVar('T')
     A = NewType('A', int)
     B = NewType('B', int)
