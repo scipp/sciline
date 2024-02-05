@@ -79,6 +79,11 @@ class DaskScheduler:
     def get(self, graph: Graph, keys: List[Key]) -> Any:
         from dask.utils import apply
 
+        # Use `apply` to allow passing keyword arguments.
+        # Contrary to the Dask docs, we need to pass positional args as a list
+        # and keyword args with a nested tuple+list structure.
+        # Otherwise, Dask would treat them as literal values instead of
+        # references to other nodes.
         dsk = {
             tp: (
                 apply,
