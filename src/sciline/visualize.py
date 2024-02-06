@@ -17,8 +17,6 @@ from typing import (
 from graphviz import Digraph
 
 from ._provider import Provider, ProviderKind
-from .handler import HandleAsComputeTimeException
-from .pipeline import SeriesProvider
 from .typing import Graph, Item, Key, get_optional
 
 
@@ -103,8 +101,7 @@ def _to_subgraphs(graph: FormattedGraph) -> Dict[str, FormattedGraph]:
 
 def _add_subgraph(graph: FormattedGraph, dot: Digraph, subgraph: Digraph) -> None:
     for p, formatted_p in graph.items():
-        unsatisfied = f'{_qualname(HandleAsComputeTimeException.handle_unsatisfied_requirement)}.<locals>.unsatisfied_sentinel'  # noqa: E501
-        if formatted_p.name == unsatisfied:
+        if formatted_p.kind == 'unsatisfied':
             subgraph.node(
                 formatted_p.ret.name,
                 formatted_p.ret.name,
@@ -119,19 +116,17 @@ def _add_subgraph(graph: FormattedGraph, dot: Digraph, subgraph: Digraph) -> Non
                 formatted_p.ret.name,
                 shape='box3d' if formatted_p.ret.collapsed else 'rectangle',
             )
-        # Do not draw dummy providers created by Pipeline when setting instances
-        if formatted_p.kind in ('parameter', 'table', 'sentinel'):
-            continue
         # Do not draw the internal provider gathering index-dependent results into
         # a dict
-        if formatted_p.name == _qualname(SeriesProvider):
+        if formatted_p.kind == 'series':
             for arg in formatted_p.args:
                 dot.edge(arg.name, formatted_p.ret.name, style='dashed')
-        else:
+        elif formatted_p.kind == 'function':
             dot.node(p, formatted_p.name, shape='ellipse')
             for arg in formatted_p.args:
                 dot.edge(arg.name, p)
             dot.edge(p, formatted_p.ret.name)
+        # else: Do not draw dummy providers created by Pipeline when setting instances
 
 
 def _qualname(obj: Any) -> Any:
@@ -143,7 +138,7 @@ def _qualname(obj: Any) -> Any:
 def _format_graph(graph: Graph, compact: bool) -> FormattedGraph:
     return {
         _format_provider(provider, ret, compact=compact): FormattedProvider(
-            name=provider.qualname,
+            name=_qualname(provider.func),
             args=[_format_type(a, compact=compact) for a in provider.arg_spec.keys()],
             ret=_format_type(ret, compact=compact),
             kind=provider.kind,
@@ -153,7 +148,7 @@ def _format_graph(graph: Graph, compact: bool) -> FormattedGraph:
 
 
 def _format_provider(provider: Provider, ret: Key, compact: bool) -> str:
-    return f'{provider.qualname}_{_format_type(ret, compact=compact).name}'
+    return f'{provider.location.qualname}_{_format_type(ret, compact=compact).name}'
 
 
 T = TypeVar('T')

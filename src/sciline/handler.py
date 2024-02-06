@@ -49,5 +49,5 @@ class HandleAsComputeTimeException(ErrorHandler):
             raise UnsatisfiedRequirement('No provider found for type', tp)
 
         return Provider(
-            func=unsatisfied_sentinel, arg_spec=ArgSpec.null(), kind='sentinel'
+            func=unsatisfied_sentinel, arg_spec=ArgSpec.null(), kind='unsatisfied'
         )

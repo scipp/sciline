@@ -23,7 +23,9 @@ if TYPE_CHECKING:
 
 
 ToProvider = Callable[..., Any]
-ProviderKind = Literal['function', 'parameter', 'series', 'table', 'sentinel']
+ProviderKind = Literal[
+    'function', 'parameter', 'series', 'table', 'sentinel', 'unsatisfied'
+]
 
 
 class UnboundTypeVar(Exception):
@@ -99,11 +101,6 @@ class Provider:
     @property
     def location(self) -> ProviderLocation:
         return self._location
-
-    @property
-    def qualname(self) -> str:
-        # TODO merge with location
-        return getattr(self._func, '__qualname__', self._func.__class__.__qualname__)
 
     def deduce_key(self) -> Any:
         if (key := get_type_hints(self._func).get('return')) is None:
@@ -203,6 +200,17 @@ class ProviderLocation:
         return cls(
             name=func.__name__, module=getattr(inspect.getmodule(func), '__name__', '')
         )
+
+    @property
+    def qualname(self) -> str:
+        """Fully qualified name of the provider.
+
+        Note that this always includes the module name unlike
+        ``provider.func.__qualname__`` which depends on how the provider was imported.
+        """
+        if self.module:
+            return f'{self.module}.{self.name}'
+        return self.name
 
 
 def _bind_free_typevars(tp: Union[TypeVar, Key], bound: dict[TypeVar, Key]) -> Key:
