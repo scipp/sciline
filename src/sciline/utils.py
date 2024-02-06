@@ -30,13 +30,3 @@ def keyname(key: Union[Key, TypeVar]) -> str:
         parameters = ', '.join(map(keyname, args))
         return f'{qualname(key)}[{parameters}]'
     return qualname(key)
-
-
-# def kind_of_provider(p: Callable[..., Any]) -> ProviderKind:
-#     from .pipeline import Pipeline
-#
-#     if qualname(p) == f'{qualname(Pipeline.__setitem__)}.<locals>.<lambda>':
-#         return 'parameter'
-#     if qualname(p) == f'{qualname(Pipeline.set_param_table)}.<locals>.<lambda>':
-#         return 'table'
-#     return 'function'
