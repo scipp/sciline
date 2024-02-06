@@ -61,18 +61,18 @@ class Provider:
             arg_spec=ArgSpec.null(),
             kind='parameter',
             location=ProviderLocation(
-                name=f'param({type(param).__name__})', module='sciline'
+                name=f'param({type(param).__name__})', module=_module_name(param)
             ),
         )
 
     @classmethod
-    def table(cls, param: Any) -> Provider:
+    def table_row(cls, param: Any) -> Provider:
         return cls(
             func=lambda: param,
             arg_spec=ArgSpec.null(),
             kind='table',
             location=ProviderLocation(
-                name=f'table({type(param).__name__})', module='sciline'
+                name=f'table_row({type(param).__name__})', module=_module_name(param)
             ),
         )
 
@@ -197,9 +197,7 @@ class ProviderLocation:
 
     @classmethod
     def from_function(cls, func: ToProvider) -> ProviderLocation:
-        return cls(
-            name=func.__name__, module=getattr(inspect.getmodule(func), '__name__', '')
-        )
+        return cls(name=func.__name__, module=_module_name(func))
 
     @property
     def qualname(self) -> str:
@@ -225,3 +223,8 @@ def _bind_free_typevars(tp: Union[TypeVar, Key], bound: dict[TypeVar, Key]) -> K
         return result
     else:
         return tp
+
+
+def _module_name(x: Any) -> str:
+    # getmodule might return None
+    return getattr(inspect.getmodule(x), '__name__', '')
