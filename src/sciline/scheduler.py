@@ -88,7 +88,7 @@ class DaskScheduler:
         dsk = {
             tp: (
                 apply,
-                provider,
+                provider.func,
                 list(provider.arg_spec.args),
                 (dict, [[key, val] for key, val in provider.arg_spec.kwargs]),
             )
