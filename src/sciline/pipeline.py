@@ -418,12 +418,12 @@ class Pipeline:
             for index, label in zip(params.index, values):
                 self._set_provider(
                     Item((Label(tp=params.row_dim, index=index),), param_name),
-                    Provider.table_row(label),
+                    Provider.table_label(label),
                 )
         for index, label in zip(params.index, params.index):
             self._set_provider(
                 Item((Label(tp=params.row_dim, index=index),), params.row_dim),
-                Provider.table_row(label),
+                Provider.table_label(label),
             )
 
     def del_param_table(self, row_dim: type) -> None:
