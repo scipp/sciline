@@ -41,10 +41,10 @@ from .series import Series
 from .typing import Graph, Item, Key, Label, get_optional, get_union
 
 T = TypeVar('T')
-KeyType = TypeVar('KeyType')
-ValueType = TypeVar('ValueType')
-IndexType = TypeVar('IndexType')
-LabelType = TypeVar('LabelType')
+KeyType = TypeVar('KeyType', bound=Key)
+ValueType = TypeVar('ValueType', bound=Key)
+IndexType = TypeVar('IndexType', bound=Key)
+LabelType = TypeVar('LabelType', bound=Key)
 
 
 class AmbiguousProvider(Exception):
@@ -270,7 +270,7 @@ class SeriesProvider(Generic[KeyType], Provider):
     def __init__(
         self,
         labels: Iterable[KeyType],
-        row_dim: Key,
+        row_dim: Type[KeyType],
         *,
         args: Optional[Iterable[Key]] = None,
     ) -> None:
@@ -305,7 +305,7 @@ class Pipeline:
         self,
         providers: Optional[Iterable[Union[ToProvider, Provider]]] = None,
         *,
-        params: Optional[Dict[Key, Any]] = None,
+        params: Optional[Dict[Type[Any], Any]] = None,
     ):
         """
         Setup a Pipeline from a list providers
