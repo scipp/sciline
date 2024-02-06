@@ -609,7 +609,7 @@ class Pipeline:
                     graph.update(optional_subgraph)
                 continue
             provider, bound = self._get_unique_provider(tp, handler=handler)
-            provider = provider.bind(bound)
+            provider = provider.bind_type_vars(bound)
             graph[tp] = provider
             stack.extend(provider.arg_spec.keys() - graph.keys())
         return graph

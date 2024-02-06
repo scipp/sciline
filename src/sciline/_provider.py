@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright (c) 2023 Scipp contributors (https://github.com/scipp)
+"""Handling of providers and their arguments."""
 from __future__ import annotations
 
 import inspect
@@ -23,9 +24,12 @@ if TYPE_CHECKING:
 
 
 ToProvider = Callable[..., Any]
+"""Callable that can be converted to a provider."""
+
 ProviderKind = Literal[
     'function', 'parameter', 'series', 'table', 'sentinel', 'unsatisfied'
 ]
+"""Identifies the kind of a provider, most are used internally."""
 
 
 class UnboundTypeVar(Exception):
@@ -35,6 +39,14 @@ class UnboundTypeVar(Exception):
 
 
 class Provider:
+    """A provider.
+
+    This class wraps a function that returns the provided values.
+    That function can be a user-provided callable, in which case
+    ``kind = 'function'``, or an internally constructed function
+    for providing parameters or other special values.
+    """
+
     def __init__(
         self,
         *,
@@ -52,10 +64,12 @@ class Provider:
 
     @classmethod
     def from_function(cls, func: ToProvider) -> Provider:
+        """Construct from a function or other callable."""
         return cls(func=func, arg_spec=ArgSpec.from_function(func), kind='function')
 
     @classmethod
     def parameter(cls, param: Any) -> Provider:
+        """Construct a provider that always returns the given value."""
         return cls(
             func=lambda: param,
             arg_spec=ArgSpec.null(),
@@ -67,6 +81,7 @@ class Provider:
 
     @classmethod
     def table_row(cls, param: Any) -> Provider:
+        """Construct a provider that returns the label for a table row."""
         return cls(
             func=lambda: param,
             arg_spec=ArgSpec.null(),
@@ -88,33 +103,42 @@ class Provider:
 
     @property
     def func(self) -> ToProvider:
+        """Return the function that implements the provider."""
         return self._func
 
     @property
     def arg_spec(self) -> ArgSpec:
+        """Return the argument specification for the provider."""
         return self._arg_spec
 
     @property
     def kind(self) -> ProviderKind:
+        """Return the kind of the provider."""
         return self._kind
 
     @property
     def location(self) -> ProviderLocation:
+        """Return the location of the provider in source code."""
         return self._location
 
     def deduce_key(self) -> Any:
+        """Attempt to determine the key (return type) of the provider."""
         if (key := get_type_hints(self._func).get('return')) is None:
             raise ValueError(
                 f'Provider {self} lacks type-hint for return value or returns NOne.'
             )
         return key
 
-    def bind(self, bound: dict[TypeVar, Key]) -> Provider:
+    def bind_type_vars(self, bound: dict[TypeVar, Key]) -> Provider:
+        """Replace TypeVars with their corresponding keys."""
         return Provider(
-            func=self._func, arg_spec=self._arg_spec.bind(bound), kind=self._kind
+            func=self._func,
+            arg_spec=self._arg_spec.bind_type_vars(bound),
+            kind=self._kind,
         )
 
     def map_arg_keys(self, transform: Callable[[Key], Key]) -> Provider:
+        """Return a new provider with transformed argument keys."""
         return Provider(
             func=self._func,
             arg_spec=self._arg_spec.map_keys(transform),
@@ -178,7 +202,7 @@ class ArgSpec:
         yield from self._args.values()
         yield from self._kwargs.values()
 
-    def bind(self, bound: dict[TypeVar, Key]) -> ArgSpec:
+    def bind_type_vars(self, bound: dict[TypeVar, Key]) -> ArgSpec:
         """Bind concrete types to TypeVars."""
         return self.map_keys(lambda arg: _bind_free_typevars(arg, bound=bound))
 
