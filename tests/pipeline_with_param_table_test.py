@@ -350,7 +350,6 @@ def test_can_groupby_by_requesting_series_of_series() -> None:
         Param1,
         {1: sl.Series(Row, {0: 4, 1: 5}), 3: sl.Series(Row, {2: 6})},
     )
-    print(list(pl._providers.values()))
     assert pl.compute(sl.Series[Param1, sl.Series[Row, Param2]]) == expected
 
 
