@@ -1266,3 +1266,141 @@ def test_pipeline_detect_missing_return_typehint() -> None:
 
     with pytest.raises(ValueError, match='type-hint'):
         sl.Pipeline([f])
+
+
+def test_does_not_allow_type_argument_outside_of_constraints_flat() -> None:
+    T = TypeVar('T', int, float, str)
+    T2 = TypeVar('T2', int, float)
+
+    @dataclass
+    class M(Generic[T]):
+        value: T
+
+    def p1(value: T2) -> M[T2]:
+        return M(value)
+
+    pipeline = sl.Pipeline((p1,))
+    pipeline[str] = 'abc'
+    pipeline[int] = 123
+
+    pipeline.get(M[int])
+
+    with pytest.raises(sl.handler.UnsatisfiedRequirement):
+        pipeline.get(M[str])
+
+
+def test_does_not_allow_type_argument_outside_of_constraints_nested() -> None:
+    T = TypeVar('T', int, float, str)
+
+    @dataclass
+    class M(Generic[T]):
+        value: T
+
+    S = TypeVar('S', M[int], M[float], M[str])
+    S2 = TypeVar('S2', M[int], M[float])
+
+    @dataclass
+    class N(Generic[S]):
+        value: S
+
+    def p1(value: T) -> M[T]:
+        return M(value)
+
+    def p2(value: S2) -> N[S2]:
+        return N(value)
+
+    pipeline = sl.Pipeline((p1, p2))
+    pipeline[str] = 'abc'
+    pipeline[int] = 123
+
+    pipeline.get(N[M[int]])
+
+    with pytest.raises(sl.handler.UnsatisfiedRequirement):
+        pipeline.get(N[M[str]])
+
+
+def test_constraints_nested_multiple_typevars() -> None:
+    T = TypeVar('T', int, float, str)
+    T2 = TypeVar('T2', int, float)
+
+    @dataclass
+    class M(Generic[T]):
+        v: T
+
+    S = TypeVar('S', M[int], M[float], M[str])
+    S2 = TypeVar('S2', M[int], M[float])
+
+    @dataclass
+    class N(Generic[S, T]):
+        v1: S
+        v2: T
+
+    def p1(v: T) -> M[T]:
+        return M(v)
+
+    def p2(v1: S2, v2: T2) -> N[S2, T2]:
+        return N(v1, v2)
+
+    pipeline = sl.Pipeline((p1, p2))
+    pipeline[str] = 'abc'
+    pipeline[int] = 123
+    pipeline[float] = 3.14
+
+    pipeline.get(N[M[float], int])
+    pipeline.get(N[M[int], int])
+
+    with pytest.raises(sl.handler.UnsatisfiedRequirement):
+        pipeline.get(N[M[int], str])
+    with pytest.raises(sl.handler.UnsatisfiedRequirement):
+        pipeline.get(N[M[str], float])
+
+
+def test_number_of_type_vars_defines_most_specialized() -> None:
+    Green = NewType('Green', str)
+    Blue = NewType('Blue', str)
+    Color = TypeVar('Color', Green, Blue)
+
+    @dataclass
+    class Likes(Generic[Color]):
+        color: Color
+
+    Preference = TypeVar('Preference')
+
+    @dataclass
+    class Person(Generic[Preference, Color]):
+        preference: Preference
+        hatcolor: Color
+        provided_by: str
+
+    def p(c: Color) -> Likes[Color]:
+        return Likes(c)
+
+    def p0(p: Preference, c: Color) -> Person[Preference, Color]:
+        return Person(p, c, 'p0')
+
+    def p1(c: Color) -> Person[Likes[Color], Color]:
+        return Person(Likes(c), c, 'p1')
+
+    def p2(p: Preference) -> Person[Preference, Green]:
+        return Person(p, Green('g'), 'p2')
+
+    pipeline = sl.Pipeline((p, p0, p1, p2))
+    pipeline[Blue] = 'b'
+    pipeline[Green] = 'g'
+
+    # only provided by p0
+    assert pipeline.compute(Person[Likes[Green], Blue]) == Person(
+        Likes(Green('g')), Blue('b'), 'p0'
+    )
+    # provided by p1 and p0 but p1 is preferred because it has fewer typevars
+    assert pipeline.compute(Person[Likes[Blue], Blue]) == Person(
+        Likes(Blue('b')), Blue('b'), 'p1'
+    )
+    # provided by p2 and p0 but p2 is preferred because it has fewer typevars
+    assert pipeline.compute(Person[Likes[Blue], Green]) == Person(
+        Likes(Blue('b')), Green('g'), 'p2'
+    )
+
+    with pytest.raises(sl.AmbiguousProvider):
+        # provided by p1 and p2 with the same number of typevars
+        pipeline.get(Person[Likes[Green], Green])
