@@ -51,12 +51,24 @@ def test_union_requirement_with_multiple_matches_raises_AmbiguousProvider() -> N
         pipeline.compute(str)
 
 
-def test_optional_dependency_can_be_filled_by_non_optional_param() -> None:
+def test_optional_dependency_can_be_filled_by_non_optional_param(
+    scheduler: sl.scheduler.Scheduler,
+) -> None:
     def use_optional(x: Optional[int]) -> str:
         return f'{x or 123}'
 
     pipeline = sl.Pipeline([use_optional], params={int: 1})
-    assert pipeline.compute(str) == '1'
+    assert pipeline.compute(str, scheduler=scheduler) == '1'
+
+
+def test_optional_dependency_can_be_filled_by_non_optional_param_kwarg(
+    scheduler: sl.scheduler.Scheduler,
+) -> None:
+    def use_optional(*, x: Optional[int]) -> str:
+        return f'{x or 123}'
+
+    pipeline = sl.Pipeline([use_optional], params={int: 1})
+    assert pipeline.compute(str, scheduler=scheduler) == '1'
 
 
 def test_union_with_none_can_be_used_instead_of_Optional() -> None:
@@ -88,12 +100,24 @@ def test_optional_dependency_can_be_filled_transitively() -> None:
     assert pipeline.compute(str) == '2'
 
 
-def test_optional_dependency_is_set_to_none_if_no_provider_found() -> None:
+def test_optional_dependency_is_set_to_none_if_no_provider_found(
+    scheduler: sl.scheduler.Scheduler,
+) -> None:
     def use_optional(x: Optional[int]) -> str:
         return f'{x or 123}'
 
     pipeline = sl.Pipeline([use_optional])
-    assert pipeline.compute(str) == '123'
+    assert pipeline.compute(str, scheduler=scheduler) == '123'
+
+
+def test_optional_dependency_is_set_to_none_if_no_provider_found_kwarg(
+    scheduler: sl.scheduler.Scheduler,
+) -> None:
+    def use_optional(*, x: Optional[int]) -> str:
+        return f'{x or 123}'
+
+    pipeline = sl.Pipeline([use_optional])
+    assert pipeline.compute(str, scheduler=scheduler) == '123'
 
 
 def test_optional_dependency_is_set_to_none_if_no_provider_found_transitively() -> None:

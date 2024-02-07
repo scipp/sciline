@@ -3,7 +3,6 @@
 from dataclasses import dataclass
 from typing import (
     Any,
-    Callable,
     Dict,
     List,
     Optional,
@@ -17,8 +16,7 @@ from typing import (
 
 from graphviz import Digraph
 
-from .handler import HandleAsComputeTimeException
-from .pipeline import Pipeline, SeriesProvider
+from ._provider import Provider, ProviderKind
 from .typing import Graph, Item, Key, get_optional
 
 
@@ -28,7 +26,15 @@ class Node:
     collapsed: bool = False
 
 
-FormattedGraph = Dict[str, Tuple[str, List[Node], Node]]
+@dataclass
+class FormattedProvider:
+    name: str
+    args: list[Node]
+    ret: Node
+    kind: ProviderKind
+
+
+FormattedGraph = Dict[str, FormattedProvider]
 
 
 def to_graphviz(
@@ -58,7 +64,7 @@ def to_graphviz(
     dot = Digraph(strict=True, **kwargs)
     formatted_graph = _format_graph(graph, compact=compact)
     ordered_graph = dict(
-        sorted(formatted_graph.items(), key=lambda item: item[1][2].name)
+        sorted(formatted_graph.items(), key=lambda item: item[1].ret.name)
     )
     subgraphs = _to_subgraphs(ordered_graph)
 
@@ -85,47 +91,42 @@ def _to_subgraphs(graph: FormattedGraph) -> Dict[str, FormattedGraph]:
         return sgname
 
     subgraphs: Dict[str, FormattedGraph] = {}
-    for p, (p_name, args, ret) in graph.items():
-        subgraph_name = get_subgraph_name(ret.name)
+    for p, formatted_p in graph.items():
+        subgraph_name = get_subgraph_name(formatted_p.ret.name)
         if subgraph_name not in subgraphs:
             subgraphs[subgraph_name] = {}
-        subgraphs[subgraph_name][p] = (p_name, args, ret)
+        subgraphs[subgraph_name][p] = formatted_p
     return subgraphs
 
 
 def _add_subgraph(graph: FormattedGraph, dot: Digraph, subgraph: Digraph) -> None:
-    for p, (p_name, args, ret) in graph.items():
-        unsatisfied = f'{_qualname(HandleAsComputeTimeException.handle_unsatisfied_requirement)}.<locals>.unsatisfied_sentinel'  # noqa: E501
-        if p_name == unsatisfied:
+    for p, formatted_p in graph.items():
+        if formatted_p.kind == 'unsatisfied':
             subgraph.node(
-                ret.name,
-                ret.name,
-                shape='box3d' if ret.collapsed else 'rectangle',
+                formatted_p.ret.name,
+                formatted_p.ret.name,
+                shape='box3d' if formatted_p.ret.collapsed else 'rectangle',
                 color='red',
                 fontcolor='red',  # Set text color to red
                 style='dashed',
             )
         else:
             subgraph.node(
-                ret.name, ret.name, shape='box3d' if ret.collapsed else 'rectangle'
+                formatted_p.ret.name,
+                formatted_p.ret.name,
+                shape='box3d' if formatted_p.ret.collapsed else 'rectangle',
             )
-        # Do not draw dummy providers created by Pipeline when setting instances
-        if p_name in (
-            f'{_qualname(Pipeline.__setitem__)}.<locals>.<lambda>',
-            f'{_qualname(Pipeline.set_param_table)}.<locals>.<lambda>',
-            unsatisfied,
-        ):
-            continue
         # Do not draw the internal provider gathering index-dependent results into
         # a dict
-        if p_name == _qualname(SeriesProvider):
-            for arg in args:
-                dot.edge(arg.name, ret.name, style='dashed')
-        else:
-            dot.node(p, p_name, shape='ellipse')
-            for arg in args:
+        if formatted_p.kind == 'series':
+            for arg in formatted_p.args:
+                dot.edge(arg.name, formatted_p.ret.name, style='dashed')
+        elif formatted_p.kind == 'function':
+            dot.node(p, formatted_p.name, shape='ellipse')
+            for arg in formatted_p.args:
                 dot.edge(arg.name, p)
-            dot.edge(p, ret.name)
+            dot.edge(p, formatted_p.ret.name)
+        # else: Do not draw dummy providers created by Pipeline when setting instances
 
 
 def _qualname(obj: Any) -> Any:
@@ -136,17 +137,18 @@ def _qualname(obj: Any) -> Any:
 
 def _format_graph(graph: Graph, compact: bool) -> FormattedGraph:
     return {
-        _format_provider(provider, ret, compact=compact): (
-            _qualname(provider),
-            [_format_type(a, compact=compact) for a in args],
-            _format_type(ret, compact=compact),
+        _format_provider(provider, ret, compact=compact): FormattedProvider(
+            name=_qualname(provider.func),
+            args=[_format_type(a, compact=compact) for a in provider.arg_spec.keys()],
+            ret=_format_type(ret, compact=compact),
+            kind=provider.kind,
         )
-        for ret, (provider, args) in graph.items()
+        for ret, provider in graph.items()
     }
 
 
-def _format_provider(provider: Callable[..., Any], ret: Key, compact: bool) -> str:
-    return f'{_qualname(provider)}_{_format_type(ret, compact=compact).name}'
+def _format_provider(provider: Provider, ret: Key, compact: bool) -> str:
+    return f'{provider.location.qualname}_{_format_type(ret, compact=compact).name}'
 
 
 T = TypeVar('T')

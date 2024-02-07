@@ -26,6 +26,7 @@ from typing import (
 
 from sciline.task_graph import TaskGraph
 
+from ._provider import ArgSpec, Provider, ProviderLocation, ToProvider
 from .display import pipeline_html_repr
 from .domain import Scope, ScopeTwoParams
 from .handler import (
@@ -37,19 +38,13 @@ from .handler import (
 from .param_table import ParamTable
 from .scheduler import Scheduler
 from .series import Series
-from .typing import Graph, Item, Key, Label, Provider, get_optional, get_union
+from .typing import Graph, Item, Key, Label, get_optional, get_union
 
 T = TypeVar('T')
-KeyType = TypeVar('KeyType')
-ValueType = TypeVar('ValueType')
-IndexType = TypeVar('IndexType')
-LabelType = TypeVar('LabelType')
-
-
-class UnboundTypeVar(Exception):
-    """
-    Raised when a parameter of a generic provider is not bound to a concrete type.
-    """
+KeyType = TypeVar('KeyType', bound=Key)
+ValueType = TypeVar('ValueType', bound=Key)
+IndexType = TypeVar('IndexType', bound=Key)
+LabelType = TypeVar('LabelType', bound=Key)
 
 
 class AmbiguousProvider(Exception):
@@ -73,23 +68,9 @@ def _is_compatible_type_tuple(
     return True
 
 
-def _bind_free_typevars(tp: TypeVar | Key, bound: Dict[TypeVar, Key]) -> Key:
-    if isinstance(tp, TypeVar):
-        if (result := bound.get(tp)) is None:
-            raise UnboundTypeVar(f'Unbound type variable {tp}')
-        return result
-    elif (origin := get_origin(tp)) is not None:
-        result = origin[tuple(_bind_free_typevars(arg, bound) for arg in get_args(tp))]
-        if result is None:
-            raise ValueError(f'Binding type variables in {tp} resulted in `None`')
-        return result
-    else:
-        return tp
-
-
 def _find_all_paths(
-    dependencies: Mapping[T, Collection[T]], start: T, end: T
-) -> List[List[T]]:
+    dependencies: Mapping[Key, Collection[Key]], start: Key, end: Key
+) -> List[List[Key]]:
     """Find all paths from start to end in a DAG."""
     if start == end:
         return [[start]]
@@ -102,16 +83,13 @@ def _find_all_paths(
     return paths
 
 
-def _find_nodes_in_paths(
-    graph: Mapping[T, Tuple[Callable[..., Any], Collection[T]]], end: T
-) -> List[T]:
+def _find_nodes_in_paths(graph: Graph, end: Key) -> List[Key]:
     """
     Helper for Pipeline. Finds all nodes that need to be duplicated since they depend
     on a value from a param table.
     """
     start = next(iter(graph))
-    # 0 is the provider, 1 is the args
-    dependencies = {k: v[1] for k, v in graph.items()}
+    dependencies = {k: tuple(p.arg_spec.keys()) for k, p in graph.items()}
     paths = _find_all_paths(dependencies, start, end)
     nodes = set()
     for path in paths:
@@ -135,10 +113,6 @@ def _is_multiple_keys(
     )
 
 
-def provide_none() -> None:
-    return None
-
-
 class ReplicatorBase(Generic[IndexType]):
     def __init__(self, index_name: type, index: Iterable[IndexType], path: List[Key]):
         if len(path) == 0:
@@ -157,29 +131,26 @@ class ReplicatorBase(Generic[IndexType]):
     def replicate(
         self,
         key: Key,
-        value: Any,
+        provider: Provider,
         get_provider: Callable[..., Tuple[Provider, Dict[TypeVar, Key]]],
     ) -> Graph:
         graph: Graph = {}
-        provider, args = value
         for idx in self.index:
             subkey = self.key(idx, key)
-            if provider == _param_sentinel:
-                graph[subkey] = (get_provider(subkey)[0], ())
+            if isinstance(provider, _ParamSentinel):
+                graph[subkey] = get_provider(subkey)[0]
             else:
-                graph[subkey] = self._copy_node(key, provider, args, idx)
+                graph[subkey] = self._copy_node(key, provider, idx)
         return graph
 
     def _copy_node(
         self,
         key: Key,
         provider: Union[Provider, SeriesProvider[IndexType]],
-        args: Tuple[Key, ...],
         idx: IndexType,
-    ) -> Tuple[Provider, Tuple[Key, ...]]:
-        return (
-            provider,
-            tuple(self.key(idx, arg) if arg in self else arg for arg in args),
+    ) -> Provider:
+        return provider.map_arg_keys(
+            lambda arg: self.key(idx, arg) if arg in self else arg
         )
 
     def key(self, i: IndexType, value_name: Union[Type[T], Item[T]]) -> Item[T]:
@@ -260,19 +231,24 @@ class GroupingReplicator(ReplicatorBase[LabelType], Generic[IndexType, LabelType
         self,
         key: Key,
         provider: Union[Provider, SeriesProvider[IndexType]],
-        args: Tuple[Key, ...],
         idx: LabelType,
-    ) -> Tuple[Provider, Tuple[Key, ...]]:
+    ) -> Provider:
         if (not isinstance(provider, SeriesProvider)) or key != self._group_node:
-            return super()._copy_node(key, provider, args, idx)
+            return super()._copy_node(key, provider, idx)
         labels = self._groups[idx]
         if set(labels) - set(provider.labels):
             raise ValueError(f'{labels} is not a subset of {provider.labels}')
+        if tuple(provider.arg_spec.kwargs):
+            raise RuntimeError(
+                'A Series was provided with keyword arguments. This should not happen '
+                'and is an internal error of Sciline.'
+            )
         selected = {
-            label: arg for label, arg in zip(provider.labels, args) if label in labels
+            label: arg
+            for label, arg in zip(provider.labels, provider.arg_spec.args)
+            if label in labels
         }
-        split_provider = SeriesProvider(selected, provider.row_dim)
-        return (split_provider, tuple(selected.values()))
+        return SeriesProvider(selected.keys(), provider.row_dim, args=selected.values())
 
     def _find_grouping_node(self, index_name: Key, subgraph: Graph) -> type:
         ends: List[type] = []
@@ -285,22 +261,41 @@ class GroupingReplicator(ReplicatorBase[LabelType], Generic[IndexType, LabelType
         raise ValueError(f"Could not find unique grouping node, found {ends}")
 
 
-class SeriesProvider(Generic[KeyType]):
+class SeriesProvider(Generic[KeyType], Provider):
     """
     Internal provider for combining results obtained based on different rows in a
     param table into a single object.
     """
 
-    def __init__(self, labels: Iterable[KeyType], row_dim: type) -> None:
+    def __init__(
+        self,
+        labels: Iterable[KeyType],
+        row_dim: Type[KeyType],
+        *,
+        args: Optional[Iterable[Key]] = None,
+    ) -> None:
+        super().__init__(
+            func=self._call,
+            arg_spec=ArgSpec.from_args(*(args if args is not None else labels)),
+            kind='series',
+        )
         self.labels = labels
         self.row_dim = row_dim
 
-    def __call__(self, *vals: ValueType) -> Series[KeyType, ValueType]:
+    def _call(self, *vals: ValueType) -> Series[KeyType, ValueType]:
         return Series(self.row_dim, dict(zip(self.labels, vals)))
 
 
-class _param_sentinel:
-    ...
+class _ParamSentinel(Provider):
+    def __init__(self, key: Key) -> None:
+        super().__init__(
+            func=lambda: None,
+            arg_spec=ArgSpec.from_args(key),
+            kind='sentinel',
+            location=ProviderLocation(
+                name=f'param_sentinel({type(key).__name__})', module='sciline'
+            ),
+        )
 
 
 class Pipeline:
@@ -308,9 +303,9 @@ class Pipeline:
 
     def __init__(
         self,
-        providers: Optional[Iterable[Provider]] = None,
+        providers: Optional[Iterable[Union[ToProvider, Provider]]] = None,
         *,
-        params: Optional[Dict[type, Any]] = None,
+        params: Optional[Dict[Type[Any], Any]] = None,
     ):
         """
         Setup a Pipeline from a list providers
@@ -332,19 +327,20 @@ class Pipeline:
         for tp, param in (params or {}).items():
             self[tp] = param
 
-    def insert(self, provider: Provider, /) -> None:
+    def insert(self, provider: Union[ToProvider, Provider], /) -> None:
         """
         Add a callable that provides its return value to the pipeline.
 
         Parameters
         ----------
         provider:
-            Callable that provides its return value. Its arguments and return value
-            must be annotated with type hints.
+            Either a callable that provides its return value. Its arguments
+            and return value must be annotated with type hints.
+            Or a ``Provider`` object that has been constructed from such a callable.
         """
-        if (key := get_type_hints(provider).get('return')) is None:
-            raise ValueError(f'Provider {provider} lacks type-hint for return value')
-        self._set_provider(key, provider)
+        if not isinstance(provider, Provider):
+            provider = Provider.from_function(provider)
+        self._set_provider(provider.deduce_key(), provider)
 
     def __setitem__(self, key: Type[T], param: T) -> None:
         """
@@ -387,7 +383,7 @@ class Pipeline:
             raise TypeError(
                 f'Key {key} incompatible to value {param} of type {type(param)}'
             )
-        self._set_provider(key, lambda: param)
+        self._set_provider(key, Provider.parameter(param))
 
     def set_param_table(self, params: ParamTable) -> None:
         """
@@ -422,12 +418,12 @@ class Pipeline:
             for index, label in zip(params.index, values):
                 self._set_provider(
                     Item((Label(tp=params.row_dim, index=index),), param_name),
-                    lambda label=label: label,
+                    Provider.table_cell(label),
                 )
         for index, label in zip(params.index, params.index):
             self._set_provider(
                 Item((Label(tp=params.row_dim, index=index),), params.row_dim),
-                lambda label=label: label,
+                Provider.table_cell(label),
             )
 
     def del_param_table(self, row_dim: type) -> None:
@@ -470,7 +466,9 @@ class Pipeline:
         self.set_param_table(ParamTable(row_dim, columns={}, index=index))
 
     def _set_provider(
-        self, key: Union[Type[T], Item[T]], provider: Callable[..., T]
+        self,
+        key: Key,
+        provider: Provider,
     ) -> None:
         # isinstance does not work here and types.NoneType available only in 3.10+
         if key == type(None):  # noqa: E721
@@ -494,7 +492,7 @@ class Pipeline:
 
     def _get_provider(
         self, tp: Union[Type[T], Item[T]], handler: Optional[ErrorHandler] = None
-    ) -> Tuple[Callable[..., T], Dict[TypeVar, Key]]:
+    ) -> Tuple[Provider, Dict[TypeVar, Key]]:
         handler = handler or HandleAsBuildTimeException()
         if (provider := self._providers.get(tp)) is not None:
             return provider, {}
@@ -526,17 +524,16 @@ class Pipeline:
                 }
                 return provider, bound
             elif len(matches) > 1:
-                matching_providers = [m[1].__name__ for m in matches]
+                matching_providers = [m[1].location.name for m in matches]
                 raise AmbiguousProvider(
                     f"Multiple providers found for type {tp}."
                     f" Matching providers are: {matching_providers}."
                 )
-
         return handler.handle_unsatisfied_requirement(tp), {}
 
     def _get_unique_provider(
         self, tp: Union[Type[T], Item[T]], handler: ErrorHandler
-    ) -> Tuple[Callable[..., T], Dict[TypeVar, Key]]:
+    ) -> Tuple[Provider, Dict[TypeVar, Key]]:
         """Get a unique provider for a potential Union type."""
         if (union_args := get_union(tp)) is None:
             return self._get_provider(tp, handler=handler)
@@ -587,12 +584,12 @@ class Pipeline:
             tp = stack.pop()
             # First look in column labels of param tables
             if search_param_tables and tp in self._param_name_to_table_key:
-                graph[tp] = (_param_sentinel, (self._param_name_to_table_key[tp],))
+                graph[tp] = _ParamSentinel(self._param_name_to_table_key[tp])
                 continue
             # Then also indices of param tables. This comes second because we need to
             # prefer column labels over indices for multi-level grouping.
             if search_param_tables and tp in self._param_tables:
-                graph[tp] = (_param_sentinel, (tp,))
+                graph[tp] = _ParamSentinel(tp)
                 continue
             if get_origin(tp) == Series:
                 sub = self._build_series(tp, handler=handler)  # type: ignore[arg-type]
@@ -606,22 +603,15 @@ class Pipeline:
                         handler=HandleAsBuildTimeException(),
                     )
                 except UnsatisfiedRequirement:
-                    graph[tp] = (provide_none, ())
+                    graph[tp] = Provider.provide_none()
                 else:
                     graph[tp] = optional_subgraph.pop(optional_arg)
                     graph.update(optional_subgraph)
                 continue
             provider, bound = self._get_unique_provider(tp, handler=handler)
-            tps = get_type_hints(provider)
-            args = tuple(
-                _bind_free_typevars(t, bound=bound)
-                for name, t in tps.items()
-                if name != 'return'
-            )
-            graph[tp] = (provider, args)
-            for arg in args:
-                if arg not in graph:
-                    stack.append(arg)
+            provider = provider.bind_type_vars(bound)
+            graph[tp] = provider
+            stack.extend(provider.arg_spec.keys() - graph.keys())
         return graph
 
     def _build_series(
@@ -705,17 +695,19 @@ class Pipeline:
         else:
             raise KeyError(f'No parameter table found for label {index_name}')
 
-        graph: Graph = {}
-        graph[tp] = (
-            SeriesProvider(list(replicator.index), index_name),
-            tuple(replicator.key(idx, value_type) for idx in replicator.index),
-        )
+        graph: Graph = {
+            tp: SeriesProvider(
+                list(replicator.index),
+                index_name,
+                args=(replicator.key(idx, value_type) for idx in replicator.index),
+            )
+        }
 
-        for key, value in subgraph.items():
+        for key, provider in subgraph.items():
             if key in replicator:
-                graph.update(replicator.replicate(key, value, self._get_provider))
+                graph.update(replicator.replicate(key, provider, self._get_provider))
             else:
-                graph[key] = value
+                graph[key] = provider
         return graph
 
     @overload

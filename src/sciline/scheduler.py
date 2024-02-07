@@ -37,7 +37,9 @@ class NaiveScheduler:
     def get(self, graph: Graph, keys: List[Key]) -> Tuple[Any, ...]:
         import graphlib
 
-        dependencies = {tp: args for tp, (_, args) in graph.items()}
+        dependencies = {
+            tp: tuple(provider.arg_spec.keys()) for tp, provider in graph.items()
+        }
         ts = graphlib.TopologicalSorter(dependencies)
         try:
             # Create list from generator to force early exception if there is a cycle
@@ -46,8 +48,7 @@ class NaiveScheduler:
             raise CycleError from e
         results: Dict[Key, Any] = {}
         for t in tasks:
-            provider, args = graph[t]
-            results[t] = provider(*[results[arg] for arg in args])
+            results[t] = graph[t].call(results)
         return tuple(results[key] for key in keys)
 
     def __repr__(self) -> str:
@@ -77,7 +78,22 @@ class DaskScheduler:
             self._dask_get = scheduler
 
     def get(self, graph: Graph, keys: List[Key]) -> Any:
-        dsk = {tp: (provider, *args) for tp, (provider, args) in graph.items()}
+        from dask.utils import apply
+
+        # Use `apply` to allow passing keyword arguments.
+        # Contrary to the Dask docs, we need to pass positional args as a list
+        # and keyword args with a nested tuple+list structure.
+        # Otherwise, Dask would treat them as literal values instead of
+        # references to other nodes.
+        dsk = {
+            tp: (
+                apply,
+                provider.func,
+                list(provider.arg_spec.args),
+                (dict, [[key, val] for key, val in provider.arg_spec.kwargs]),
+            )
+            for tp, provider in graph.items()
+        }
         try:
             return self._dask_get(dsk, keys)
         except RuntimeError as e:

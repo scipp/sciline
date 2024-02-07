@@ -1208,3 +1208,45 @@ def test_pipeline_with_generics_setitem_on_copy_does_not_affect_original() -> No
 def test_html_repr() -> None:
     pipeline = sl.Pipeline([make_int], params={float: 5.0})
     assert isinstance(pipeline._repr_html_(), str)
+
+
+def test_pipeline_keyword_only_argument_and_param(
+    scheduler: sl.scheduler.Scheduler,
+) -> None:
+    def fn_with_kwarg(*, y: int) -> str:
+        return f'y = {y}'
+
+    pipeline = sl.Pipeline([fn_with_kwarg], params={int: 5})
+    assert pipeline.compute(str, scheduler=scheduler) == 'y = 5'
+
+
+def test_pipeline_mixed_arguments(scheduler: sl.scheduler.Scheduler) -> None:
+    def no_args() -> float:
+        return 1.2
+
+    def pos_only(a: float) -> list[float]:
+        return [a, a]
+
+    def kwarg_only(*, lst: list[float]) -> int:
+        return len(lst)
+
+    def mixed_args(i: int, *, lst: list[float]) -> str:
+        return f'i = {i}, lst[0] = {lst[0]}'
+
+    pipeline = sl.Pipeline([no_args, pos_only, kwarg_only, mixed_args])
+    assert pipeline.compute(str, scheduler=scheduler) == 'i = 2, lst[0] = 1.2'
+
+
+def test_pipeline_generic_keyword_only(scheduler: sl.scheduler.Scheduler) -> None:
+    T = TypeVar('T')
+    A = NewType('A', int)
+    B = NewType('B', int)
+
+    class G(sl.Scope[T, int], int):
+        ...
+
+    def func(*, a: G[A]) -> int:
+        return -4 * a
+
+    pipeline = sl.Pipeline([func], params={G[A]: 3, G[B]: 4})
+    assert pipeline.compute(int, scheduler=scheduler) == -12

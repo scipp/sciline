@@ -7,7 +7,7 @@ from typing import Any, Optional, Sequence, Tuple, TypeVar, Union
 
 from .scheduler import DaskScheduler, NaiveScheduler, Scheduler
 from .typing import Graph, Item
-from .utils import keyname, kind_of_provider
+from .utils import keyname
 
 T = TypeVar("T")
 
@@ -140,8 +140,8 @@ class TaskGraph:
         roots = sorted(
             {
                 escape(keyname(key))
-                for key, (value, _) in self._graph.items()
-                if kind_of_provider(value) != 'function'
+                for key, provider in self._graph.items()
+                if provider.kind != 'function'
             }
         )
         scheduler = escape(str(self._scheduler))
