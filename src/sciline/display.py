@@ -32,7 +32,7 @@ def _provider_source(
     p: Tuple[Key, Tuple[Union[Key, TypeVar], ...], List[Provider]]
 ) -> str:
     key, _, (v, *rest) = p
-    if v.kind == 'table_label':
+    if v.kind == 'table_cell':
         # This is always the case, but mypy complains
         if isinstance(key, Item):
             return escape(
