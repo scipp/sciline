@@ -1250,3 +1250,19 @@ def test_pipeline_generic_keyword_only(scheduler: sl.scheduler.Scheduler) -> Non
 
     pipeline = sl.Pipeline([func], params={G[A]: 3, G[B]: 4})
     assert pipeline.compute(int, scheduler=scheduler) == -12
+
+
+def test_pipeline_detect_missing_argument_typehint() -> None:
+    def f(x) -> int:  # type: ignore[no-untyped-def]
+        return x  # type:ignore[no-any-return]
+
+    with pytest.raises(ValueError, match='type-hint'):
+        sl.Pipeline([f])
+
+
+def test_pipeline_detect_missing_return_typehint() -> None:
+    def f(x: int):  # type: ignore[no-untyped-def]
+        return x
+
+    with pytest.raises(ValueError, match='type-hint'):
+        sl.Pipeline([f])

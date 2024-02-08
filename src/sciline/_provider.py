@@ -125,7 +125,7 @@ class Provider:
         """Attempt to determine the key (return type) of the provider."""
         if (key := get_type_hints(self._func).get('return')) is None:
             raise ValueError(
-                f'Provider {self} lacks type-hint for return value or returns NOne.'
+                f'Provider {self} lacks type-hint for return value or returns None.'
             )
         return key
 
@@ -175,8 +175,13 @@ class ArgSpec:
         """Parse the argument spec of a provider."""
         hints = get_type_hints(provider)
         signature = inspect.getfullargspec(provider)
-        args = {name: hints[name] for name in signature.args}
-        kwargs = {name: hints[name] for name in signature.kwonlyargs}
+        try:
+            args = {name: hints[name] for name in signature.args}
+            kwargs = {name: hints[name] for name in signature.kwonlyargs}
+        except KeyError:
+            raise ValueError(
+                f'Provider {provider} lacks type-hint for arguments.'
+            ) from None
         return cls(args=args, kwargs=kwargs)
 
     @classmethod
