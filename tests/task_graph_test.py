@@ -1,10 +1,36 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright (c) 2023 Scipp contributors (https://github.com/scipp)
+from typing import NewType, TypeVar
+
 import pytest
 
 import sciline as sl
 from sciline.task_graph import TaskGraph
 from sciline.typing import Graph
+
+A = NewType('A', int)
+B = NewType('B', int)
+T = TypeVar('T', A, B)
+
+
+class Int(sl.Scope[T, int], int):
+    ...
+
+
+class List(sl.Scope[T, list[int]], list[int]):
+    ...
+
+
+def make_int_b() -> Int[B]:
+    return Int[B](2)
+
+
+def zeros(n: Int[T]) -> List[T]:
+    return List[T]([0] * n)
+
+
+def to_string(a: List[A], b: List[B]) -> str:
+    return f'a: {a}, b: {b}'
 
 
 def as_float(x: int) -> float:
@@ -14,6 +40,11 @@ def as_float(x: int) -> float:
 def make_task_graph() -> Graph:
     pl = sl.Pipeline([as_float], params={int: 1})
     return pl.build(float, handler=sl.HandleAsBuildTimeException())
+
+
+def make_complex_task_graph() -> Graph:
+    pl = sl.Pipeline([make_int_b, zeros, to_string], params={Int[A]: 3})
+    return pl.build(str, handler=sl.HandleAsBuildTimeException())
 
 
 def test_default_scheduler_is_dask_when_dask_available() -> None:
@@ -53,3 +84,32 @@ def test_compute_raises_when_provided_with_key_not_in_graph() -> None:
         tg.compute(str)
     with pytest.raises(KeyError):
         tg.compute((str, float))
+
+
+def test_nodes_iter() -> None:
+    graph = make_complex_task_graph()
+    tg = TaskGraph(graph=graph, keys=str)
+    keys = set(n for n in tg.nodes() if not isinstance(n, sl.Provider))
+    functions = set(
+        n.func
+        for n in tg.nodes()
+        if isinstance(n, sl.Provider) and n.kind == 'function'
+    )
+    params = set(
+        n.call({})
+        for n in tg.nodes()
+        if isinstance(n, sl.Provider) and n.kind == 'parameter'
+    )
+    # We got all nodes when splitting sets
+    # -1 because `zeros` shows up twice in `nodes()` but not `functions`
+    assert len(keys) + len(functions) + len(params) == len(list(tg.nodes())) - 1
+
+    assert keys == {
+        Int[A],
+        Int[B],
+        List[A],
+        List[B],
+        str,
+    }
+    assert functions == {make_int_b, zeros, to_string}
+    assert params == {3}

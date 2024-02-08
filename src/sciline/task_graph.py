@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 from html import escape
-from typing import Any, Optional, Sequence, Tuple, TypeVar, Union
+from typing import Any, Generator, Optional, Sequence, Tuple, TypeVar, Union
 
+from ._provider import Provider
 from .scheduler import DaskScheduler, NaiveScheduler, Scheduler
-from .typing import Graph, Item
+from .typing import Graph, Item, Key
 from .utils import keyname
 
 T = TypeVar("T")
@@ -112,6 +113,21 @@ class TaskGraph:
             return dict(zip(keys, results))
         else:
             return self._scheduler.get(self._graph, [keys])[0]
+
+    def nodes(self) -> Generator[Union[Key, Provider], None, None]:
+        """Iterate over all nodes of the graph.
+
+        Nodes are both keys, i.e., the types of values that can be computed
+        and providers.
+
+        Returns
+        -------
+        :
+            Iterable over keys and providers.
+        """
+        for key, provider in self._graph.items():
+            yield key
+            yield provider
 
     def visualize(
         self, **kwargs: Any
