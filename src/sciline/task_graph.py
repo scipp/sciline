@@ -129,6 +129,26 @@ class TaskGraph:
             yield key
             yield provider
 
+    def edges(
+        self,
+    ) -> Generator[Union[tuple[Key, Provider], tuple[Provider, Key]], None, None]:
+        """Iterate over all edges of the graph.
+
+        Returns
+        -------
+        :
+            Iterable over pairs ``(source, target)`` which indicate a directed edge
+            from ``source`` to ``target``.
+            There are two cases:
+
+            - ``source`` is a key, ``target`` is a provider.
+            - ``source`` is a provider, ``target`` is a key.
+        """
+        for key, provider in self._graph.items():
+            yield provider, key
+            for arg in provider.arg_spec.keys():
+                yield arg, provider
+
     def visualize(
         self, **kwargs: Any
     ) -> graphviz.Digraph:  # type: ignore[name-defined] # noqa: F821

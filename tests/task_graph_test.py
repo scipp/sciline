@@ -113,3 +113,44 @@ def test_nodes_iter() -> None:
     }
     assert functions == {make_int_b, zeros, to_string}
     assert params == {3}
+
+
+def test_edges_iter() -> None:
+    graph = make_complex_task_graph()
+    tg = TaskGraph(graph=graph, keys=str)
+    from_function = set(
+        (f.func, t)
+        for (f, t) in tg.edges()
+        if isinstance(f, sl.Provider)
+        and not isinstance(t, sl.Provider)
+        and f.kind == 'function'
+    )
+    from_param = set(
+        (f.call({}), t)
+        for (f, t) in tg.edges()
+        if isinstance(f, sl.Provider)
+        and not isinstance(t, sl.Provider)
+        and f.kind == 'parameter'
+    )
+    to_provider = set(
+        (f, t.func)
+        for (f, t) in tg.edges()
+        if not isinstance(f, sl.Provider) and isinstance(t, sl.Provider)
+    )
+    # We got all nodes when splitting sets
+    assert len(from_function) + len(from_param) + len(to_provider) == len(
+        list(tg.edges())
+    )
+    assert from_function == {
+        (make_int_b, Int[B]),
+        (zeros, List[A]),
+        (zeros, List[B]),
+        (to_string, str),
+    }
+    assert from_param == {(3, Int[A])}
+    assert to_provider == {
+        (Int[A], zeros),
+        (Int[B], zeros),
+        (List[A], to_string),
+        (List[B], to_string),
+    }
