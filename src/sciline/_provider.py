@@ -226,7 +226,7 @@ class ProviderLocation:
 
     @classmethod
     def from_function(cls, func: ToProvider) -> ProviderLocation:
-        return cls(name=func.__name__, module=_module_name(func))
+        return cls(name=func.__qualname__, module=_module_name(func))
 
     @property
     def qualname(self) -> str:
