@@ -10,7 +10,7 @@ except importlib.metadata.PackageNotFoundError:
     __version__ = "0.0.0"
 
 from . import scheduler
-from ._provider import UnboundTypeVar
+from ._provider import ArgSpec, Provider, ProviderKind, ProviderLocation, UnboundTypeVar
 from .domain import Scope, ScopeTwoParams
 from .handler import (
     HandleAsBuildTimeException,
@@ -23,14 +23,18 @@ from .series import Series
 
 __all__ = [
     "AmbiguousProvider",
-    "Series",
+    "ArgSpec",
     "ParamTable",
     "Pipeline",
+    "Provider",
+    "ProviderKind",
+    "ProviderLocation",
+    "scheduler",
+    "Series",
     "Scope",
     "ScopeTwoParams",
     "UnboundTypeVar",
     "UnsatisfiedRequirement",
-    "scheduler",
     "HandleAsBuildTimeException",
     "HandleAsComputeTimeException",
 ]
