@@ -2,6 +2,7 @@
 # Copyright (c) 2023 Scipp contributors (https://github.com/scipp)
 from __future__ import annotations
 
+import inspect
 from html import escape
 from typing import Any, Generator, Optional, Sequence, Tuple, TypeVar, Union
 
@@ -164,6 +165,22 @@ class TaskGraph:
 
         return to_graphviz(self._graph, **kwargs)
 
+    def serialize(self) -> dict[str, Any]:
+        node_ids = _UniqueNodeId()
+        nodes = []
+        edges = []
+        for key, provider in self._graph.items():
+            key_id = node_ids.get(key)
+            nodes.append(_serialize_data_node(key, key_id))
+            _ = provider
+
+        return {
+            'directed': True,
+            'multigraph': False,
+            'nodes': nodes,
+            'edges': edges,
+        }
+
     def _repr_html_(self) -> str:
         leafs = sorted(
             [
@@ -199,3 +216,28 @@ class TaskGraph:
                 '</div>',
             )
         )
+
+
+def _serialize_data_node(key: Key, key_id: str) -> dict[str, str]:
+    return {'id': key_id, 'kind': 'data', 'label': str(key), 'type': _key_qualname(key)}
+
+
+def _key_qualname(key: Key) -> str:
+    module = inspect.getmodule(key)
+    if module is None:
+        return str(key)
+    return f'{module.__name__}.{str(key)}'
+
+
+class _UniqueNodeId:
+    def __init__(self) -> None:
+        self._assigned: dict[int, str] = {}
+        self._next = 0
+
+    def get(self, obj: Any) -> str:
+        try:
+            return self._assigned[id(obj)]
+        except KeyError:
+            self._assigned[id(obj)] = str(self._next)
+            self._next += 1
+            return self._assigned[id(obj)]

@@ -154,3 +154,56 @@ def test_edges_iter() -> None:
         (List[A], to_string),
         (List[B], to_string),
     }
+
+
+"""
+{
+    'directed': True,
+    'multigraph': False,
+    'graph': {},
+    'nodes': [
+        {'label': 'A', 'f': 'foo.a', 'id': 'a'},
+        {'label': 'B', 'f': 'foo.b', 'id': 'b'},
+        {'label': 'C', 'f': 'bar.c', 'id': 'c'}
+    ],
+    'links': [
+        {'weight': 1.2, 'source': 'a', 'target': 'b'},
+        {'weight': 2.4, 'source': 'a', 'target': 'c'}
+    ]
+}
+"""
+
+
+def test_serialize() -> None:
+    # We cannot easily test the graph structure because we cannot predict node ids.
+    graph = make_complex_task_graph()
+    tg = TaskGraph(graph=graph, keys=str)
+    res = tg.serialize()
+    assert res.keys() == {'directed', 'multigraph', 'nodes', 'edges'}
+    assert res['directed'] is True
+    assert res['multigraph'] is False
+
+    nodes = sorted(res['nodes'], key=lambda node: node['label'])
+    for node in nodes:
+        del node['id']
+    assert nodes == [
+        {'label': 'Int[A]', 'kind': 'data', 'type': 'task_graph_test.Int[A]'},
+    ]
+
+
+def test_ids_are_unique() -> None:
+    graph = make_complex_task_graph()
+    tg = TaskGraph(graph=graph, keys=str)
+    res = tg.serialize()
+    node_ids = [node['id'] for node in res['nodes']]
+    assert len(node_ids) == len(set(node_ids))
+
+
+def test_edges_refer_to_valid_ids() -> None:
+    graph = make_complex_task_graph()
+    tg = TaskGraph(graph=graph, keys=str)
+    res = tg.serialize()
+    node_ids = [node['id'] for node in res['nodes']]
+    for edge in res['edges']:
+        assert edge['source'] in node_ids
+        assert edge['target'] in node_ids
