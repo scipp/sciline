@@ -7,9 +7,9 @@ from html import escape
 from typing import Any, Generator, Optional, Sequence, Tuple, TypeVar, Union
 
 from ._provider import Provider
+from ._utils import keyname
 from .scheduler import DaskScheduler, NaiveScheduler, Scheduler
 from .typing import Graph, Item, Key
-from .utils import keyname
 
 T = TypeVar("T")
 

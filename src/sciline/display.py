@@ -4,8 +4,8 @@ from html import escape
 from typing import Iterable, List, Tuple, TypeVar, Union
 
 from ._provider import Provider
+from ._utils import groupby, keyname
 from .typing import Item, Key
-from .utils import groupby, keyname
 
 
 def _details(summary: str, body: str) -> str:
