@@ -17,7 +17,7 @@ def groupby(f: Callable[[T], G], a: Iterable[T]) -> DefaultDict[G, list[T]]:
     return g
 
 
-def qualname(obj: Any) -> str:
+def fullqualname(obj: Any) -> str:
     try:
         obj_name = obj.__qualname__
     except AttributeError:
@@ -30,8 +30,6 @@ def qualname(obj: Any) -> str:
 
 
 def keyname(key: Union[Key, TypeVar]) -> str:
-    if isinstance(key, TypeVar):
-        return str(key)
     if isinstance(key, Item):
         return (
             f'{keyname(key.tp)}({", ".join(keyname(label.tp) for label in key.label)})'
@@ -43,15 +41,14 @@ def keyname(key: Union[Key, TypeVar]) -> str:
     return key.__name__
 
 
-def keyqualname(key: Union[Key, TypeVar]) -> str:
-    if isinstance(key, TypeVar):
-        return qualname(key)
+def keyfullqualname(key: Union[Key, TypeVar]) -> str:
     if isinstance(key, Item):
         return (
-            f'{keyqualname(key.tp)}'
-            f'({", ".join(keyqualname(label.tp) for label in key.label)})'
+            f'{keyfullqualname(key.tp)}'
+            f'({", ".join(keyfullqualname(label.tp) for label in key.label)})'
         )
     args = get_args(key)
     if len(args):
-        return str(key)
-    return qualname(key)
+        parameters = ', '.join(map(keyfullqualname, args))
+        return f'{fullqualname(key.__origin__)}[{parameters}]'
+    return fullqualname(key)
