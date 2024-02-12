@@ -32,7 +32,9 @@ def full_qualname(obj: Any) -> str:
 
 def key_name(key: Union[Key, TypeVar]) -> str:
     if isinstance(key, Item):
-        parameters = ", ".join(key_name(label.tp) for label in key.label)
+        parameters = ", ".join(
+            f'{key_name(label.tp)}={label.index}' for label in key.label
+        )
         return f'{key_name(key.tp)}({parameters})'
     args = get_args(key)
     if len(args):
