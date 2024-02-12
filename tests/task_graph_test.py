@@ -6,7 +6,7 @@ import pytest
 
 import sciline as sl
 from sciline.task_graph import TaskGraph
-from sciline.typing import Graph
+from sciline.typing import Graph, Json
 
 A = NewType('A', int)
 B = NewType('B', int)
@@ -156,6 +156,32 @@ def test_edges_iter() -> None:
     }
 
 
+def check_serialized_graph(serialized: Json, expected_nodes, expected_edges) -> None:
+    assert serialized.keys() == {'directed', 'multigraph', 'nodes', 'edges'}
+    assert serialized['directed'] is True
+    assert serialized['multigraph'] is False
+
+    # Use predictable node labels instead of ids to check edges.
+    # This is slightly ambiguous because some labels appear multiple times.
+    def node_label(id_: str) -> str:
+        for n in serialized['nodes']:
+            if n['id'] == id_:
+                return n['label']
+
+    edges = [
+        {'source': node_label(edge['source']), 'target': node_label(edge['target'])}
+        for edge in serialized['edges']
+    ]
+    edges = sorted(edges, key=lambda e: e['source'] + e['target'])
+    assert edges == expected_edges
+
+    # Everything except the node id must be predictable.
+    nodes = sorted(serialized['nodes'], key=lambda n: n['label'])
+    for node in nodes:
+        del node['id']
+    assert nodes == expected_nodes
+
+
 # Result of serializing make_complex_task_graph(), sorted by label.
 expected_serialized_nodes = [
     {
@@ -216,44 +242,99 @@ def test_serialize() -> None:
     graph = make_complex_task_graph()
     tg = TaskGraph(graph=graph, keys=str)
     res = tg.serialize()
-    assert res.keys() == {'directed', 'multigraph', 'nodes', 'edges'}
-    assert res['directed'] is True
-    assert res['multigraph'] is False
-
-    # Use predictable node labels instead of ids to check edges.
-    # This is slightly ambiguous because some labels appear multiple times.
-    def node_label(id_: str) -> str:
-        for n in res['nodes']:
-            if n['id'] == id_:
-                return n['label']
-
-    edges = [
-        {'source': node_label(edge['source']), 'target': node_label(edge['target'])}
-        for edge in res['edges']
-    ]
-    edges = sorted(edges, key=lambda e: e['source'] + e['target'])
-    assert edges == expected_serialized_edges
-
-    # Everything except the node id must be predictable.
-    nodes = sorted(res['nodes'], key=lambda n: n['label'])
-    for node in nodes:
-        del node['id']
-    assert nodes == expected_serialized_nodes
+    check_serialized_graph(res, expected_serialized_nodes, expected_serialized_edges)
 
 
-def test_ids_are_unique() -> None:
+# Result of serializing a task graph with a param table, sorted by label.
+expected_serialized_nodes_param_table = [
+    {
+        'label': 'Series[str, float]',
+        'kind': 'data',
+        'type': 'sciline.series.Series[builtins.str, builtins.float]',
+    },
+    {
+        'label': 'as_float',
+        'kind': 'p_function',
+        'function': 'task_graph_test.as_float',
+    },
+    {
+        'label': 'as_float',
+        'kind': 'p_function',
+        'function': 'task_graph_test.as_float',
+    },
+    {
+        'label': 'float(str:0)',
+        'kind': 'data_table_cell',
+        'value_type': 'builtins.float',
+        'row_types': ['builtins.str'],
+        'row_indices': ['0'],
+    },
+    {
+        'label': 'float(str:1)',
+        'kind': 'data_table_cell',
+        'value_type': 'builtins.float',
+        'row_types': ['builtins.str'],
+        'row_indices': ['1'],
+    },
+    {
+        'label': 'int(str:0)',
+        'kind': 'data_table_cell',
+        'value_type': 'builtins.int',
+        'row_types': ['builtins.str'],
+        'row_indices': ['0'],
+    },
+    {
+        'label': 'int(str:1)',
+        'kind': 'data_table_cell',
+        'value_type': 'builtins.int',
+        'row_types': ['builtins.str'],
+        'row_indices': ['1'],
+    },
+    {
+        'label': 'provide_series[str, float]',
+        'kind': 'p_series',
+        'value_type': 'builtins.float',
+        'row_dim': 'builtins.str',
+        'labels': ['0', '1'],
+    },
+    {
+        'label': 'table_cell(int(str:0))',
+        'kind': 'p_table_cell',
+    },
+    {
+        'label': 'table_cell(int(str:1))',
+        'kind': 'p_table_cell',
+    },
+]
+expected_serialized_edges_param_table = [
+    {'source': 'as_float', 'target': 'float(str:0)'},
+    {'source': 'as_float', 'target': 'float(str:1)'},
+    {'source': 'float(str:0)', 'target': 'provide_series[str, float]'},
+    {'source': 'float(str:1)', 'target': 'provide_series[str, float]'},
+    {'source': 'int(str:0)', 'target': 'as_float'},
+    {'source': 'int(str:1)', 'target': 'as_float'},
+    {'source': 'provide_series[str, float]', 'target': 'Series[str, float]'},
+    {'source': 'table_cell(int(str:0))', 'target': 'int(str:0)'},
+    {'source': 'table_cell(int(str:1))', 'target': 'int(str:1)'},
+]
+
+
+def test_serialize_param_table() -> None:
+    pl = sl.Pipeline([as_float])
+    pl.set_param_table(sl.ParamTable(str, {int: [3, -5]}))
+    graph = pl.build(sl.Series[str, float], handler=sl.HandleAsBuildTimeException())
+    tg = TaskGraph(graph=graph, keys=sl.Series[str, float])
+    res = tg.serialize()
+    check_serialized_graph(
+        res,
+        expected_serialized_nodes_param_table,
+        expected_serialized_edges_param_table,
+    )
+
+
+def test_serialize_ids_are_unique() -> None:
     graph = make_complex_task_graph()
     tg = TaskGraph(graph=graph, keys=str)
     res = tg.serialize()
     node_ids = [node['id'] for node in res['nodes']]
     assert len(node_ids) == len(set(node_ids))
-
-
-def test_edges_refer_to_valid_ids() -> None:
-    graph = make_complex_task_graph()
-    tg = TaskGraph(graph=graph, keys=str)
-    res = tg.serialize()
-    node_ids = [node['id'] for node in res['nodes']]
-    for edge in res['edges']:
-        assert edge['source'] in node_ids
-        assert edge['target'] in node_ids
