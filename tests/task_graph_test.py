@@ -165,7 +165,7 @@ expected_serialized_nodes = [
     },
     {
         'label': 'Int[A]',
-        'kind': 'parameter',
+        'kind': 'p_parameter',
         'type': 'task_graph_test.Int[task_graph_test.A]',
     },
     {
@@ -185,13 +185,17 @@ expected_serialized_nodes = [
     },
     {
         'label': 'make_int_b',
-        'kind': 'function',
+        'kind': 'p_function',
         'function': 'task_graph_test.make_int_b',
     },
     {'label': 'str', 'kind': 'data', 'type': 'builtins.str'},
-    {'label': 'to_string', 'kind': 'function', 'function': 'task_graph_test.to_string'},
-    {'label': 'zeros', 'kind': 'function', 'function': 'task_graph_test.zeros'},
-    {'label': 'zeros', 'kind': 'function', 'function': 'task_graph_test.zeros'},
+    {
+        'label': 'to_string',
+        'kind': 'p_function',
+        'function': 'task_graph_test.to_string',
+    },
+    {'label': 'zeros', 'kind': 'p_function', 'function': 'task_graph_test.zeros'},
+    {'label': 'zeros', 'kind': 'p_function', 'function': 'task_graph_test.zeros'},
 ]
 # Ids were replaced by labels here.
 expected_serialized_edges = [
