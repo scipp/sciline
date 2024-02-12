@@ -1,6 +1,9 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright (c) 2023 Scipp contributors (https://github.com/scipp)
+import sys
 from typing import NewType, TypeVar
+
+import pytest
 
 import sciline as sl
 from sciline.task_graph import TaskGraph
@@ -121,6 +124,7 @@ expected_serialized_edges = [
 ]
 
 
+@pytest.mark.skipif(sys.version_info < (3, 10), reason="requires python3.10 or higher")
 def test_serialize() -> None:
     # We cannot easily test the graph structure because we cannot predict node ids.
     graph = make_task_graph()

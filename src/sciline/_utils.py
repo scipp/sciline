@@ -39,7 +39,8 @@ def key_name(key: Union[Key, TypeVar]) -> str:
     args = get_args(key)
     if len(args):
         parameters = ', '.join(map(key_name, args))
-        return f'{key.__name__}[{parameters}]'
+        # getattr is a fallback for python < 3.10
+        return f'{getattr(key, "__name__", "<Generic>")}[{parameters}]'
     return key.__name__
 
 
