@@ -51,7 +51,7 @@ def test_key_name_type_var() -> None:
 
 def test_key_name_item() -> None:
     item = Item(tp=int, label=(Label(tp=float, index=0), Label(tp=str, index=1)))
-    assert _utils.key_name(item) == 'int(float=0, str=1)'
+    assert _utils.key_name(item) == 'int(float:0, str:1)'
 
 
 def test_key_name_builtin_generic() -> None:
@@ -134,7 +134,8 @@ def test_key_full_qualname_type_var() -> None:
 def test_key_full_qualname_item() -> None:
     item = Item(tp=int, label=(Label(tp=float, index=0), Label(tp=str, index=1)))
     assert (
-        _utils.key_full_qualname(item) == 'builtins.int(builtins.float, builtins.str)'
+        _utils.key_full_qualname(item)
+        == 'builtins.int(builtins.float:0, builtins.str:1)'
     )
 
 
