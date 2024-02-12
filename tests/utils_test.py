@@ -51,7 +51,7 @@ def test_key_name_type_var() -> None:
 
 def test_key_name_item() -> None:
     item = Item(tp=int, label=(Label(tp=float, index=0), Label(tp=str, index=1)))
-    assert _utils.key_name(item) == 'int(float, str)'
+    assert _utils.key_name(item) == 'int(float=0, str=1)'
 
 
 def test_key_name_builtin_generic() -> None:
@@ -208,8 +208,8 @@ def test_provider_name_function() -> None:
 
 def test_provider_name_parameter() -> None:
     MyType = NewType('MyType', float)
-    assert _utils.provider_name(Provider.parameter(4.1)) == 'parameter(4.1)'
-    assert _utils.provider_name(Provider.parameter(MyType(3.2))) == 'parameter(3.2)'
+    assert _utils.provider_name(Provider.parameter(4.1)) == 'parameter(float)'
+    assert _utils.provider_name(Provider.parameter(MyType(3.2))) == 'parameter(float)'
 
 
 def test_provider_full_qualname_function() -> None:
@@ -228,5 +228,5 @@ def test_provider_full_qualname_function() -> None:
 
 def test_provider_full_qualname_parameter() -> None:
     MyType = NewType('MyType', float)
-    assert _utils.provider_name(Provider.parameter(4.1)) == 'parameter(4.1)'
-    assert _utils.provider_name(Provider.parameter(MyType(3.2))) == 'parameter(3.2)'
+    assert _utils.provider_name(Provider.parameter(4.1)) == 'parameter(float)'
+    assert _utils.provider_name(Provider.parameter(MyType(3.2))) == 'parameter(float)'

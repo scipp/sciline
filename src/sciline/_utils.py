@@ -56,7 +56,7 @@ def provider_name(provider: Provider) -> str:
     if provider.kind == 'function':
         return provider.func.__name__
     if provider.kind == 'parameter':
-        return f'parameter({provider.call({})})'
+        return f'parameter({key_name(type(provider.call({})))})'
     return str(provider)
 
 
@@ -64,5 +64,5 @@ def provider_full_qualname(provider: Provider) -> str:
     if provider.kind == 'function':
         return full_qualname(provider.func)
     if provider.kind == 'parameter':
-        return f'parameter({provider.call({})})'
+        return f'parameter({key_full_qualname(type(provider.call({})))})'
     return str(provider)
