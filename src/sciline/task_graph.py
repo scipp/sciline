@@ -2,12 +2,11 @@
 # Copyright (c) 2023 Scipp contributors (https://github.com/scipp)
 from __future__ import annotations
 
-import inspect
 from html import escape
 from typing import Any, Generator, Optional, Sequence, Tuple, TypeVar, Union
 
 from ._provider import Provider
-from ._utils import keyname
+from ._utils import key_full_qualname, key_name, provider_full_qualname, provider_name
 from .scheduler import DaskScheduler, NaiveScheduler, Scheduler
 from .typing import Graph, Item, Key
 
@@ -171,8 +170,14 @@ class TaskGraph:
         edges = []
         for key, provider in self._graph.items():
             key_id = node_ids.get(key)
+            provider_id = node_ids.get(provider)
             nodes.append(_serialize_data_node(key, key_id))
-            _ = provider
+            nodes.append(_serialize_provider_node(provider, key, provider_id))
+
+            edges.append(_serialize_edge(provider_id, key_id))
+            if provider.kind == 'function':
+                for arg in provider.arg_spec.keys():
+                    edges.append(_serialize_edge(node_ids.get(arg), provider_id))
 
         return {
             'directed': True,
@@ -184,7 +189,7 @@ class TaskGraph:
     def _repr_html_(self) -> str:
         leafs = sorted(
             [
-                escape(keyname(key))
+                escape(key_name(key))
                 for key in (
                     self._keys if isinstance(self._keys, tuple) else [self._keys]
                 )
@@ -192,7 +197,7 @@ class TaskGraph:
         )
         roots = sorted(
             {
-                escape(keyname(key))
+                escape(key_name(key))
                 for key, provider in self._graph.items()
                 if provider.kind != 'function'
             }
@@ -219,14 +224,38 @@ class TaskGraph:
 
 
 def _serialize_data_node(key: Key, key_id: str) -> dict[str, str]:
-    return {'id': key_id, 'kind': 'data', 'label': str(key), 'type': _key_qualname(key)}
+    return {
+        'id': key_id,
+        'kind': 'data',
+        'label': key_name(key),
+        'type': key_full_qualname(key),
+    }
 
 
-def _key_qualname(key: Key) -> str:
-    module = inspect.getmodule(key)
-    if module is None:
-        return str(key)
-    return f'{module.__name__}.{str(key)}'
+def _serialize_provider_node(
+    provider: Provider, key: Key, provider_id: str
+) -> dict[str, str]:
+    if provider.kind == 'function':
+        return {
+            'id': provider_id,
+            'kind': 'function',
+            'label': provider_name(provider),
+            'function': provider_full_qualname(provider),
+        }
+    if provider.kind == 'parameter':
+        return {
+            'id': provider_id,
+            'kind': 'parameter',
+            'label': key_name(key),
+            'type': key_full_qualname(key),
+        }
+    raise ValueError(
+        f'Cannot serialize graph containing providers of kind {provider.kind}'
+    )
+
+
+def _serialize_edge(source_id: str, target_id: str) -> dict[str, str]:
+    return {'source': source_id, 'target': target_id}
 
 
 class _UniqueNodeId:

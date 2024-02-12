@@ -156,22 +156,55 @@ def test_edges_iter() -> None:
     }
 
 
-"""
-{
-    'directed': True,
-    'multigraph': False,
-    'graph': {},
-    'nodes': [
-        {'label': 'A', 'f': 'foo.a', 'id': 'a'},
-        {'label': 'B', 'f': 'foo.b', 'id': 'b'},
-        {'label': 'C', 'f': 'bar.c', 'id': 'c'}
-    ],
-    'links': [
-        {'weight': 1.2, 'source': 'a', 'target': 'b'},
-        {'weight': 2.4, 'source': 'a', 'target': 'c'}
-    ]
-}
-"""
+# Result of serializing make_complex_task_graph(), sorted by label.
+expected_serialized_nodes = [
+    {
+        'label': 'Int[A]',
+        'kind': 'data',
+        'type': 'task_graph_test.Int[task_graph_test.A]',
+    },
+    {
+        'label': 'Int[A]',
+        'kind': 'parameter',
+        'type': 'task_graph_test.Int[task_graph_test.A]',
+    },
+    {
+        'label': 'Int[B]',
+        'kind': 'data',
+        'type': 'task_graph_test.Int[task_graph_test.B]',
+    },
+    {
+        'label': 'List[A]',
+        'kind': 'data',
+        'type': 'task_graph_test.List[task_graph_test.A]',
+    },
+    {
+        'label': 'List[B]',
+        'kind': 'data',
+        'type': 'task_graph_test.List[task_graph_test.B]',
+    },
+    {
+        'label': 'make_int_b',
+        'kind': 'function',
+        'function': 'task_graph_test.make_int_b',
+    },
+    {'label': 'str', 'kind': 'data', 'type': 'builtins.str'},
+    {'label': 'to_string', 'kind': 'function', 'function': 'task_graph_test.to_string'},
+    {'label': 'zeros', 'kind': 'function', 'function': 'task_graph_test.zeros'},
+    {'label': 'zeros', 'kind': 'function', 'function': 'task_graph_test.zeros'},
+]
+# Ids were replaced by labels here.
+expected_serialized_edges = [
+    {'source': 'Int[A]', 'target': 'Int[A]'},
+    {'source': 'Int[A]', 'target': 'zeros'},
+    {'source': 'Int[B]', 'target': 'zeros'},
+    {'source': 'List[A]', 'target': 'to_string'},
+    {'source': 'List[B]', 'target': 'to_string'},
+    {'source': 'make_int_b', 'target': 'Int[B]'},
+    {'source': 'to_string', 'target': 'str'},
+    {'source': 'zeros', 'target': 'List[A]'},
+    {'source': 'zeros', 'target': 'List[B]'},
+]
 
 
 def test_serialize() -> None:
@@ -183,12 +216,25 @@ def test_serialize() -> None:
     assert res['directed'] is True
     assert res['multigraph'] is False
 
-    nodes = sorted(res['nodes'], key=lambda node: node['label'])
+    # Use predictable node labels instead of ids to check edges.
+    # This is slightly ambiguous because some labels appear multiple times.
+    def node_label(id_: str) -> str:
+        for n in res['nodes']:
+            if n['id'] == id_:
+                return n['label']
+
+    edges = [
+        {'source': node_label(edge['source']), 'target': node_label(edge['target'])}
+        for edge in res['edges']
+    ]
+    edges = sorted(edges, key=lambda e: e['source'] + e['target'])
+    assert edges == expected_serialized_edges
+
+    # Everything except the node id must be predictable.
+    nodes = sorted(res['nodes'], key=lambda n: n['label'])
     for node in nodes:
         del node['id']
-    assert nodes == [
-        {'label': 'Int[A]', 'kind': 'data', 'type': 'task_graph_test.Int[A]'},
-    ]
+    assert nodes == expected_serialized_nodes
 
 
 def test_ids_are_unique() -> None:
