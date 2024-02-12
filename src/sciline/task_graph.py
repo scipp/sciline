@@ -264,9 +264,10 @@ class _UniqueNodeId:
         self._next = 0
 
     def get(self, obj: Any) -> str:
+        hsh = hash(obj)
         try:
-            return self._assigned[id(obj)]
+            return self._assigned[hsh]
         except KeyError:
-            self._assigned[id(obj)] = str(self._next)
+            self._assigned[hsh] = str(self._next)
             self._next += 1
-            return self._assigned[id(obj)]
+            return self._assigned[hsh]
