@@ -4,7 +4,7 @@ from html import escape
 from typing import Iterable, List, Tuple, TypeVar, Union
 
 from ._provider import Provider
-from ._utils import groupby, keyname
+from ._utils import groupby, key_name
 from .typing import Item, Key
 
 
@@ -24,8 +24,8 @@ def _provider_name(
     if args:
         # This is always the case, but mypy complains
         if hasattr(key, '__getitem__'):
-            return escape(keyname(key[args]))
-    return escape(keyname(key))
+            return escape(key_name(key[args]))
+    return escape(key_name(key))
 
 
 def _provider_source(
@@ -36,7 +36,7 @@ def _provider_source(
         # This is always the case, but mypy complains
         if isinstance(key, Item):
             return escape(
-                f'ParamTable({keyname(key.label[0].tp)}, length={len((v, *rest))})'
+                f'ParamTable({key_name(key.label[0].tp)}, length={len((v, *rest))})'
             )
     if v.kind == 'function':
         return _details(
