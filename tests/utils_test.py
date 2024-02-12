@@ -86,8 +86,8 @@ def test_keyname_custom_generic_two_params() -> None:
 
 
 def test_keyfullqualname_builtin() -> None:
-    assert _utils.keyfullqualname(int) == 'int'
-    assert _utils.keyfullqualname(object) == 'object'
+    assert _utils.keyfullqualname(int) == 'builtins.int'
+    assert _utils.keyfullqualname(object) == 'builtins.object'
 
 
 # NewType returns a class since python 3.10,
@@ -115,7 +115,7 @@ def test_keyfullqualname_generic_type_alias_type() -> None:
     # Use exec to avoid a syntax error in older python
     code = """
 type MyType[T] = dict[str, T]
-assert _utils.keyfullqualname(MyType[int]) == 'utils_test.MyType[int]'
+assert _utils.keyfullqualname(MyType[int]) == 'utils_test.MyType[builtins.int]'
     """
     exec(code)
 
@@ -129,16 +129,19 @@ def test_keyfullqualname_type_var() -> None:
 
 def test_keyfullqualname_item() -> None:
     item = Item(tp=int, label=(Label(tp=float, index=0), Label(tp=str, index=1)))
-    assert _utils.keyfullqualname(item) == 'int(float, str)'
+    assert _utils.keyfullqualname(item) == 'builtins.int(builtins.float, builtins.str)'
 
 
 @pytest.mark.skipif(sys.version_info < (3, 10), reason="requires python3.10 or higher")
 def test_keyfullqualname_builtin_generic() -> None:
     MyType = NewType('MyType', str)
-    assert _utils.keyfullqualname(list) == 'list'
-    assert _utils.keyfullqualname(list[float]) == 'list[float]'
-    assert _utils.keyfullqualname(list[MyType]) == 'list[utils_test.MyType]'
-    assert _utils.keyfullqualname(dict[str, MyType]) == 'dict[str, utils_test.MyType]'
+    assert _utils.keyfullqualname(list) == 'builtins.list'
+    assert _utils.keyfullqualname(list[float]) == 'builtins.list[builtins.float]'
+    assert _utils.keyfullqualname(list[MyType]) == 'builtins.list[utils_test.MyType]'
+    assert (
+        _utils.keyfullqualname(dict[str, MyType])
+        == 'builtins.dict[builtins.str, utils_test.MyType]'
+    )
 
 
 @pytest.mark.skipif(sys.version_info < (3, 10), reason="requires python3.10 or higher")
@@ -155,7 +158,7 @@ def test_keyfullqualname_custom_generic() -> None:
     )
     assert (
         _utils.keyfullqualname(G[int])
-        == 'utils_test.test_keyfullqualname_custom_generic.<locals>.G[int]'
+        == 'utils_test.test_keyfullqualname_custom_generic.<locals>.G[builtins.int]'
     )
     assert (
         _utils.keyfullqualname(G[MyType])
@@ -180,10 +183,10 @@ def test_keyfullqualname_custom_generic_two_params() -> None:
     assert (
         _utils.keyfullqualname(G[int, tuple[float]])
         == 'utils_test.test_keyfullqualname_custom_generic_two_params.'
-        '<locals>.G[int, tuple[float]]'
+        '<locals>.G[builtins.int, builtins.tuple[builtins.float]]'
     )
     assert (
         _utils.keyfullqualname(G[list[MyType], MyType])
         == 'utils_test.test_keyfullqualname_custom_generic_two_params.<locals>.'
-        'G[list[utils_test.MyType], utils_test.MyType]'
+        'G[builtins.list[utils_test.MyType], utils_test.MyType]'
     )

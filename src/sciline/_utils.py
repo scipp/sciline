@@ -24,7 +24,7 @@ def fullqualname(obj: Any) -> str:
         obj_name = str(obj)
 
     module = inspect.getmodule(obj)
-    if module is None or module.__name__ == 'builtins':
+    if module is None:
         return obj_name
     return f'{module.__name__}.{obj_name}'
 
