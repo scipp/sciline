@@ -3,7 +3,9 @@
 from dataclasses import dataclass
 from typing import (
     Any,
+    Dict,
     Generic,
+    List,
     Optional,
     Tuple,
     Type,
@@ -33,6 +35,9 @@ class Item(Generic[T]):
 
 Key = Union[type, Item[Any]]
 Graph = dict[Key, Provider]
+
+
+Json = Union[Dict[str, "Json"], List["Json"], str, int, float, bool, None]
 
 
 def get_optional(tp: Key) -> Optional[Any]:
