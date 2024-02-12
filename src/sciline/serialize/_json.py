@@ -10,6 +10,16 @@ from ..typing import Graph, Item, Json, Key
 
 
 def json_schema() -> Json:
+    """Return the JSON schema for serialized task graphs.
+
+    See, e.g., `jsonschema <https://python-jsonschema.readthedocs.io/en/stable/>`_
+    for a tool that can validate the schema.
+
+    Returns
+    -------
+    :
+        The graph JSON schema as a dict.
+    """
     with (
         importlib.resources.files('sciline.serialize')
         .joinpath('graph_json_schema.json')
