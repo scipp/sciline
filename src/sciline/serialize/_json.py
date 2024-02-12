@@ -1,10 +1,21 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright (c) 2023 Scipp contributors (https://github.com/scipp)
+import importlib.resources
+import json
 from typing import Union, get_args
 
 from .._provider import Provider
 from .._utils import key_full_qualname, key_name, provider_full_qualname, provider_name
 from ..typing import Graph, Item, Json, Key
+
+
+def json_schema() -> Json:
+    with (
+        importlib.resources.files('sciline.serialize')
+        .joinpath('graph_json_schema.json')
+        .open()
+    ) as f:
+        return json.load(f)
 
 
 def json_serialize_task_graph(graph: Graph) -> dict[str, Json]:

@@ -3,11 +3,13 @@
 import sys
 from typing import NewType, TypeVar
 
+import jsonschema
 import pytest
 
 import sciline as sl
+from sciline.serialize import json_schema
 from sciline.task_graph import TaskGraph
-from sciline.typing import Graph, Json
+from sciline.typing import Json
 
 A = NewType('A', int)
 B = NewType('B', int)
@@ -36,11 +38,6 @@ def to_string(a: List[A], b: List[B]) -> str:
 
 def as_float(x: int) -> float:
     return 0.5 * x
-
-
-def make_task_graph() -> Graph:
-    pl = sl.Pipeline([make_int_b, zeros, to_string], params={Int[A]: 3})
-    return pl.build(str, handler=sl.HandleAsBuildTimeException())
 
 
 def check_serialized_graph(serialized: Json, expected_nodes, expected_edges) -> None:
@@ -127,7 +124,8 @@ expected_serialized_edges = [
 @pytest.mark.skipif(sys.version_info < (3, 10), reason="requires python3.10 or higher")
 def test_serialize() -> None:
     # We cannot easily test the graph structure because we cannot predict node ids.
-    graph = make_task_graph()
+    pl = sl.Pipeline([make_int_b, zeros, to_string], params={Int[A]: 3})
+    graph = pl.build(str, handler=sl.HandleAsBuildTimeException())
     tg = TaskGraph(graph=graph, keys=str)
     res = tg.serialize()
     check_serialized_graph(res, expected_serialized_nodes, expected_serialized_edges)
@@ -221,8 +219,28 @@ def test_serialize_param_table() -> None:
 
 
 def test_serialize_ids_are_unique() -> None:
-    graph = make_task_graph()
+    pl = sl.Pipeline([make_int_b, zeros, to_string], params={Int[A]: 3})
+    graph = pl.build(str, handler=sl.HandleAsBuildTimeException())
     tg = TaskGraph(graph=graph, keys=str)
     res = tg.serialize()
     node_ids = [node['id'] for node in res['nodes']]
     assert len(node_ids) == len(set(node_ids))
+
+
+def test_serialize_validate_schema() -> None:
+    pl = sl.Pipeline([make_int_b, zeros, to_string], params={Int[A]: 3})
+    graph = pl.build(str, handler=sl.HandleAsBuildTimeException())
+    tg = TaskGraph(graph=graph, keys=str)
+    res = tg.serialize()
+    schema = json_schema()
+    jsonschema.validate(res, schema)
+
+
+def test_serialize_validate_schema_param_table() -> None:
+    pl = sl.Pipeline([as_float])
+    pl.set_param_table(sl.ParamTable(str, {int: [3, -5]}))
+    graph = pl.build(sl.Series[str, float], handler=sl.HandleAsBuildTimeException())
+    tg = TaskGraph(graph=graph, keys=str)
+    res = tg.serialize()
+    schema = json_schema()
+    jsonschema.validate(res, schema)

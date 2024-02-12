@@ -1,0 +1,195 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Sciline task graph",
+  "description": "A task graph from the Sciline package (https://scipp.github.io/sciline/).",
+  "type": "object",
+  "properties": {
+    "directed": {
+      "type": "boolean",
+      "description": "Indicates whether the graph is directed. Always true in Sciline."
+    },
+    "multigraph": {
+      "type": "boolean",
+      "description": "Indicates whether the graph has multi-edges. Always false in Sciline."
+    },
+    "nodes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "description": "A node in the graph",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Unique id of the node."
+          },
+          "label": {
+            "type": "string",
+            "description": "Human-readable label; not necessarily unique."
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "data",
+              "data_table_cell",
+              "p_function",
+              "p_parameter",
+              "p_series",
+              "p_table_cell"
+            ],
+            "description": "Indicates what kind of object the node represents. Determines the schema of the node."
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "kind"
+        ],
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "data"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "type": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "type"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "data_table_cell"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "value_type": {
+                  "type": "string"
+                },
+                "row_types": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "row_indices": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "required": [
+                "value_type","row_types","row_indices"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "p_function"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "function": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "function"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "p_parameter"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "type": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "type"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "p_series"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "value_type": {
+                  "type": "string"
+                },
+                "row_dim": {
+                  "type": "string"
+                },
+                "labels": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "required": [
+                "value_type","row_dim","labels"
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "edges": {
+      "type": "array",
+      "description": "A directed edge that connects from 'source' to 'target'.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "source": {
+            "type": "string",
+            "description": "Id of the source node of the edge."
+          },
+          "target": {
+            "type": "string",
+            "description": "Id of the target node of the edge."
+          }
+        },
+        "required": [
+          "source",
+          "target"
+        ]
+      }
+    }
+  },
+  "required": [
+    "directed",
+    "edges",
+    "multigraph",
+    "nodes"
+  ]
+}
