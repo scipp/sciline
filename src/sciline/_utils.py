@@ -26,7 +26,7 @@ def full_qualname(obj: Any) -> str:
 
     module = inspect.getmodule(obj)
     if module is None:
-        return obj_name
+        return str(obj_name)
     return f'{module.__name__}.{obj_name}'
 
 
@@ -54,8 +54,9 @@ def key_full_qualname(key: Union[Key, TypeVar]) -> str:
         return f'{key_full_qualname(key.tp)}({parameters})'
     args = get_args(key)
     if len(args):
+        origin = key.__origin__  # type: ignore[union-attr] # key is a TypeVar
         parameters = ', '.join(map(key_full_qualname, args))
-        return f'{full_qualname(key.__origin__)}[{parameters}]'
+        return f'{full_qualname(origin)}[{parameters}]'
     return full_qualname(key)
 
 

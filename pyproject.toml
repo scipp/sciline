@@ -79,3 +79,9 @@ enable_error_code = [
 ]
 show_error_codes = true
 warn_unreachable = true
+
+[[tool.mypy.overrides]]
+# There are a lot of errors from using JSON objects.
+# Instead of fixing them, we can just rely on runtime checks to validate them.
+module = "tests.serialize.json_test"
+disable_error_code = ["call-overload", "index", "union-attr"]

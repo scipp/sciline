@@ -128,7 +128,8 @@ def test_key_full_qualname_type_var() -> None:
     # TypeVar has no __qualname__, the result is therefore missing
     # test_key_full_qualname_type_var.<locals>
     MyType = TypeVar('MyType')
-    assert _utils.key_full_qualname(MyType) == 'utils_test.~MyType'
+    res = _utils.key_full_qualname(MyType)  # type: ignore[arg-type]
+    assert res == 'utils_test.~MyType'
 
 
 def test_key_full_qualname_item() -> None:

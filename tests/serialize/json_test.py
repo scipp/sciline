@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright (c) 2023 Scipp contributors (https://github.com/scipp)
 import sys
-from typing import NewType, TypeVar
+from typing import Any, NewType, TypeVar
 
 import jsonschema
 import pytest
@@ -40,7 +40,9 @@ def as_float(x: int) -> float:
     return 0.5 * x
 
 
-def check_serialized_graph(serialized: Json, expected_nodes, expected_edges) -> None:
+def check_serialized_graph(
+    serialized: dict[str, Json], expected_nodes: Any, expected_edges: Any
+) -> None:
     assert serialized.keys() == {'directed', 'multigraph', 'nodes', 'edges'}
     assert serialized['directed'] is True
     assert serialized['multigraph'] is False
@@ -49,20 +51,26 @@ def check_serialized_graph(serialized: Json, expected_nodes, expected_edges) -> 
     # This is slightly ambiguous because some labels appear multiple times.
     def node_label(id_: str) -> str:
         for n in serialized['nodes']:
-            if n['id'] == id_:
-                return n['label']
+            if n['id'] == id_:  # type: ignore[index]
+                return n['label']  # type: ignore[index, return-value]
+        raise AssertionError("Edge refers to invalid node id")
 
     edges = [
-        {'source': node_label(edge['source']), 'target': node_label(edge['target'])}
+        {
+            'source': node_label(edge['source']),  # type: ignore[arg-type]
+            'target': node_label(edge['target']),  # type: ignore[arg-type]
+        }
         for edge in serialized['edges']
     ]
     edges = sorted(edges, key=lambda e: e['source'] + e['target'])
     assert edges == expected_edges
 
     # Everything except the node id must be predictable.
-    nodes = sorted(serialized['nodes'], key=lambda n: n['label'])
+    nodes = sorted(
+        serialized['nodes'], key=lambda n: str(n['label'])  # type: ignore[arg-type]
+    )
     for node in nodes:
-        del node['id']
+        del node['id']  # type: ignore[arg-type]
     assert nodes == expected_nodes
 
 

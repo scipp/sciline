@@ -25,7 +25,7 @@ def json_schema() -> Json:
         .joinpath('graph_json_schema.json')
         .open()
     ) as f:
-        return json.load(f)
+        return json.load(f)  # type: ignore[no-any-return]
 
 
 def json_serialize_task_graph(graph: Graph) -> dict[str, Json]:
@@ -58,12 +58,12 @@ def json_serialize_task_graph(graph: Graph) -> dict[str, Json]:
     return {
         'directed': True,
         'multigraph': False,
-        'nodes': nodes,
-        'edges': edges,
+        'nodes': nodes,  # type: ignore[dict-item]
+        'edges': edges,  # type: ignore[dict-item]
     }
 
 
-def _serialize_data_node(key: Key, key_id: str) -> dict[str, str]:
+def _serialize_data_node(key: Key, key_id: str) -> dict[str, Union[str, list[str]]]:
     if isinstance(key, Item):
         return {
             'id': key_id,
@@ -83,7 +83,7 @@ def _serialize_data_node(key: Key, key_id: str) -> dict[str, str]:
 
 def _serialize_provider_node(
     provider: Provider, key: Key, provider_id: str
-) -> dict[str, str]:
+) -> dict[str, Union[str, list[str]]]:
     from ..pipeline import SeriesProvider
 
     if isinstance(provider, SeriesProvider):
