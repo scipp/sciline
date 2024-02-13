@@ -1,5 +1,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright (c) 2023 Scipp contributors (https://github.com/scipp)
+# type: ignore
+
 import sys
 from typing import Any, NewType, TypeVar
 
@@ -66,9 +68,7 @@ def check_serialized_graph(
     assert edges == expected_edges
 
     # Everything except the node id must be predictable.
-    nodes = sorted(
-        serialized['nodes'], key=lambda n: str(n['label'])  # type: ignore[arg-type]
-    )
+    nodes = sorted(serialized['nodes'], key=lambda n: str(n['label']))
     for node in nodes:
         del node['id']  # type: ignore[arg-type]
     assert nodes == expected_nodes
