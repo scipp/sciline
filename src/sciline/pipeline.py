@@ -14,6 +14,7 @@ from typing import (
     List,
     Mapping,
     Optional,
+    Set,
     Tuple,
     Type,
     TypeVar,
@@ -27,6 +28,7 @@ from typing import (
 from sciline.task_graph import TaskGraph
 
 from ._provider import ArgSpec, Provider, ProviderLocation, ToProvider
+from ._utils import key_name
 from .display import pipeline_html_repr
 from .domain import Scope, ScopeTwoParams
 from .handler import (
@@ -51,21 +53,68 @@ class AmbiguousProvider(Exception):
     """Raised when multiple providers are found for a type."""
 
 
-def _is_compatible_type_tuple(
+def _extract_typevars_from_generic_type(t: type) -> Tuple[TypeVar, ...]:
+    """Returns the typevars that were used in the definition of a Generic type."""
+    if not hasattr(t, '__orig_bases__'):
+        return ()
+    return tuple(
+        chain(*(get_args(b) for b in t.__orig_bases__ if get_origin(b) == Generic))
+    )
+
+
+def _find_all_typevars(t: Union[type, TypeVar]) -> Set[TypeVar]:
+    """Returns the set of all TypeVars in a type expression."""
+    if isinstance(t, TypeVar):
+        return {t}
+    return set(chain(*map(_find_all_typevars, get_args(t))))
+
+
+def _find_bounds_to_make_compatible_type(
+    requested: Key,
+    provided: Key | TypeVar,
+) -> Optional[Dict[TypeVar, Key]]:
+    """
+    Check if a type is compatible to a provided type.
+    If the types are compatible, return a mapping from typevars to concrete types
+    that makes the provided type equal to the requested type.
+    """
+    if provided == requested:
+        ret: Dict[TypeVar, Key] = {}
+        return ret
+    if isinstance(provided, TypeVar):
+        # If the type var has no constraints, accept anything
+        if not provided.__constraints__:
+            return {provided: requested}
+        for c in provided.__constraints__:
+            if _find_bounds_to_make_compatible_type(requested, c) is not None:
+                return {provided: requested}
+    if get_origin(provided) is not None:
+        if get_origin(provided) == get_origin(requested):
+            return _find_bounds_to_make_compatible_type_tuple(
+                get_args(requested), get_args(provided)
+            )
+    return None
+
+
+def _find_bounds_to_make_compatible_type_tuple(
     requested: tuple[Key, ...],
     provided: tuple[Key | TypeVar, ...],
-) -> bool:
+) -> Optional[Dict[TypeVar, Key]]:
     """
-    Check if a tuple of requested types is compatible with a tuple of provided types.
-
-    Types in the tuples must either by equal, or the provided type must be a TypeVar.
+    Check if a tuple of requested types is compatible with a tuple of provided types
+    and return a mapping from type vars to concrete types that makes all provided
+    types equal to their corresponding requested type.
+    If any of the types is not compatible, return None.
     """
-    for req, prov in zip(requested, provided):
-        if isinstance(prov, TypeVar):
-            continue
-        if req != prov:
-            return False
-    return True
+    union: Dict[TypeVar, Key] = {}
+    for bound in map(_find_bounds_to_make_compatible_type, requested, provided):
+        # If no mapping from the type-var to a concrete type was found,
+        # or if the mapping is inconsistent,
+        # interrupt the search and report that no compatible types were found.
+        if bound is None or any(k in union and union[k] != bound[k] for k in bound):
+            return None
+        union.update(bound)
+    return union
 
 
 def _find_all_paths(
@@ -494,6 +543,7 @@ class Pipeline:
         self, tp: Union[Type[T], Item[T]], handler: Optional[ErrorHandler] = None
     ) -> Tuple[Provider, Dict[TypeVar, Key]]:
         handler = handler or HandleAsBuildTimeException()
+        explanation: List[str] = []
         if (provider := self._providers.get(tp)) is not None:
             return provider, {}
         elif (origin := get_origin(tp)) is not None and (
@@ -501,13 +551,14 @@ class Pipeline:
         ) is not None:
             requested = get_args(tp)
             matches = [
-                (args, subprovider)
+                (subprovider, bound)
                 for args, subprovider in subproviders.items()
-                if _is_compatible_type_tuple(requested, args)
+                if (
+                    bound := _find_bounds_to_make_compatible_type_tuple(requested, args)
+                )
+                is not None
             ]
-            typevar_counts = [
-                sum(1 for t in args if isinstance(t, TypeVar)) for args, _ in matches
-            ]
+            typevar_counts = [len(bound) for _, bound in matches]
             min_typevar_count = min(typevar_counts, default=0)
             matches = [
                 m
@@ -516,20 +567,38 @@ class Pipeline:
             ]
 
             if len(matches) == 1:
-                args, provider = matches[0]
-                bound = {
-                    arg: req
-                    for arg, req in zip(args, requested)
-                    if isinstance(arg, TypeVar)
-                }
+                provider, bound = matches[0]
                 return provider, bound
             elif len(matches) > 1:
-                matching_providers = [m[1].location.name for m in matches]
+                matching_providers = [provider.location.name for provider, _ in matches]
                 raise AmbiguousProvider(
                     f"Multiple providers found for type {tp}."
                     f" Matching providers are: {matching_providers}."
                 )
-        return handler.handle_unsatisfied_requirement(tp), {}
+            else:
+                typevars_in_expression = _extract_typevars_from_generic_type(origin)
+                if typevars_in_expression:
+                    explanation = [
+                        ''.join(
+                            map(
+                                str,
+                                (
+                                    'Note that ',
+                                    key_name(origin[typevars_in_expression]),
+                                    ' has constraints ',
+                                    (
+                                        {
+                                            key_name(tv): tuple(
+                                                map(key_name, tv.__constraints__)
+                                            )
+                                            for tv in typevars_in_expression
+                                        }
+                                    ),
+                                ),
+                            )
+                        )
+                    ]
+        return handler.handle_unsatisfied_requirement(tp, *explanation), {}
 
     def _get_unique_provider(
         self, tp: Union[Type[T], Item[T]], handler: ErrorHandler
