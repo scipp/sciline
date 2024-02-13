@@ -17,7 +17,7 @@ class UnsatisfiedRequirement(Exception):
 class ErrorHandler(Protocol):
     """Error handling protocol for pipelines."""
 
-    def handle_unsatisfied_requirement(self, tp: Key) -> Provider:
+    def handle_unsatisfied_requirement(self, tp: Key, *explanation: str) -> Provider:
         ...
 
 
@@ -29,9 +29,9 @@ class HandleAsBuildTimeException(ErrorHandler):
     ensuring that errors are caught early, before starting costly computation.
     """
 
-    def handle_unsatisfied_requirement(self, tp: Key) -> NoReturn:
+    def handle_unsatisfied_requirement(self, tp: Key, *explanation: str) -> NoReturn:
         """Raise an exception when a type cannot be provided."""
-        raise UnsatisfiedRequirement('No provider found for type', tp)
+        raise UnsatisfiedRequirement('No provider found for type', tp, *explanation)
 
 
 class HandleAsComputeTimeException(ErrorHandler):
@@ -42,11 +42,11 @@ class HandleAsComputeTimeException(ErrorHandler):
     visualization. This is helpful when visualizing a graph that is not yet complete.
     """
 
-    def handle_unsatisfied_requirement(self, tp: Key) -> Provider:
+    def handle_unsatisfied_requirement(self, tp: Key, *explanation: str) -> Provider:
         """Return a function that raises an exception when called."""
 
         def unsatisfied_sentinel() -> NoReturn:
-            raise UnsatisfiedRequirement('No provider found for type', tp)
+            raise UnsatisfiedRequirement('No provider found for type', tp, *explanation)
 
         return Provider(
             func=unsatisfied_sentinel, arg_spec=ArgSpec.null(), kind='unsatisfied'
