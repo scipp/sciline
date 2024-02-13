@@ -20,6 +20,7 @@ from .handler import (
 from .param_table import ParamTable
 from .pipeline import AmbiguousProvider, Pipeline
 from .series import Series
+from .task_graph import TaskGraph
 
 __all__ = [
     "AmbiguousProvider",
@@ -33,6 +34,7 @@ __all__ = [
     "Series",
     "Scope",
     "ScopeTwoParams",
+    'TaskGraph',
     "UnboundTypeVar",
     "UnsatisfiedRequirement",
     "HandleAsBuildTimeException",
