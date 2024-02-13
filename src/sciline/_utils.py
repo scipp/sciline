@@ -41,6 +41,8 @@ def key_name(key: Union[Key, TypeVar]) -> str:
         parameters = ', '.join(map(key_name, args))
         # getattr is a fallback for python < 3.10
         return f'{getattr(key, "__name__", "<Generic>")}[{parameters}]'
+    if isinstance(key, TypeVar):
+        return str(key)
     return key.__name__
 
 

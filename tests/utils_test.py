@@ -46,7 +46,7 @@ assert _utils.key_name(MyType[int]) == 'MyType[int]'
 
 def test_key_name_type_var() -> None:
     MyType = TypeVar('MyType')
-    assert _utils.key_name(MyType) == 'MyType'
+    assert _utils.key_name(MyType) == '~MyType'  # type: ignore[arg-type]
 
 
 def test_key_name_item() -> None:
