@@ -63,7 +63,7 @@ def setup(app: Sphinx) -> dict[str, Any]:
         rebuild='env',
         types=dict[str, str],
     )
-    app.config.typehints_formatter = _typehints_formatter  # type: ignore[attr-defined]
+    app.config.typehints_formatter = _typehints_formatter
     return {'version': 1, 'parallel_read_safe': True, 'parallel_write_safe': True}
 
 
@@ -94,7 +94,7 @@ def _format_new_type(annotation: Any, prefix: str, aliases: dict[str, str]) -> s
 
 def _is_type_alias_type(annotation: Any) -> bool:
     try:
-        from typing import TypeAliasType
+        from typing import TypeAliasType  # type: ignore[attr-defined, unused-ignore]
 
         return isinstance(annotation, TypeAliasType)
     except ImportError:
