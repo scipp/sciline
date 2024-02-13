@@ -41,5 +41,6 @@
    :template: module-template.rst
    :recursive:
 
+   serialize
    sphinxext
 ```

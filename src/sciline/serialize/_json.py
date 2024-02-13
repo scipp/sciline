@@ -29,6 +29,18 @@ def json_schema() -> Json:
 
 
 def json_serialize_task_graph(graph: Graph) -> dict[str, Json]:
+    """Serialize a graph to JSON.
+
+    See the user guide on
+    `Serializing Providers <../../user-guide/serialization.rst>`_.
+
+    Also available as :meth:`sciline.TaskGraph.serialize`.
+
+    Returns
+    -------
+    :
+        A JSON object representing the graph.
+    """
     node_ids = _UniqueNodeId()
     nodes = []
     edges = []

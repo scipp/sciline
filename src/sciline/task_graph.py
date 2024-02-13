@@ -130,6 +130,16 @@ class TaskGraph:
         return to_graphviz(self._graph, **kwargs)
 
     def serialize(self) -> dict[str, Json]:
+        """Serialize the graph to JSON.
+
+        See the user guide on
+        `Serializing Providers <../../user-guide/serialization.rst>`_.
+
+        Returns
+        -------
+        :
+            A JSON object representing the graph.
+        """
         return json_serialize_task_graph(self._graph)
 
     def _repr_html_(self) -> str:
