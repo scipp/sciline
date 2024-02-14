@@ -1,10 +1,28 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright (c) 2023 Scipp contributors (https://github.com/scipp)
+from typing import NewType, TypeVar
+
 import pytest
 
 import sciline as sl
 from sciline.task_graph import TaskGraph
 from sciline.typing import Graph
+
+A = NewType('A', int)
+B = NewType('B', int)
+T = TypeVar('T', A, B)
+
+
+class Str(sl.Scope[T, str], str):
+    ...
+
+
+def to_string(x: T) -> Str[T]:
+    return Str[T](str(x))
+
+
+def repeat(a: A, s: Str[B]) -> list[str]:
+    return [s] * a
 
 
 def as_float(x: int) -> float:
@@ -53,3 +71,10 @@ def test_compute_raises_when_provided_with_key_not_in_graph() -> None:
         tg.compute(str)
     with pytest.raises(KeyError):
         tg.compute((str, float))
+
+
+def test_keys_iter() -> None:
+    pl = sl.Pipeline([to_string, repeat], params={A: 3, B: 4})
+    tg = pl.get(list[str])
+    assert len(list(tg.keys())) == 4  # there are no duplicates
+    assert set(tg.keys()) == {A, B, Str[B], list[str]}
