@@ -6,7 +6,8 @@ from typing import NewType, TypeVar
 import pytest
 
 import sciline
-from sciline import Provider, _utils
+from sciline import _utils
+from sciline._provider import Provider
 from sciline.typing import Item, Label
 
 

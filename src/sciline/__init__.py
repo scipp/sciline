@@ -10,7 +10,7 @@ except importlib.metadata.PackageNotFoundError:
     __version__ = "0.0.0"
 
 from . import scheduler
-from ._provider import ArgSpec, Provider, ProviderKind, ProviderLocation, UnboundTypeVar
+from ._provider import UnboundTypeVar
 from .domain import Scope, ScopeTwoParams
 from .handler import (
     HandleAsBuildTimeException,
@@ -24,12 +24,8 @@ from .task_graph import TaskGraph
 
 __all__ = [
     "AmbiguousProvider",
-    "ArgSpec",
     "ParamTable",
     "Pipeline",
-    "Provider",
-    "ProviderKind",
-    "ProviderLocation",
     "scheduler",
     "Series",
     "Scope",
