@@ -36,37 +36,40 @@ def make_task_graph() -> Graph:
 
 def test_default_scheduler_is_dask_when_dask_available() -> None:
     _ = pytest.importorskip("dask")
-    tg = TaskGraph(graph={}, keys=())
+    tg = TaskGraph(graph={}, targets=())
     assert isinstance(tg._scheduler, sl.scheduler.DaskScheduler)
 
 
 def test_compute_returns_value_when_initialized_with_single_key() -> None:
     graph = make_task_graph()
-    tg = TaskGraph(graph=graph, keys=float)
+    tg = TaskGraph(graph=graph, targets=float)
     assert tg.compute() == 0.5
 
 
 def test_compute_returns_dict_when_initialized_with_key_tuple() -> None:
     graph = make_task_graph()
-    assert TaskGraph(graph=graph, keys=(float,)).compute() == {float: 0.5}
-    assert TaskGraph(graph=graph, keys=(float, int)).compute() == {float: 0.5, int: 1}
+    assert TaskGraph(graph=graph, targets=(float,)).compute() == {float: 0.5}
+    assert TaskGraph(graph=graph, targets=(float, int)).compute() == {
+        float: 0.5,
+        int: 1,
+    }
 
 
 def test_compute_returns_value_when_provided_with_single_key() -> None:
     graph = make_task_graph()
-    tg = TaskGraph(graph=graph, keys=float)
+    tg = TaskGraph(graph=graph, targets=float)
     assert tg.compute(int) == 1
 
 
 def test_compute_returns_dict_when_provided_with_key_tuple() -> None:
     graph = make_task_graph()
-    tg = TaskGraph(graph=graph, keys=float)
+    tg = TaskGraph(graph=graph, targets=float)
     assert tg.compute((int, float)) == {int: 1, float: 0.5}
 
 
 def test_compute_raises_when_provided_with_key_not_in_graph() -> None:
     graph = make_task_graph()
-    tg = TaskGraph(graph=graph, keys=float)
+    tg = TaskGraph(graph=graph, targets=float)
     with pytest.raises(KeyError):
         tg.compute(str)
     with pytest.raises(KeyError):
