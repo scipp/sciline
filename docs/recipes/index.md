@@ -5,7 +5,8 @@
 maxdepth: 2
 ---
 
-side-effects-and-file-writing
+applying-decorators
 continue-from-intermediate-results
 replacing-providers
+side-effects-and-file-writing
 ```
