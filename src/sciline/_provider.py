@@ -123,7 +123,7 @@ class Provider:
 
     def deduce_key(self) -> Any:
         """Attempt to determine the key (return type) of the provider."""
-        if (key := get_type_hints(self._func).get('return')) is None:
+        if (key := self._arg_spec.return_) is None:
             raise ValueError(
                 f'Provider {self} lacks type-hint for return value or returns None.'
             )
@@ -165,10 +165,13 @@ class Provider:
 class ArgSpec:
     """Argument specification for a provider."""
 
-    def __init__(self, *, args: dict[str, Key], kwargs: dict[str, Key]) -> None:
+    def __init__(
+        self, *, args: dict[str, Key], kwargs: dict[str, Key], return_: Optional[Key]
+    ) -> None:
         """Build from components, use dedicated creation functions instead."""
         self._args = args
         self._kwargs = kwargs
+        self._return = return_
 
     @classmethod
     def from_function(cls, provider: ToProvider) -> ArgSpec:
@@ -182,17 +185,21 @@ class ArgSpec:
             raise ValueError(
                 f'Provider {provider} lacks type-hint for arguments.'
             ) from None
-        return cls(args=args, kwargs=kwargs)
+        return cls(args=args, kwargs=kwargs, return_=hints.get('return'))
 
     @classmethod
     def from_args(cls, *args: Key) -> ArgSpec:
         """Create ArgSpec from positional arguments."""
-        return cls(args={f'unknown_{i}': arg for i, arg in enumerate(args)}, kwargs={})
+        return cls(
+            args={f'unknown_{i}': arg for i, arg in enumerate(args)},
+            kwargs={},
+            return_=None,
+        )
 
     @classmethod
     def null(cls) -> ArgSpec:
         """Create ArgSpec for a nullary function (no args)."""
-        return cls(args={}, kwargs={})
+        return cls(args={}, kwargs={}, return_=None)
 
     @property
     def args(self) -> Generator[Key, None, None]:
@@ -201,6 +208,10 @@ class ArgSpec:
     @property
     def kwargs(self) -> Generator[tuple[str, Key], None, None]:
         yield from self._kwargs.items()
+
+    @property
+    def return_(self) -> Optional[Key]:
+        return self._return
 
     def keys(self) -> Generator[Key, None, None]:
         """Flat iterator over all argument types."""
@@ -216,6 +227,7 @@ class ArgSpec:
         return ArgSpec(
             args={name: transform(arg) for name, arg in self._args.items()},
             kwargs={name: transform(arg) for name, arg in self._kwargs.items()},
+            return_=self._return,
         )
 
 
