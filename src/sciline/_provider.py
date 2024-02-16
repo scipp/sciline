@@ -176,16 +176,15 @@ class ArgSpec:
     @classmethod
     def from_function(cls, provider: ToProvider) -> ArgSpec:
         """Parse the argument spec of a provider."""
-        hints = get_type_hints(provider)
-        signature = _get_provider_args(provider)
+        args, kwonlyargs, hints = _get_args_and_types(provider)
         try:
-            args = {name: hints[name] for name in signature.args}
-            kwargs = {name: hints[name] for name in signature.kwonlyargs}
+            arg_hints = {name: hints[name] for name in args}
+            kwarg_hints = {name: hints[name] for name in kwonlyargs}
         except KeyError:
             raise ValueError(
                 f'Provider {provider} lacks type-hint for arguments.'
             ) from None
-        return cls(args=args, kwargs=kwargs, return_=hints.get('return'))
+        return cls(args=arg_hints, kwargs=kwarg_hints, return_=hints.get('return'))
 
     @classmethod
     def from_args(cls, *args: Key) -> ArgSpec:
@@ -238,7 +237,11 @@ class ProviderLocation:
 
     @classmethod
     def from_function(cls, func: ToProvider) -> ProviderLocation:
-        return cls(name=func.__name__, module=_module_name(func))
+        try:
+            name = func.__name__
+        except AttributeError:
+            name = str(func)
+        return cls(name=name, module=_module_name(func))
 
     @property
     def qualname(self) -> str:
@@ -271,7 +274,46 @@ def _module_name(x: Any) -> str:
     return getattr(inspect.getmodule(x), '__name__', '')
 
 
-def _get_provider_args(func: ToProvider) -> inspect.FullArgSpec:
+def _unwrap_decorated(func: ToProvider) -> ToProvider:
     if (wrapped := getattr(func, '__wrapped__', None)) is not None:
-        return _get_provider_args(wrapped)
-    return inspect.getfullargspec(func)
+        return _unwrap_decorated(wrapped)
+    return func
+
+
+def _get_args_and_types(
+    func: ToProvider,
+) -> tuple[list[str], list[str], dict[str, Any]]:
+    if inspect.isfunction(func):
+        return _get_func_args_and_types(func)
+    if inspect.ismethod(func):
+        return _get_method_args_and_types(func)
+    if isinstance(func, type):
+        raise TypeError(
+            "Classes are not supported as providers because their type annotations "
+            f"cannot reliably be extracted. Got class {func}. "
+            "Consider using a free function, classmethod, or staticmethod."
+        ) from None
+    if (call := getattr(func, '__call__', None)) is not None:  # noqa: B004
+        return _get_method_args_and_types(call)
+    raise TypeError(f"Cannot get type hints of provider {func}") from None
+
+
+def _get_func_args_and_types(
+    func: ToProvider,
+) -> tuple[list[str], list[str], dict[str, Any]]:
+    func = _unwrap_decorated(func)
+    hints = get_type_hints(func)
+    signature = inspect.getfullargspec(func)
+    return signature.args, signature.kwonlyargs, hints
+
+
+def _get_method_args_and_types(
+    func: ToProvider,
+) -> tuple[list[str], list[str], dict[str, Any]]:
+    func = _unwrap_decorated(func)
+    args, kwonlyargs, hints = _get_func_args_and_types(func)
+    # Remove annotation of `self` / `cls` if present
+    hints.pop(args[0], None)
+    # Drop `self` / `cls`
+    args = args[1:]
+    return args, kwonlyargs, hints
