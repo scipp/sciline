@@ -69,7 +69,7 @@ def setup(app: Sphinx) -> dict[str, Any]:
 
 def _retrieve_name(obj: Any) -> str:
     """Retrieve the name of an object.
-    
+
     ``obj.__name__`` if possible or its string representation.
     """
 
