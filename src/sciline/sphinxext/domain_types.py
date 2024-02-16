@@ -67,6 +67,18 @@ def setup(app: Sphinx) -> dict[str, Any]:
     return {'version': 1, 'parallel_read_safe': True, 'parallel_write_safe': True}
 
 
+def _retrieve_name(obj: Any) -> str:
+    """Retrieve the name of an object.
+    
+    ``obj.__name__`` if possible or its string representation.
+    """
+
+    try:
+        return obj.__name__
+    except AttributeError:
+        return str(obj)
+
+
 def _typehints_formatter(annotation: Any, config: Config) -> Optional[str]:
     """Format typehints with improved NewType handling."""
     prefix = config.sciline_domain_types_prefix
@@ -123,10 +135,11 @@ def _internal_link(
     prefix: str,
     type_params: Optional[tuple[type, ...]] = None,
 ) -> str:
-    target = f'{annotation.__module__}.{annotation.__name__}'
-    label = f'{annotation.__module__.removeprefix(prefix+".")}.{annotation.__name__}'
+    annotation_name = _retrieve_name(annotation)
+    target = f'{annotation.__module__}.{annotation_name}'
+    label = f'{annotation.__module__.removeprefix(prefix+".")}.{annotation_name}'
     if type_params:
-        label += f'[{", ".join(ty.__name__ for ty in type_params)}]'
+        label += f'[{", ".join(_retrieve_name(ty) for ty in type_params)}]'
     return f':{kind}:`{label} <{target}>`'
 
 
@@ -136,11 +149,12 @@ def _link(
     aliases: dict[str, str],
     type_params: Optional[tuple[type, ...]] = None,
 ) -> str:
+    ty_name = _retrieve_name(ty)
     if ty.__module__ == 'builtins':
-        target = ty.__name__
+        target = ty_name
     else:
-        target = f'{ty.__module__}.{ty.__name__}'
+        target = f'{ty.__module__}.{ty_name}'
     label = aliases.get(target, target)
     if type_params:
-        label += f'[{", ".join(ty.__name__ for ty in type_params)}]'
+        label += f'[{", ".join(_retrieve_name(ty) for ty in type_params)}]'
     return f':{kind}:`{label} <{target}>`'
