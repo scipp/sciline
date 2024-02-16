@@ -74,7 +74,7 @@ def _retrieve_name(obj: Any) -> str:
     """
 
     try:
-        return obj.__name__
+        return str(obj.__name__)
     except AttributeError:
         return str(obj)
 
