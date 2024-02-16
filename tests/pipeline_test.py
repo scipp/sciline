@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright (c) 2023 Scipp contributors (https://github.com/scipp)
+import functools
 from dataclasses import dataclass
 from typing import Any, Callable, Generic, List, NewType, TypeVar
 
@@ -1404,3 +1405,37 @@ def test_number_of_type_vars_defines_most_specialized() -> None:
     with pytest.raises(sl.AmbiguousProvider):
         # provided by p1 and p2 with the same number of typevars
         pipeline.get(Person[Likes[Green], Green])
+
+
+def test_pipeline_with_decorated_provider() -> None:
+    R = TypeVar('R')
+
+    def deco(f: Callable[..., R]) -> Callable[..., R]:
+        @functools.wraps(f)
+        def impl(*args: Any, **kwargs: Any) -> R:
+            return f(*args, **kwargs)
+
+        return impl
+
+    provider = deco(int_to_float)
+    pipeline = sl.Pipeline([provider], params={int: 3})
+    assert pipeline.compute(float) == 1.5
+
+
+def test_pipeline_with_decorated_provider_keyword_only_arg() -> None:
+    R = TypeVar('R')
+
+    def deco(f: Callable[..., R]) -> Callable[..., R]:
+        @functools.wraps(f)
+        def impl(*args: Any, **kwargs: Any) -> R:
+            return f(*args, **kwargs)
+
+        return impl
+
+    @deco
+    def foo(*, k: int) -> float:
+        return float(k)
+
+    provider = deco(foo)
+    pipeline = sl.Pipeline([provider], params={int: 3})
+    assert pipeline.compute(float) == 3.0

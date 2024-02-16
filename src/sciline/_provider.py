@@ -174,7 +174,7 @@ class ArgSpec:
     def from_function(cls, provider: ToProvider) -> ArgSpec:
         """Parse the argument spec of a provider."""
         hints = get_type_hints(provider)
-        signature = inspect.getfullargspec(provider)
+        signature = _get_provider_args(provider)
         try:
             args = {name: hints[name] for name in signature.args}
             kwargs = {name: hints[name] for name in signature.kwonlyargs}
@@ -257,3 +257,9 @@ def _bind_free_typevars(tp: Union[TypeVar, Key], bound: dict[TypeVar, Key]) -> K
 def _module_name(x: Any) -> str:
     # getmodule might return None
     return getattr(inspect.getmodule(x), '__name__', '')
+
+
+def _get_provider_args(func: ToProvider) -> inspect.FullArgSpec:
+    if (wrapped := getattr(func, '__wrapped__', None)) is not None:
+        return _get_provider_args(wrapped)
+    return inspect.getfullargspec(func)
