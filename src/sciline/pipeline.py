@@ -434,11 +434,11 @@ class Pipeline:
         self._set_provider(key, Provider.parameter(param))
 
     def __getitem__(self, tp: Union[Type[T], Item[T]]) -> Provider:
-        return self.get(tp).graph[tp]
+        return self._get_unique_provider(tp, HandleAsBuildTimeException())
 
     def __contains__(self, tp: Union[Type[T], Item[T]]) -> bool:
         try:
-            self.get(tp)
+            self[tp]
         except AmbiguousProvider:
             return True
         except UnsatisfiedRequirement:
