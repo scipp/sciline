@@ -8,9 +8,10 @@ from sciline._provider import ArgSpec
 
 
 def test_arg_spec() -> None:
-    arg_spec = ArgSpec(args={'a': int}, kwargs={'b': str})
+    arg_spec = ArgSpec(args={'a': int}, kwargs={'b': str}, return_=list[str])
     assert list(arg_spec.args) == [int]
     assert dict(arg_spec.kwargs) == {'b': str}
+    assert arg_spec.return_ == list[str]
 
 
 def combine_numbers(a: int, *, b: float) -> str:
