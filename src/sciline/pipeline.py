@@ -546,11 +546,7 @@ class Pipeline:
             matches = [
                 (provider, bound)
                 for return_type, provider in self._providers.items()
-                if (
-                    bound := _find_bounds_to_make_compatible_type_tuple(
-                        (tp,), (return_type,)
-                    )
-                )
+                if (bound := _find_bounds_to_make_compatible_type(tp, return_type))
                 is not None
             ]
         typevar_counts = [len(bound) for _, bound in matches]
