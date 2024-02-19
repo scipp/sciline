@@ -434,7 +434,7 @@ class Pipeline:
         self._set_provider(key, Provider.parameter(param))
 
     def __getitem__(self, tp: Union[Type[T], Item[T]]) -> Provider:
-        return self._get_unique_provider(tp, HandleAsBuildTimeException())
+        return self._get_unique_provider(tp, HandleAsBuildTimeException())[0]
 
     def __contains__(self, tp: Union[Type[T], Item[T]]) -> bool:
         try:
@@ -933,8 +933,8 @@ class Pipeline:
         return self.copy()
 
     def _repr_html_(self) -> str:
-        providers = (
+        providers = [
             (get_origin(tp), get_args(tp), value)
             for tp, value in self._providers.items()
-        )  # type: ignore[var-annotated]
+        ]
         return pipeline_html_repr(providers)
