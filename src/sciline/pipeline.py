@@ -551,9 +551,9 @@ class Pipeline:
         handler = handler or HandleAsBuildTimeException()
         explanation: List[str] = []
 
-        if tp in self._providers:
+        if provider := self._providers.get(tp):
             # Optimization to quickly find non-generic providers
-            matches = [(self._providers[tp], {})]
+            matches = [(provider, {})]
         else:
             matches = [
                 (provider, bound)
