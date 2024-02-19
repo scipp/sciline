@@ -1,0 +1,1096 @@
+
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="../" >
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Parameter Tables &#8212; Sciline</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "light";
+  </script>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="../_static/styles/theme.css?digest=bd9e20870c6007c4c509" rel="stylesheet" />
+<link href="../_static/styles/bootstrap.css?digest=bd9e20870c6007c4c509" rel="stylesheet" />
+<link href="../_static/styles/pydata-sphinx-theme.css?digest=bd9e20870c6007c4c509" rel="stylesheet" />
+
+  
+  <link href="../_static/vendor/fontawesome/6.5.1/css/all.min.css?digest=bd9e20870c6007c4c509" rel="stylesheet" />
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="../_static/vendor/fontawesome/6.5.1/webfonts/fa-solid-900.woff2" />
+<link rel="preload" as="font" type="font/woff2" crossorigin href="../_static/vendor/fontawesome/6.5.1/webfonts/fa-brands-400.woff2" />
+<link rel="preload" as="font" type="font/woff2" crossorigin href="../_static/vendor/fontawesome/6.5.1/webfonts/fa-regular-400.woff2" />
+
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=fa44fd50" />
+    <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../_static/design-style.1e8bd061cd6da7fc9cf755528e8ffc24.min.css?v=0a3b3ea7" />
+    <link rel="stylesheet" type="text/css" href="../_static/nbsphinx-code-cells.css" />
+  
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=bd9e20870c6007c4c509" />
+<link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=bd9e20870c6007c4c509" />
+  <script src="../_static/vendor/fontawesome/6.5.1/js/all.min.js?digest=bd9e20870c6007c4c509"></script>
+
+    <script src="../_static/documentation_options.js?v=5a6bd5ae"></script>
+    <script src="../_static/doctools.js?v=888ff710"></script>
+    <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../_static/copybutton.js?v=f281be69"></script>
+    <script src="../_static/design-tabs.js?v=36754332"></script>
+    <script crossorigin="anonymous" integrity="sha256-Ae2Vz/4ePdIu6ZyI/5ZGsYnb+m0JlOmKPjt6XZ9JJkA=" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js"></script>
+    <script>window.MathJax = {"tex": {"inlineMath": [["$", "$"], ["\\(", "\\)"]], "processEscapes": true}, "options": {"ignoreHtmlClass": "tex2jax_ignore|mathjax_ignore|document", "processHtmlClass": "tex2jax_process|mathjax_process|math|output_area"}}</script>
+    <script defer="defer" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'user-guide/parameter-tables';</script>
+    <script src="../_static/anaconda-icon.js?v=461bdc62"></script>
+    <link rel="icon" href="../_static/favicon.ico"/>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Generic Providers" href="generic-providers.html" />
+    <link rel="prev" title="Getting Started" href="getting-started.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="docsearch:language" content="en"/>
+  </head>
+  
+  
+  <body data-bs-spy="scroll" data-bs-target=".bd-toc-nav" data-offset="180" data-bs-root-margin="0px 0px -60%" data-default-mode="">
+
+  
+  
+  <a id="pst-skip-link" class="skip-link" href="#main-content">Skip to main content</a>
+  
+  <div id="pst-scroll-pixel-helper"></div>
+
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>
+    Back to top
+  </button>
+
+  
+  <input type="checkbox"
+          class="sidebar-toggle"
+          name="__primary"
+          id="__primary"/>
+  <label class="overlay overlay-primary" for="__primary"></label>
+  
+  <input type="checkbox"
+          class="sidebar-toggle"
+          name="__secondary"
+          id="__secondary"/>
+  <label class="overlay overlay-secondary" for="__secondary"></label>
+  
+  <div class="search-button__wrapper">
+    <div class="search-button__overlay"></div>
+    <div class="search-button__search-container">
+<form class="bd-search d-flex align-items-center"
+      action="../search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         id="search-input"
+         placeholder="Search the docs ..."
+         aria-label="Search the docs ..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form></div>
+  </div>
+
+  <header>
+  
+    <div class="bd-header navbar navbar-expand-lg bd-navbar">
+<div class="bd-header__inner bd-page-width">
+  <label class="sidebar-toggle primary-toggle" for="__primary">
+    <span class="fa-solid fa-bars"></span>
+  </label>
+  
+  
+  <div class="col-lg-3 navbar-header-items__start">
+    
+      <div class="navbar-item">
+
+  
+
+<a class="navbar-brand logo" href="../index.html">
+  
+  
+  
+  
+  
+    
+    
+      
+    
+    
+    <img src="../_static/logo.svg" class="logo__image only-light" alt="Sciline - Home"/>
+    <script>document.write(`<img src="../_static/logo-dark.svg" class="logo__image only-dark" alt="Sciline - Home"/>`);</script>
+  
+  
+</a></div>
+    
+  </div>
+  
+  <div class="col-lg-9 navbar-header-items">
+    
+    <div class="me-auto navbar-header-items__center">
+      
+        <div class="navbar-item">
+<nav class="navbar-nav">
+  <ul class="bd-navbar-elements navbar-nav">
+    
+                    <li class="nav-item current active">
+                      <a class="nav-link nav-internal" href="index.html">
+                        User Guide
+                      </a>
+                    </li>
+                
+
+                    <li class="nav-item">
+                      <a class="nav-link nav-internal" href="../recipes/index.html">
+                        Recipes
+                      </a>
+                    </li>
+                
+
+                    <li class="nav-item">
+                      <a class="nav-link nav-internal" href="../api-reference/index.html">
+                        API Reference
+                      </a>
+                    </li>
+                
+
+                    <li class="nav-item">
+                      <a class="nav-link nav-internal" href="../developer/index.html">
+                        Developer documentation
+                      </a>
+                    </li>
+                
+
+                    <li class="nav-item">
+                      <a class="nav-link nav-internal" href="../about/index.html">
+                        About
+                      </a>
+                    </li>
+                
+            <li class="nav-item dropdown">
+                <button class="btn dropdown-toggle nav-item" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-controls="pst-nav-more-links">
+                    More
+                </button>
+                <ul id="pst-nav-more-links" class="dropdown-menu">
+                    
+                <li class="nav-item">
+                  <a class="nav-link dropdown-item nav-external" href="https://scipp.github.io">
+                    Scipp
+                  </a>
+                </li>
+                
+                </ul>
+            </li>
+            
+  </ul>
+</nav></div>
+      
+    </div>
+    
+    
+    <div class="navbar-header-items__end">
+      
+        <div class="navbar-item navbar-persistent--container">
+          
+
+<script>
+document.write(`
+  <button class="btn btn-sm navbar-btn search-button search-button__button" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="fa-solid fa-magnifying-glass fa-lg"></i>
+  </button>
+`);
+</script>
+        </div>
+      
+      
+        <div class="navbar-item">
+
+<script>
+document.write(`
+  <button class="btn btn-sm navbar-btn theme-switch-button" title="light/dark" aria-label="light/dark" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <span class="theme-switch nav-link" data-mode="light"><i class="fa-solid fa-sun fa-lg"></i></span>
+    <span class="theme-switch nav-link" data-mode="dark"><i class="fa-solid fa-moon fa-lg"></i></span>
+    <span class="theme-switch nav-link" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg"></i></span>
+  </button>
+`);
+</script></div>
+      
+        <div class="navbar-item"><ul class="navbar-icon-links navbar-nav"
+    aria-label="Icon Links">
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://github.com/scipp/sciline" title="GitHub" class="nav-link" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><span><i class="fa-brands fa-github fa-lg" aria-hidden="true"></i></span>
+            <span class="sr-only">GitHub</span></a>
+        </li>
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://pypi.org/project/sciline/" title="PyPI" class="nav-link" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><span><i class="fa-brands fa-python fa-lg" aria-hidden="true"></i></span>
+            <span class="sr-only">PyPI</span></a>
+        </li>
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://anaconda.org/scipp/sciline" title="Conda" class="nav-link" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><span><i class="fa-custom fa-anaconda fa-lg" aria-hidden="true"></i></span>
+            <span class="sr-only">Conda</span></a>
+        </li>
+</ul></div>
+      
+    </div>
+    
+  </div>
+  
+  
+    <div class="navbar-persistent--mobile">
+
+<script>
+document.write(`
+  <button class="btn btn-sm navbar-btn search-button search-button__button" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="fa-solid fa-magnifying-glass fa-lg"></i>
+  </button>
+`);
+</script>
+    </div>
+  
+
+  
+</div>
+
+    </div>
+  
+  </header>
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+      <div class="bd-sidebar-primary bd-sidebar">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+      <div class="sidebar-header-items__center">
+        
+          <div class="navbar-item">
+<nav class="navbar-nav">
+  <ul class="bd-navbar-elements navbar-nav">
+    
+                    <li class="nav-item current active">
+                      <a class="nav-link nav-internal" href="index.html">
+                        User Guide
+                      </a>
+                    </li>
+                
+
+                    <li class="nav-item">
+                      <a class="nav-link nav-internal" href="../recipes/index.html">
+                        Recipes
+                      </a>
+                    </li>
+                
+
+                    <li class="nav-item">
+                      <a class="nav-link nav-internal" href="../api-reference/index.html">
+                        API Reference
+                      </a>
+                    </li>
+                
+
+                    <li class="nav-item">
+                      <a class="nav-link nav-internal" href="../developer/index.html">
+                        Developer documentation
+                      </a>
+                    </li>
+                
+
+                    <li class="nav-item">
+                      <a class="nav-link nav-internal" href="../about/index.html">
+                        About
+                      </a>
+                    </li>
+                
+            <li class="nav-item dropdown">
+                <button class="btn dropdown-toggle nav-item" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-controls="pst-nav-more-links-2">
+                    More
+                </button>
+                <ul id="pst-nav-more-links-2" class="dropdown-menu">
+                    
+                <li class="nav-item">
+                  <a class="nav-link dropdown-item nav-external" href="https://scipp.github.io">
+                    Scipp
+                  </a>
+                </li>
+                
+                </ul>
+            </li>
+            
+  </ul>
+</nav></div>
+        
+      </div>
+    
+    
+    
+      <div class="sidebar-header-items__end">
+        
+          <div class="navbar-item">
+
+<script>
+document.write(`
+  <button class="btn btn-sm navbar-btn theme-switch-button" title="light/dark" aria-label="light/dark" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <span class="theme-switch nav-link" data-mode="light"><i class="fa-solid fa-sun fa-lg"></i></span>
+    <span class="theme-switch nav-link" data-mode="dark"><i class="fa-solid fa-moon fa-lg"></i></span>
+    <span class="theme-switch nav-link" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg"></i></span>
+  </button>
+`);
+</script></div>
+        
+          <div class="navbar-item"><ul class="navbar-icon-links navbar-nav"
+    aria-label="Icon Links">
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://github.com/scipp/sciline" title="GitHub" class="nav-link" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><span><i class="fa-brands fa-github fa-lg" aria-hidden="true"></i></span>
+            <span class="sr-only">GitHub</span></a>
+        </li>
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://pypi.org/project/sciline/" title="PyPI" class="nav-link" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><span><i class="fa-brands fa-python fa-lg" aria-hidden="true"></i></span>
+            <span class="sr-only">PyPI</span></a>
+        </li>
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://anaconda.org/scipp/sciline" title="Conda" class="nav-link" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><span><i class="fa-custom fa-anaconda fa-lg" aria-hidden="true"></i></span>
+            <span class="sr-only">Conda</span></a>
+        </li>
+</ul></div>
+        
+      </div>
+    
+  </div>
+  
+    <div class="sidebar-primary-items__start sidebar-primary__section">
+        <div class="sidebar-primary-item">
+<nav class="bd-docs-nav bd-links"
+     aria-label="Section Navigation">
+  <p class="bd-links__title" role="heading" aria-level="1">Section Navigation</p>
+  <div class="bd-toc-item navbar-nav"><ul class="current nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="getting-started.html">Getting Started</a></li>
+<li class="toctree-l1 current active"><a class="current reference internal" href="#">Parameter Tables</a></li>
+<li class="toctree-l1"><a class="reference internal" href="generic-providers.html">Generic Providers</a></li>
+</ul>
+</div>
+</nav></div>
+        <div class="sidebar-primary-item">
+<div
+    id="pst-page-navigation-heading-2"
+    class="page-toc tocsection onthispage">
+    <i class="fa-solid fa-list"></i> On this page
+  </div>
+  <nav class="bd-toc-nav page-toc" aria-labelledby="pst-page-navigation-heading-2">
+    <ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#Overview">Overview</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#Computing-results-for-series-of-parameters">Computing results for series of parameters</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#Combining-intermediate-results-from-series-of-parameters">Combining intermediate results from series of parameters</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#Grouping-intermediate-results-based-on-secondary-parameters">Grouping intermediate results based on secondary parameters</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#More-examples">More examples</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#Using-tables-for-series-of-parameters">Using tables for series of parameters</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#Combining-multiple-parameters-from-same-table">Combining multiple parameters from same table</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#Diamond-graphs">Diamond graphs</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#Combining-parameters-from-different-tables">Combining parameters from different tables</a></li>
+</ul>
+</li>
+</ul>
+  </nav></div>
+    </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+      <div class="sidebar-primary-item">
+
+  <div class="tocsection sourcelink">
+    <a href="../_sources/user-guide/parameter-tables.ipynb">
+      <i class="fa-solid fa-file-lines"></i> Show Source
+    </a>
+  </div>
+</div>
+  </div>
+  
+  <div id="rtd-footer-container"></div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main">
+        
+        
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item">
+
+
+
+<nav aria-label="Breadcrumb">
+  <ul class="bd-breadcrumbs">
+    
+    <li class="breadcrumb-item breadcrumb-home">
+      <a href="../index.html" class="nav-link" aria-label="Home">
+        <i class="fa-solid fa-home"></i>
+      </a>
+    </li>
+    
+    <li class="breadcrumb-item"><a href="index.html" class="nav-link">User Guide</a></li>
+    
+    <li class="breadcrumb-item active" aria-current="page">Parameter Tables</li>
+  </ul>
+</nav>
+</div>
+      
+    </div>
+  
+  
+</div>
+</div>
+              
+              
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <section id="Parameter-Tables">
+<h1>Parameter Tables<a class="headerlink" href="#Parameter-Tables" title="Link to this heading">#</a></h1>
+<section id="Overview">
+<h2>Overview<a class="headerlink" href="#Overview" title="Link to this heading">#</a></h2>
+<p>Parameter tables provide a mechanism for repeating parts of or all of a computation with different values for one or more parameters. This allows for a variety of use cases, similar to <em>map</em>, <em>reduce</em>, and <em>groupby</em> operations in other systems. We illustrate each of these in the follow three chapters.</p>
+</section>
+<section id="Computing-results-for-series-of-parameters">
+<h2>Computing results for series of parameters<a class="headerlink" href="#Computing-results-for-series-of-parameters" title="Link to this heading">#</a></h2>
+<p>This chapter illustrates how to implement <em>map</em> operations with Sciline.</p>
+<p>Starting with the model workflow introduced in <a class="reference internal" href="getting-started.html"><span class="doc">Getting Started</span></a>, we can replace the fixed <code class="docutils literal notranslate"><span class="pre">Filename</span></code> parameter with a series of filenames listed in a <a class="reference internal" href="../generated/classes/sciline.ParamTable.html"><span class="doc">ParamTable</span></a>:</p>
+<div class="nbinput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[1]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">NewType</span>
+<span class="kn">import</span> <span class="nn">sciline</span>
+
+<span class="n">_fake_filesytem</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s1">&#39;file102.txt&#39;</span><span class="p">:</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="nb">float</span><span class="p">(</span><span class="s1">&#39;nan&#39;</span><span class="p">),</span> <span class="mi">3</span><span class="p">],</span>
+    <span class="s1">&#39;file103.txt&#39;</span><span class="p">:</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">4</span><span class="p">],</span>
+    <span class="s1">&#39;file104.txt&#39;</span><span class="p">:</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">5</span><span class="p">],</span>
+    <span class="s1">&#39;file105.txt&#39;</span><span class="p">:</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">],</span>
+<span class="p">}</span>
+
+<span class="c1"># 1. Define domain types</span>
+
+<span class="n">Filename</span> <span class="o">=</span> <span class="n">NewType</span><span class="p">(</span><span class="s1">&#39;Filename&#39;</span><span class="p">,</span> <span class="nb">str</span><span class="p">)</span>
+<span class="n">RawData</span> <span class="o">=</span> <span class="n">NewType</span><span class="p">(</span><span class="s1">&#39;RawData&#39;</span><span class="p">,</span> <span class="nb">dict</span><span class="p">)</span>
+<span class="n">CleanedData</span> <span class="o">=</span> <span class="n">NewType</span><span class="p">(</span><span class="s1">&#39;CleanedData&#39;</span><span class="p">,</span> <span class="nb">list</span><span class="p">)</span>
+<span class="n">ScaleFactor</span> <span class="o">=</span> <span class="n">NewType</span><span class="p">(</span><span class="s1">&#39;ScaleFactor&#39;</span><span class="p">,</span> <span class="nb">float</span><span class="p">)</span>
+<span class="n">Result</span> <span class="o">=</span> <span class="n">NewType</span><span class="p">(</span><span class="s1">&#39;Result&#39;</span><span class="p">,</span> <span class="nb">float</span><span class="p">)</span>
+
+
+<span class="c1"># 2. Define providers</span>
+
+
+<span class="k">def</span> <span class="nf">load</span><span class="p">(</span><span class="n">filename</span><span class="p">:</span> <span class="n">Filename</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">RawData</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Load the data from the filename.&quot;&quot;&quot;</span>
+
+    <span class="n">data</span> <span class="o">=</span> <span class="n">_fake_filesytem</span><span class="p">[</span><span class="n">filename</span><span class="p">]</span>
+    <span class="k">return</span> <span class="n">RawData</span><span class="p">({</span><span class="s1">&#39;data&#39;</span><span class="p">:</span> <span class="n">data</span><span class="p">,</span> <span class="s1">&#39;meta&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;filename&#39;</span><span class="p">:</span> <span class="n">filename</span><span class="p">}})</span>
+
+
+<span class="k">def</span> <span class="nf">clean</span><span class="p">(</span><span class="n">raw_data</span><span class="p">:</span> <span class="n">RawData</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">CleanedData</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Clean the data, removing NaNs.&quot;&quot;&quot;</span>
+    <span class="kn">import</span> <span class="nn">math</span>
+
+    <span class="k">return</span> <span class="n">CleanedData</span><span class="p">([</span><span class="n">x</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">raw_data</span><span class="p">[</span><span class="s1">&#39;data&#39;</span><span class="p">]</span> <span class="k">if</span> <span class="ow">not</span> <span class="n">math</span><span class="o">.</span><span class="n">isnan</span><span class="p">(</span><span class="n">x</span><span class="p">)])</span>
+
+
+<span class="k">def</span> <span class="nf">process</span><span class="p">(</span><span class="n">data</span><span class="p">:</span> <span class="n">CleanedData</span><span class="p">,</span> <span class="n">param</span><span class="p">:</span> <span class="n">ScaleFactor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Result</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Process the data, multiplying the sum by the scale factor.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">Result</span><span class="p">(</span><span class="nb">sum</span><span class="p">(</span><span class="n">data</span><span class="p">)</span> <span class="o">*</span> <span class="n">param</span><span class="p">)</span>
+
+
+<span class="c1"># 3. Create pipeline</span>
+
+<span class="c1"># 3.a Providers and normal parameters</span>
+<span class="n">providers</span> <span class="o">=</span> <span class="p">[</span><span class="n">load</span><span class="p">,</span> <span class="n">clean</span><span class="p">,</span> <span class="n">process</span><span class="p">]</span>
+<span class="n">params</span> <span class="o">=</span> <span class="p">{</span><span class="n">ScaleFactor</span><span class="p">:</span> <span class="mf">2.0</span><span class="p">}</span>
+
+<span class="c1"># 3.b Parameter table</span>
+<span class="n">RunID</span> <span class="o">=</span> <span class="n">NewType</span><span class="p">(</span><span class="s1">&#39;RunID&#39;</span><span class="p">,</span> <span class="nb">int</span><span class="p">)</span>
+<span class="n">run_ids</span> <span class="o">=</span> <span class="p">[</span><span class="mi">102</span><span class="p">,</span> <span class="mi">103</span><span class="p">,</span> <span class="mi">104</span><span class="p">,</span> <span class="mi">105</span><span class="p">]</span>
+<span class="n">filenames</span> <span class="o">=</span> <span class="p">[</span><span class="sa">f</span><span class="s1">&#39;file</span><span class="si">{</span><span class="n">i</span><span class="si">}</span><span class="s1">.txt&#39;</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">run_ids</span><span class="p">]</span>
+<span class="n">param_table</span> <span class="o">=</span> <span class="n">sciline</span><span class="o">.</span><span class="n">ParamTable</span><span class="p">(</span><span class="n">RunID</span><span class="p">,</span> <span class="p">{</span><span class="n">Filename</span><span class="p">:</span> <span class="n">filenames</span><span class="p">},</span> <span class="n">index</span><span class="o">=</span><span class="n">run_ids</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<p>Note how steps 1.) and 2.) are identical to those from the example without parameter table. Above we have created the following parameter table:</p>
+<div class="nbinput docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[2]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">param_table</span>
+</pre></div>
+</div>
+</div>
+<div class="nboutput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[2]:
+</pre></div>
+</div>
+<div class="output_area rendered_html docutils container">
+<table><tr><th>RunID</th><th>Filename</th></tr><tr><td>102</td><td>file102.txt</td></tr><tr><td>103</td><td>file103.txt</td></tr><tr><td>104</td><td>file104.txt</td></tr><tr><td>105</td><td>file105.txt</td></tr></table></div>
+</div>
+<p>We can now create the pipeline and set the parameter table:</p>
+<div class="nbinput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[3]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="c1"># 3.c Setup pipeline</span>
+<span class="n">pipeline</span> <span class="o">=</span> <span class="n">sciline</span><span class="o">.</span><span class="n">Pipeline</span><span class="p">(</span><span class="n">providers</span><span class="p">,</span> <span class="n">params</span><span class="o">=</span><span class="n">params</span><span class="p">)</span>
+<span class="n">pipeline</span><span class="o">.</span><span class="n">set_param_table</span><span class="p">(</span><span class="n">param_table</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<p>Then we can compute <code class="docutils literal notranslate"><span class="pre">Result</span></code> for each index in the parameter table:</p>
+<div class="nbinput docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[4]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">pipeline</span><span class="o">.</span><span class="n">compute</span><span class="p">(</span><span class="n">sciline</span><span class="o">.</span><span class="n">Series</span><span class="p">[</span><span class="n">RunID</span><span class="p">,</span> <span class="n">Result</span><span class="p">])</span>
+</pre></div>
+</div>
+</div>
+<div class="nboutput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[4]:
+</pre></div>
+</div>
+<div class="output_area rendered_html docutils container">
+<table><tr><th>RunID</th><th>Value</th></tr><tr><td>102</td><td>12.0</td></tr><tr><td>103</td><td>20.0</td></tr><tr><td>104</td><td>30.0</td></tr><tr><td>105</td><td>12.0</td></tr></table></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">sciline.Series</span></code> is a special <code class="docutils literal notranslate"><span class="pre">dict</span></code>-like type that signals to Sciline that the values of the series are based on values from one or more columns of a parameter table. The parameter table is identified using the first argument to <code class="docutils literal notranslate"><span class="pre">Series</span></code>, in this case <code class="docutils literal notranslate"><span class="pre">RunID</span></code>. The second argument specifies the result to be computed.</p>
+<p>We can also visualize the task graph for computing the series of <code class="docutils literal notranslate"><span class="pre">Result</span></code> values:</p>
+<div class="nbinput docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[5]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">pipeline</span><span class="o">.</span><span class="n">visualize</span><span class="p">(</span><span class="n">sciline</span><span class="o">.</span><span class="n">Series</span><span class="p">[</span><span class="n">RunID</span><span class="p">,</span> <span class="n">Result</span><span class="p">])</span>
+</pre></div>
+</div>
+</div>
+<div class="nboutput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[5]:
+</pre></div>
+</div>
+<div class="output_area docutils container">
+<img alt="../_images/user-guide_parameter-tables_10_0.svg" src="../_images/user-guide_parameter-tables_10_0.svg" /></div>
+</div>
+<p>Nodes that depend on values from a parameter table are drawn with the parameter index name (the row dimension of the parameter table) and value given in parenthesis. The dashed arrow indicates and internal transformation that gathers result from each branch and combines them into a single output, here <code class="docutils literal notranslate"><span class="pre">Series[RunID,</span> <span class="pre">Result]</span></code>.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>With long parameter tables, graphs can get messy and hard to read. Try using <code class="docutils literal notranslate"><span class="pre">visualize(...,</span> <span class="pre">compact=True)</span></code>.</p>
+<p>The <code class="docutils literal notranslate"><span class="pre">compact=True</span></code> option to yields a much more compact representation. Instead of drawing every intermediate result and provider for each parameter, we then represent each parameter-dependent result as a single “3D box” node, representing all nodes for different values of the respective parameter.</p>
+</div>
+</section>
+<section id="Combining-intermediate-results-from-series-of-parameters">
+<h2>Combining intermediate results from series of parameters<a class="headerlink" href="#Combining-intermediate-results-from-series-of-parameters" title="Link to this heading">#</a></h2>
+<p>This chapter illustrates how to implement <em>reduce</em> operations with Sciline.</p>
+<p>Instead of requesting a series of results as above, we can also build pipelines with providers that depend on such series. We can create a new pipeline, or extend the existing one by inserting a new provider:</p>
+<div class="nbinput docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[6]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">MergedResult</span> <span class="o">=</span> <span class="n">NewType</span><span class="p">(</span><span class="s1">&#39;MergedResult&#39;</span><span class="p">,</span> <span class="nb">float</span><span class="p">)</span>
+
+
+<span class="k">def</span> <span class="nf">merge_runs</span><span class="p">(</span><span class="n">runs</span><span class="p">:</span> <span class="n">sciline</span><span class="o">.</span><span class="n">Series</span><span class="p">[</span><span class="n">RunID</span><span class="p">,</span> <span class="n">Result</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">MergedResult</span><span class="p">:</span>
+    <span class="k">return</span> <span class="n">MergedResult</span><span class="p">(</span><span class="nb">sum</span><span class="p">(</span><span class="n">runs</span><span class="o">.</span><span class="n">values</span><span class="p">()))</span>
+
+
+<span class="n">pipeline</span><span class="o">.</span><span class="n">insert</span><span class="p">(</span><span class="n">merge_runs</span><span class="p">)</span>
+<span class="n">graph</span> <span class="o">=</span> <span class="n">pipeline</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">MergedResult</span><span class="p">)</span>
+<span class="n">graph</span><span class="o">.</span><span class="n">visualize</span><span class="p">()</span>
+</pre></div>
+</div>
+</div>
+<div class="nboutput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[6]:
+</pre></div>
+</div>
+<div class="output_area docutils container">
+<img alt="../_images/user-guide_parameter-tables_13_0.svg" src="../_images/user-guide_parameter-tables_13_0.svg" /></div>
+</div>
+<p>Note that this is identical to the example in the previous section, except for the last two nodes in the graph. The computation now returns a single result:</p>
+<div class="nbinput docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[7]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">graph</span><span class="o">.</span><span class="n">compute</span><span class="p">()</span>
+</pre></div>
+</div>
+</div>
+<div class="nboutput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[7]:
+</pre></div>
+</div>
+<div class="output_area docutils container">
+<div class="highlight"><pre>
+74.0
+</pre></div></div>
+</div>
+<p>This is useful if we need to continue computation after gathering results without setting up a second pipeline.</p>
+</section>
+<section id="Grouping-intermediate-results-based-on-secondary-parameters">
+<h2>Grouping intermediate results based on secondary parameters<a class="headerlink" href="#Grouping-intermediate-results-based-on-secondary-parameters" title="Link to this heading">#</a></h2>
+<p>This chapter illustrates how to implement <em>groupby</em> operations with Sciline.</p>
+<p>Continuing from the examples for <em>map</em> and <em>reduce</em>, we can introduce a secondary parameter in the table, such as the material of the sample:</p>
+<div class="nbinput docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[8]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">Material</span> <span class="o">=</span> <span class="n">NewType</span><span class="p">(</span><span class="s1">&#39;Material&#39;</span><span class="p">,</span> <span class="nb">str</span><span class="p">)</span>
+
+<span class="c1"># 3.a Providers and normal parameters</span>
+<span class="n">providers</span> <span class="o">=</span> <span class="p">[</span><span class="n">load</span><span class="p">,</span> <span class="n">clean</span><span class="p">,</span> <span class="n">process</span><span class="p">,</span> <span class="n">merge_runs</span><span class="p">]</span>
+<span class="n">params</span> <span class="o">=</span> <span class="p">{</span><span class="n">ScaleFactor</span><span class="p">:</span> <span class="mf">2.0</span><span class="p">}</span>
+
+<span class="c1"># 3.b Parameter table</span>
+<span class="n">run_ids</span> <span class="o">=</span> <span class="p">[</span><span class="mi">102</span><span class="p">,</span> <span class="mi">103</span><span class="p">,</span> <span class="mi">104</span><span class="p">,</span> <span class="mi">105</span><span class="p">]</span>
+<span class="n">sample</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;diamond&#39;</span><span class="p">,</span> <span class="s1">&#39;graphite&#39;</span><span class="p">,</span> <span class="s1">&#39;graphite&#39;</span><span class="p">,</span> <span class="s1">&#39;graphite&#39;</span><span class="p">]</span>
+<span class="n">filenames</span> <span class="o">=</span> <span class="p">[</span><span class="sa">f</span><span class="s1">&#39;file</span><span class="si">{</span><span class="n">i</span><span class="si">}</span><span class="s1">.txt&#39;</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">run_ids</span><span class="p">]</span>
+<span class="n">param_table</span> <span class="o">=</span> <span class="n">sciline</span><span class="o">.</span><span class="n">ParamTable</span><span class="p">(</span>
+    <span class="n">RunID</span><span class="p">,</span> <span class="p">{</span><span class="n">Filename</span><span class="p">:</span> <span class="n">filenames</span><span class="p">,</span> <span class="n">Material</span><span class="p">:</span> <span class="n">sample</span><span class="p">},</span> <span class="n">index</span><span class="o">=</span><span class="n">run_ids</span>
+<span class="p">)</span>
+<span class="n">param_table</span>
+</pre></div>
+</div>
+</div>
+<div class="nboutput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[8]:
+</pre></div>
+</div>
+<div class="output_area rendered_html docutils container">
+<table><tr><th>RunID</th><th>Filename</th><th>Material</th></tr><tr><td>102</td><td>file102.txt</td><td>diamond</td></tr><tr><td>103</td><td>file103.txt</td><td>graphite</td></tr><tr><td>104</td><td>file104.txt</td><td>graphite</td></tr><tr><td>105</td><td>file105.txt</td><td>graphite</td></tr></table></div>
+</div>
+<div class="nbinput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[9]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="c1"># 3.c Setup pipeline</span>
+<span class="n">pipeline</span> <span class="o">=</span> <span class="n">sciline</span><span class="o">.</span><span class="n">Pipeline</span><span class="p">(</span><span class="n">providers</span><span class="p">,</span> <span class="n">params</span><span class="o">=</span><span class="n">params</span><span class="p">)</span>
+<span class="n">pipeline</span><span class="o">.</span><span class="n">set_param_table</span><span class="p">(</span><span class="n">param_table</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<p>We can now compute <code class="docutils literal notranslate"><span class="pre">MergedResult</span></code> for a series of “materials”:</p>
+<div class="nbinput docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[10]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">pipeline</span><span class="o">.</span><span class="n">compute</span><span class="p">(</span><span class="n">sciline</span><span class="o">.</span><span class="n">Series</span><span class="p">[</span><span class="n">Material</span><span class="p">,</span> <span class="n">MergedResult</span><span class="p">])</span>
+</pre></div>
+</div>
+</div>
+<div class="nboutput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[10]:
+</pre></div>
+</div>
+<div class="output_area rendered_html docutils container">
+<table><tr><th>Material</th><th>Value</th></tr><tr><td>diamond</td><td>12.0</td></tr><tr><td>graphite</td><td>62.0</td></tr></table></div>
+</div>
+<p>The computation looks as show below. Note how the initial steps of the computation depend on the <code class="docutils literal notranslate"><span class="pre">RunID</span></code> parameter, while later steps depend on <code class="docutils literal notranslate"><span class="pre">Material</span></code>: The files for each run ID have been grouped by their material and then merged:</p>
+<div class="nbinput docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[11]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">pipeline</span><span class="o">.</span><span class="n">visualize</span><span class="p">(</span><span class="n">sciline</span><span class="o">.</span><span class="n">Series</span><span class="p">[</span><span class="n">Material</span><span class="p">,</span> <span class="n">MergedResult</span><span class="p">])</span>
+</pre></div>
+</div>
+</div>
+<div class="nboutput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[11]:
+</pre></div>
+</div>
+<div class="output_area docutils container">
+<img alt="../_images/user-guide_parameter-tables_23_0.svg" src="../_images/user-guide_parameter-tables_23_0.svg" /></div>
+</div>
+</section>
+<section id="More-examples">
+<h2>More examples<a class="headerlink" href="#More-examples" title="Link to this heading">#</a></h2>
+<section id="Using-tables-for-series-of-parameters">
+<h3>Using tables for series of parameters<a class="headerlink" href="#Using-tables-for-series-of-parameters" title="Link to this heading">#</a></h3>
+<p>Sometimes the parameter of interest is the index of a parameter table itself. If there are no further parameters, the param table may have no columns (aside from the index). In this case we can bypass the manual creation of a parameter table and use the <a class="reference internal" href="../generated/classes/sciline.Pipeline.html#sciline.Pipeline.set_param_series"><span class="std std-ref">Pipeline.set_param_series</span></a> function instead:</p>
+<div class="nbinput docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[12]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">NewType</span>
+<span class="kn">import</span> <span class="nn">sciline</span> <span class="k">as</span> <span class="nn">sl</span>
+
+<span class="n">Param</span> <span class="o">=</span> <span class="n">NewType</span><span class="p">(</span><span class="s2">&quot;Param&quot;</span><span class="p">,</span> <span class="nb">int</span><span class="p">)</span>
+<span class="n">Sum</span> <span class="o">=</span> <span class="n">NewType</span><span class="p">(</span><span class="s2">&quot;Sum&quot;</span><span class="p">,</span> <span class="nb">float</span><span class="p">)</span>
+
+
+<span class="k">def</span> <span class="nf">compute</span><span class="p">(</span><span class="n">x</span><span class="p">:</span> <span class="n">Param</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
+    <span class="k">return</span> <span class="mf">0.5</span> <span class="o">*</span> <span class="n">x</span>
+
+
+<span class="k">def</span> <span class="nf">gather</span><span class="p">(</span><span class="n">x</span><span class="p">:</span> <span class="n">sl</span><span class="o">.</span><span class="n">Series</span><span class="p">[</span><span class="n">Param</span><span class="p">,</span> <span class="nb">float</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">Sum</span><span class="p">:</span>
+    <span class="k">return</span> <span class="n">Sum</span><span class="p">(</span><span class="nb">sum</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">values</span><span class="p">()))</span>
+
+
+<span class="n">pl</span> <span class="o">=</span> <span class="n">sl</span><span class="o">.</span><span class="n">Pipeline</span><span class="p">([</span><span class="n">gather</span><span class="p">,</span> <span class="n">compute</span><span class="p">])</span>
+<span class="n">pl</span><span class="o">.</span><span class="n">set_param_series</span><span class="p">(</span><span class="n">Param</span><span class="p">,</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">9</span><span class="p">])</span>
+<span class="n">pl</span><span class="o">.</span><span class="n">visualize</span><span class="p">(</span><span class="n">Sum</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="nboutput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[12]:
+</pre></div>
+</div>
+<div class="output_area docutils container">
+<img alt="../_images/user-guide_parameter-tables_26_0.svg" src="../_images/user-guide_parameter-tables_26_0.svg" /></div>
+</div>
+<p>Note that <code class="docutils literal notranslate"><span class="pre">pl.set_param_series(Param,</span> <span class="pre">[1,</span> <span class="pre">4,</span> <span class="pre">9])</span></code> above is equivalent to <code class="docutils literal notranslate"><span class="pre">pl.set_param_table(sl.ParamTable(Param,</span> <span class="pre">columns={},</span> <span class="pre">index=[1,</span> <span class="pre">4,</span> <span class="pre">9]))</span></code>.</p>
+<div class="nbinput docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[13]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">pl</span><span class="o">.</span><span class="n">compute</span><span class="p">(</span><span class="n">Sum</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="nboutput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[13]:
+</pre></div>
+</div>
+<div class="output_area docutils container">
+<div class="highlight"><pre>
+7.0
+</pre></div></div>
+</div>
+</section>
+<section id="Combining-multiple-parameters-from-same-table">
+<h3>Combining multiple parameters from same table<a class="headerlink" href="#Combining-multiple-parameters-from-same-table" title="Link to this heading">#</a></h3>
+<div class="nbinput docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[14]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">sciline</span> <span class="k">as</span> <span class="nn">sl</span>
+
+<span class="n">Sum</span> <span class="o">=</span> <span class="n">NewType</span><span class="p">(</span><span class="s2">&quot;Sum&quot;</span><span class="p">,</span> <span class="nb">float</span><span class="p">)</span>
+<span class="n">Param1</span> <span class="o">=</span> <span class="n">NewType</span><span class="p">(</span><span class="s2">&quot;Param1&quot;</span><span class="p">,</span> <span class="nb">int</span><span class="p">)</span>
+<span class="n">Param2</span> <span class="o">=</span> <span class="n">NewType</span><span class="p">(</span><span class="s2">&quot;Param2&quot;</span><span class="p">,</span> <span class="nb">int</span><span class="p">)</span>
+<span class="n">Row</span> <span class="o">=</span> <span class="n">NewType</span><span class="p">(</span><span class="s2">&quot;Run&quot;</span><span class="p">,</span> <span class="nb">int</span><span class="p">)</span>
+
+
+<span class="k">def</span> <span class="nf">gather</span><span class="p">(</span>
+    <span class="n">x</span><span class="p">:</span> <span class="n">sl</span><span class="o">.</span><span class="n">Series</span><span class="p">[</span><span class="n">Row</span><span class="p">,</span> <span class="nb">float</span><span class="p">],</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Sum</span><span class="p">:</span>
+    <span class="k">return</span> <span class="n">Sum</span><span class="p">(</span><span class="nb">sum</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">values</span><span class="p">()))</span>
+
+
+<span class="k">def</span> <span class="nf">product</span><span class="p">(</span><span class="n">x</span><span class="p">:</span> <span class="n">Param1</span><span class="p">,</span> <span class="n">y</span><span class="p">:</span> <span class="n">Param2</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
+    <span class="k">return</span> <span class="n">x</span> <span class="o">/</span> <span class="n">y</span>
+
+
+<span class="n">pl</span> <span class="o">=</span> <span class="n">sl</span><span class="o">.</span><span class="n">Pipeline</span><span class="p">([</span><span class="n">gather</span><span class="p">,</span> <span class="n">product</span><span class="p">])</span>
+<span class="n">pl</span><span class="o">.</span><span class="n">set_param_table</span><span class="p">(</span><span class="n">sl</span><span class="o">.</span><span class="n">ParamTable</span><span class="p">(</span><span class="n">Row</span><span class="p">,</span> <span class="p">{</span><span class="n">Param1</span><span class="p">:</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">9</span><span class="p">],</span> <span class="n">Param2</span><span class="p">:</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">]}))</span>
+
+<span class="n">pl</span><span class="o">.</span><span class="n">visualize</span><span class="p">(</span><span class="n">Sum</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="nboutput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[14]:
+</pre></div>
+</div>
+<div class="output_area docutils container">
+<img alt="../_images/user-guide_parameter-tables_30_0.svg" src="../_images/user-guide_parameter-tables_30_0.svg" /></div>
+</div>
+<div class="nbinput docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[15]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">pl</span><span class="o">.</span><span class="n">compute</span><span class="p">(</span><span class="n">Sum</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="nboutput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[15]:
+</pre></div>
+</div>
+<div class="output_area docutils container">
+<div class="highlight"><pre>
+6.0
+</pre></div></div>
+</div>
+</section>
+<section id="Diamond-graphs">
+<h3>Diamond graphs<a class="headerlink" href="#Diamond-graphs" title="Link to this heading">#</a></h3>
+<div class="nbinput docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[16]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">Sum</span> <span class="o">=</span> <span class="n">NewType</span><span class="p">(</span><span class="s2">&quot;Sum&quot;</span><span class="p">,</span> <span class="nb">float</span><span class="p">)</span>
+<span class="n">Param</span> <span class="o">=</span> <span class="n">NewType</span><span class="p">(</span><span class="s2">&quot;Param&quot;</span><span class="p">,</span> <span class="nb">int</span><span class="p">)</span>
+<span class="n">Param1</span> <span class="o">=</span> <span class="n">NewType</span><span class="p">(</span><span class="s2">&quot;Param1&quot;</span><span class="p">,</span> <span class="nb">int</span><span class="p">)</span>
+<span class="n">Param2</span> <span class="o">=</span> <span class="n">NewType</span><span class="p">(</span><span class="s2">&quot;Param2&quot;</span><span class="p">,</span> <span class="nb">int</span><span class="p">)</span>
+<span class="n">Row</span> <span class="o">=</span> <span class="n">NewType</span><span class="p">(</span><span class="s2">&quot;Run&quot;</span><span class="p">,</span> <span class="nb">int</span><span class="p">)</span>
+
+
+<span class="k">def</span> <span class="nf">gather</span><span class="p">(</span><span class="n">x</span><span class="p">:</span> <span class="n">sl</span><span class="o">.</span><span class="n">Series</span><span class="p">[</span><span class="n">Row</span><span class="p">,</span> <span class="nb">float</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">Sum</span><span class="p">:</span>
+    <span class="k">return</span> <span class="n">Sum</span><span class="p">(</span><span class="nb">sum</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">values</span><span class="p">()))</span>
+
+
+<span class="k">def</span> <span class="nf">to_param1</span><span class="p">(</span><span class="n">x</span><span class="p">:</span> <span class="n">Param</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Param1</span><span class="p">:</span>
+    <span class="k">return</span> <span class="n">Param1</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+
+
+<span class="k">def</span> <span class="nf">to_param2</span><span class="p">(</span><span class="n">x</span><span class="p">:</span> <span class="n">Param</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Param2</span><span class="p">:</span>
+    <span class="k">return</span> <span class="n">Param2</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+
+
+<span class="k">def</span> <span class="nf">product</span><span class="p">(</span><span class="n">x</span><span class="p">:</span> <span class="n">Param1</span><span class="p">,</span> <span class="n">y</span><span class="p">:</span> <span class="n">Param2</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
+    <span class="k">return</span> <span class="n">x</span> <span class="o">*</span> <span class="n">y</span>
+
+
+<span class="n">pl</span> <span class="o">=</span> <span class="n">sl</span><span class="o">.</span><span class="n">Pipeline</span><span class="p">([</span><span class="n">gather</span><span class="p">,</span> <span class="n">product</span><span class="p">,</span> <span class="n">to_param1</span><span class="p">,</span> <span class="n">to_param2</span><span class="p">])</span>
+<span class="n">pl</span><span class="o">.</span><span class="n">set_param_table</span><span class="p">(</span><span class="n">sl</span><span class="o">.</span><span class="n">ParamTable</span><span class="p">(</span><span class="n">Row</span><span class="p">,</span> <span class="p">{</span><span class="n">Param</span><span class="p">:</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">]}))</span>
+<span class="n">pl</span><span class="o">.</span><span class="n">visualize</span><span class="p">(</span><span class="n">Sum</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="nboutput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[16]:
+</pre></div>
+</div>
+<div class="output_area docutils container">
+<img alt="../_images/user-guide_parameter-tables_33_0.svg" src="../_images/user-guide_parameter-tables_33_0.svg" /></div>
+</div>
+</section>
+<section id="Combining-parameters-from-different-tables">
+<h3>Combining parameters from different tables<a class="headerlink" href="#Combining-parameters-from-different-tables" title="Link to this heading">#</a></h3>
+<div class="nbinput docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[17]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">sciline</span> <span class="k">as</span> <span class="nn">sl</span>
+
+<span class="n">List1</span> <span class="o">=</span> <span class="n">NewType</span><span class="p">(</span><span class="s2">&quot;List1&quot;</span><span class="p">,</span> <span class="nb">float</span><span class="p">)</span>
+<span class="n">List2</span> <span class="o">=</span> <span class="n">NewType</span><span class="p">(</span><span class="s2">&quot;List2&quot;</span><span class="p">,</span> <span class="nb">float</span><span class="p">)</span>
+<span class="n">Param1</span> <span class="o">=</span> <span class="n">NewType</span><span class="p">(</span><span class="s2">&quot;Param1&quot;</span><span class="p">,</span> <span class="nb">int</span><span class="p">)</span>
+<span class="n">Param2</span> <span class="o">=</span> <span class="n">NewType</span><span class="p">(</span><span class="s2">&quot;Param2&quot;</span><span class="p">,</span> <span class="nb">int</span><span class="p">)</span>
+<span class="n">Row1</span> <span class="o">=</span> <span class="n">NewType</span><span class="p">(</span><span class="s2">&quot;Row1&quot;</span><span class="p">,</span> <span class="nb">int</span><span class="p">)</span>
+<span class="n">Row2</span> <span class="o">=</span> <span class="n">NewType</span><span class="p">(</span><span class="s2">&quot;Row2&quot;</span><span class="p">,</span> <span class="nb">int</span><span class="p">)</span>
+
+
+<span class="k">def</span> <span class="nf">gather1</span><span class="p">(</span><span class="n">x</span><span class="p">:</span> <span class="n">sl</span><span class="o">.</span><span class="n">Series</span><span class="p">[</span><span class="n">Row1</span><span class="p">,</span> <span class="nb">float</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">List1</span><span class="p">:</span>
+    <span class="k">return</span> <span class="n">List1</span><span class="p">(</span><span class="nb">list</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">values</span><span class="p">()))</span>
+
+
+<span class="k">def</span> <span class="nf">gather2</span><span class="p">(</span><span class="n">x</span><span class="p">:</span> <span class="n">sl</span><span class="o">.</span><span class="n">Series</span><span class="p">[</span><span class="n">Row2</span><span class="p">,</span> <span class="n">List1</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">List2</span><span class="p">:</span>
+    <span class="k">return</span> <span class="n">List2</span><span class="p">(</span><span class="nb">list</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">values</span><span class="p">()))</span>
+
+
+<span class="k">def</span> <span class="nf">product</span><span class="p">(</span><span class="n">x</span><span class="p">:</span> <span class="n">Param1</span><span class="p">,</span> <span class="n">y</span><span class="p">:</span> <span class="n">Param2</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
+    <span class="k">return</span> <span class="n">x</span> <span class="o">*</span> <span class="n">y</span>
+
+
+<span class="n">pl</span> <span class="o">=</span> <span class="n">sl</span><span class="o">.</span><span class="n">Pipeline</span><span class="p">([</span><span class="n">gather1</span><span class="p">,</span> <span class="n">gather2</span><span class="p">,</span> <span class="n">product</span><span class="p">])</span>
+<span class="n">pl</span><span class="o">.</span><span class="n">set_param_table</span><span class="p">(</span><span class="n">sl</span><span class="o">.</span><span class="n">ParamTable</span><span class="p">(</span><span class="n">Row1</span><span class="p">,</span> <span class="p">{</span><span class="n">Param1</span><span class="p">:</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">9</span><span class="p">]}))</span>
+<span class="n">pl</span><span class="o">.</span><span class="n">set_param_table</span><span class="p">(</span><span class="n">sl</span><span class="o">.</span><span class="n">ParamTable</span><span class="p">(</span><span class="n">Row2</span><span class="p">,</span> <span class="p">{</span><span class="n">Param2</span><span class="p">:</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">]}))</span>
+
+<span class="n">pl</span><span class="o">.</span><span class="n">visualize</span><span class="p">(</span><span class="n">List2</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="nboutput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[17]:
+</pre></div>
+</div>
+<div class="output_area docutils container">
+<img alt="../_images/user-guide_parameter-tables_35_0.svg" src="../_images/user-guide_parameter-tables_35_0.svg" /></div>
+</div>
+<p>Note how intermediates such as <code class="docutils literal notranslate"><span class="pre">float(Row1,</span> <span class="pre">Row2)</span></code> depend on two parameters, i.e., we are dealing with a 2-D array of branches in the graph.</p>
+<div class="nbinput docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[18]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">pl</span><span class="o">.</span><span class="n">compute</span><span class="p">(</span><span class="n">List2</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="nboutput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[18]:
+</pre></div>
+</div>
+<div class="output_area docutils container">
+<div class="highlight"><pre>
+[[1, 4, 9], [2, 8, 18]]
+</pre></div></div>
+</div>
+</section>
+</section>
+</section>
+
+
+                </article>
+              
+              
+              
+              
+              
+                <footer class="prev-next-footer">
+                  
+<div class="prev-next-area">
+    <a class="left-prev"
+       href="getting-started.html"
+       title="previous page">
+      <i class="fa-solid fa-angle-left"></i>
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">previous</p>
+        <p class="prev-next-title">Getting Started</p>
+      </div>
+    </a>
+    <a class="right-next"
+       href="generic-providers.html"
+       title="next page">
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">next</p>
+        <p class="prev-next-title">Generic Providers</p>
+      </div>
+      <i class="fa-solid fa-angle-right"></i>
+    </a>
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+          </footer>
+        
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script src="../_static/scripts/bootstrap.js?digest=bd9e20870c6007c4c509"></script>
+<script src="../_static/scripts/pydata-sphinx-theme.js?digest=bd9e20870c6007c4c509"></script>
+
+  <footer class="bd-footer">
+<div class="bd-footer__inner bd-page-width">
+  
+    <div class="footer-items__start">
+      
+        <div class="footer-item">
+
+  <p class="copyright">
+    
+      © Copyright 2024 Scipp contributors.
+      <br/>
+    
+  </p>
+</div>
+      
+        <div class="footer-item">
+
+  <p class="sphinx-version">
+    Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 7.2.6.
+    <br/>
+  </p>
+</div>
+      
+    </div>
+  
+  
+  
+    <div class="footer-items__end">
+      
+        <div class="footer-item"><!-- This will display the version of the docs -->
+Current Sciline version: 24.2.1 (<a href="https://github.com/scipp/sciline/releases">older versions</a>).</div>
+      
+        <div class="footer-item">
+<p class="theme-version">
+  Built with the <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a> 0.15.1.
+</p></div>
+      
+    </div>
+  
+</div>
+
+  </footer>
+  </body>
+</html>
