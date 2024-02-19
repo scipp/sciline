@@ -433,6 +433,18 @@ class Pipeline:
             )
         self._set_provider(key, Provider.parameter(param))
 
+    def __getitem__(self, tp: Union[Type[T], Item[T]]) -> Provider:
+        return self.get(tp).graph[tp]
+
+    def __contains__(self, tp: Union[Type[T], Item[T]]):
+        try:
+            self.get(tp)
+        except AmbiguousProvider:
+            return True
+        except UnsatisfiedRequirement:
+            return False
+        return True
+
     def set_param_table(self, params: ParamTable) -> None:
         """
         Set a parameter table for a row dimension.
