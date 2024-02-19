@@ -291,7 +291,10 @@ def _get_args_and_types(
         raise TypeError(
             "Classes are not supported as providers because their type annotations "
             f"cannot reliably be extracted. Got class {func}. "
-            "Consider using a free function, classmethod, or staticmethod."
+            "Consider using a free function, classmethod, or staticmethod as a "
+            "provider to instantiate the class. "
+            "Or did you accidentally pass a class instead of an instance? "
+            f"If so, use `{func}(...)` as a provider instead of `{func}`."
         ) from None
     if (call := getattr(func, '__call__', None)) is not None:  # noqa: B004
         return _get_method_args_and_types(call)
