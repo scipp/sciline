@@ -539,12 +539,20 @@ class Pipeline:
         handler = handler or HandleAsBuildTimeException()
         explanation: List[str] = []
 
-        matches = [
-            (provider, bound)
-            for ptype, provider in self._providers.items()
-            if (bound := _find_bounds_to_make_compatible_type_tuple((tp,), (ptype,)))
-            is not None
-        ]
+        if tp in self._providers:
+            # Optimization to quickly find non-generic providers
+            matches = [(self._providers[tp], {})]
+        else:
+            matches = [
+                (provider, bound)
+                for return_type, provider in self._providers.items()
+                if (
+                    bound := _find_bounds_to_make_compatible_type_tuple(
+                        (tp,), (return_type,)
+                    )
+                )
+                is not None
+            ]
         typevar_counts = [len(bound) for _, bound in matches]
         min_typevar_count = min(typevar_counts, default=0)
         matches = [
