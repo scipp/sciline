@@ -436,7 +436,7 @@ class Pipeline:
     def __getitem__(self, tp: Union[Type[T], Item[T]]) -> Provider:
         return self.get(tp).graph[tp]
 
-    def __contains__(self, tp: Union[Type[T], Item[T]]):
+    def __contains__(self, tp: Union[Type[T], Item[T]]) -> bool:
         try:
             self.get(tp)
         except AmbiguousProvider:
