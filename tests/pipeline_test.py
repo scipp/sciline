@@ -1543,3 +1543,32 @@ def test_pipeline_class_new_provider() -> None:
 
     with pytest.raises(TypeError):
         sl.Pipeline([C], params={int: 3})
+
+
+def test_getitem() -> None:
+    def p(c: int) -> float:
+        return float(c)
+
+    pipeline = sl.Pipeline([p], params={int: 3})
+    assert isinstance(pipeline[int], sl.typing.Provider)
+    assert isinstance(pipeline[float], sl.typing.Provider)
+    with pytest.raises(sl.UnsatisfiedRequirement):
+        pipeline[str]
+
+
+def test_getitem_generic() -> None:
+    Number = TypeVar('Number', int, float)
+
+    @dataclass
+    class Double(Generic[Number]):
+        number: Number
+
+    def p(n: Number) -> Double[Number]:
+        return 2 * n
+
+    pipeline = sl.Pipeline([p])
+    assert isinstance(pipeline[Double[int]], sl.typing.Provider)
+    assert isinstance(pipeline[Double[float]], sl.typing.Provider)
+
+    with pytest.raises(sl.UnsatisfiedRequirement):
+        pipeline[Double[str]]
