@@ -1545,7 +1545,7 @@ def test_pipeline_class_new_provider() -> None:
         sl.Pipeline([C], params={int: 3})
 
 
-def test_getitem() -> None:
+def test_pipeline_getitem() -> None:
     def p(c: int) -> float:
         return float(c)
 
@@ -1556,7 +1556,7 @@ def test_getitem() -> None:
         pipeline[str]
 
 
-def test_getitem_generic() -> None:
+def test_pipeline_getitem_generic() -> None:
     Number = TypeVar('Number', int, float)
 
     @dataclass
@@ -1572,3 +1572,62 @@ def test_getitem_generic() -> None:
 
     with pytest.raises(sl.UnsatisfiedRequirement):
         pipeline[Double[str]]
+
+
+def test_pipeline_getitem_ambiguous() -> None:
+    N1 = TypeVar('N1', int, float)
+    N2 = TypeVar('N2', int, float)
+
+    @dataclass
+    class Two(Generic[N1, N2]):
+        a: N1
+        b: N2
+
+    def p1(n: N1) -> Two[N1, float]:
+        return Two[N1, N1](n, 1.0)
+
+    def p2(n: N2) -> Two[int, N2]:
+        return Two[N1, N2](1, n)
+
+    pipeline = sl.Pipeline([p1, p2])
+    assert isinstance(pipeline[Two[float, float]], sl.typing.Provider)
+    assert isinstance(pipeline[Two[int, int]], sl.typing.Provider)
+    with pytest.raises(sl.AmbiguousProvider):
+        pipeline[Two[int, float]]
+
+
+def test_pipeline_contains() -> None:
+    N1 = TypeVar('N1', int, float)
+    N2 = TypeVar('N2', int, float)
+
+    @dataclass
+    class One(Generic[N1]):
+        a: N1
+
+    @dataclass
+    class Two(Generic[N1, N2]):
+        a: N1
+        b: N2
+
+    def p1(c: int) -> float:
+        return float(c)
+
+    def p2(n: N1) -> One[N1]:
+        return 2 * n
+
+    def p3(n: N1) -> Two[N1, float]:
+        return Two[N1, N1](n, 1.0)
+
+    def p4(n: N2) -> Two[int, N2]:
+        return Two[N1, N2](1, n)
+
+    pipeline = sl.Pipeline([p1, p2, p3, p4], params={int: 3})
+    assert float in pipeline
+    assert int in pipeline
+    assert One[int] in pipeline
+    assert One[float] in pipeline
+    assert Two[int, float] in pipeline
+
+    assert str not in pipeline
+    assert One[str] not in pipeline
+    assert Two[str, float] not in pipeline
