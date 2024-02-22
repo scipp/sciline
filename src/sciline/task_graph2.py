@@ -31,12 +31,14 @@ class TaskGraph2:
     def map(self, node: Hashable, values: list[Hashable]) -> TaskGraph2:
         """For every value, create a new graph with all successors renamed, merge all
         resulting graphs."""
+        # TODO Should allow mapping only for inputs nodes, not for intermediate nodes
         graphs = [
-            rename_successors(self.graph, node, index=(node, value)) for value in values
+            rename_successors(self.graph, node, index=(node, i))
+            for i in range(len(values))
         ]
         graph = TaskGraph2(nx.compose_all(graphs))
         graph.labels = {**self.labels}
-        graph.labels[node] = values
+        graph.labels[node] = (node, values)
         return graph
 
     def reduce(self, key: str, index: Hashable, func: str) -> TaskGraph2:
@@ -52,9 +54,9 @@ class TaskGraph2:
             new_node = (func, *indices)
             graph.add_edge(node, new_node)
         graph = TaskGraph2(graph)
-        for dim, labels in self.labels.items():
-            if dim != index:
-                graph.labels[dim] = labels
+        for name, labels in self.labels.items():
+            if labels[0] != index:
+                graph.labels[name] = labels
         return graph
 
     def groupby(self, key: str, index: str, reduce: str) -> TaskGraph2:
@@ -66,21 +68,22 @@ class TaskGraph2:
         """
         nodes = [node for node in self.graph.nodes if node[0] == key]
         orig_index, labels = self.labels[index]
-        labels = dict(zip(self.labels[orig_index], labels))
-        new_nodes = {label: (reduce, (index, label)) for label in labels.values()}
+        sorted_unique_labels = sorted(set(labels))
         graph = self.graph.copy()
         for node in nodes:
             # Node looks like (key, (orig_index, 2), ('y', 11))
             # We want to add an edge to (reduce, (index, label), ('y', 11))
             _, *indices = node
-            orig_label = [i[1] for i in indices if i[0] == orig_index][0]
+            orig_pos = [i[1] for i in indices if i[0] == orig_index][0]
+            orig_label = labels[orig_pos]
             indices = [i for i in indices if i[0] != orig_index]
-            label = labels[orig_label]
+            label = sorted_unique_labels.index(orig_label)
             graph.add_edge(node, (reduce, (index, label), *indices))
         graph = TaskGraph2(graph)
-        for dim in self.labels:
-            if dim != orig_index:
-                graph.labels[dim] = (index, list(new_nodes))
+        for name, labels in self.labels.items():
+            if labels[0] != orig_index:
+                graph.labels[name] = labels
+        graph.labels[index] = (index, sorted_unique_labels)
         return graph
 
     def _repr_html_(self):
