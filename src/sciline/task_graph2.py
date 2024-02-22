@@ -41,6 +41,43 @@ class TaskGraph2:
         graph.labels[node] = (node, values)
         return graph
 
+    def __getitem__(self, sel: tuple[str, int]) -> TaskGraph2:
+        """
+        Return a new graph, essentially undoing the effect of `map`.
+
+        Remove any node that has (key, i) for i != index, and remove the key from the
+        labels.
+        """
+        key, index = sel
+        graph = self.graph.copy()
+        drop = []
+        remain = []
+        for node in self.graph.nodes:
+            if isinstance(node, tuple):
+                name, *indices = node
+                if name == key and isinstance(indices[0], int):
+                    if indices[0] == index:
+                        remain.append(node)
+                    else:
+                        drop.append(node)
+                elif name != key:
+                    for dim, i in indices:
+                        if dim == key:
+                            if i == index:
+                                remain.append(node)
+                            else:
+                                drop.append(node)
+                            break
+        for node in drop:
+            if node[1] != index:
+                graph.remove_node(node)
+        # TODO remove index from remaining nodes, replace root by label
+        print(remain)
+        graph = TaskGraph2(graph)
+        graph.labels = {**self.labels}
+        del graph.labels[key]
+        return graph
+
     def reduce(self, key: str, index: Hashable, func: str) -> TaskGraph2:
         """Add edges from all nodes (key, index) to new node func."""
         nodes = [node for node in self.graph.nodes if node[0] == key]
