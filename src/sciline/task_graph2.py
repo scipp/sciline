@@ -15,7 +15,10 @@ def rename_successors(graph: nx.DiGraph, node: str, index: Hashable) -> nx.DiGra
     successors = set(
         successor for successors in successors.values() for successor in successors
     )
-    renamed_nodes = {node: (node, index) for node in successors}
+    renamed_nodes = {
+        node: node + (index,) if isinstance(node, tuple) else (node, index)
+        for node in successors
+    }
     renamed_nodes[node] = index
     return nx.relabel_nodes(graph, renamed_nodes, copy=True)
 
@@ -36,16 +39,25 @@ class TaskGraph2:
         graph.labels[node] = values
         return graph
 
-    def reduce(self, key: str, func: str) -> TaskGraph2:
+    def reduce(self, key: str, index: Hashable, func: str) -> TaskGraph2:
         """Add edges from all nodes (key, index) to new node func."""
         nodes = [node for node in self.graph.nodes if node[0] == key]
         new_node = func
         graph = self.graph.copy()
         for node in nodes:
+            # Node looks like ('v', ('x', 2), ('y', 11))
+            _, *indices = node
+            # Remove the old index, e.g., ('x', 2) if index is 'x'
+            indices = [i for i in indices if i[0] != index]
+            new_node = (func, *indices)
             graph.add_edge(node, new_node)
-        return TaskGraph2(graph)
+        graph = TaskGraph2(graph)
+        for dim, labels in self.labels.items():
+            if dim != index:
+                graph.labels[dim] = labels
+        return graph
 
-    def groupby(self, key: str, label: str, reduce: str) -> TaskGraph2:
+    def groupby(self, key: str, index: str, reduce: str) -> TaskGraph2:
         """
         Similar to reduce, but group nodes by label.
 
@@ -53,14 +65,23 @@ class TaskGraph2:
         label.  The label is given by `labels[index]`.
         """
         nodes = [node for node in self.graph.nodes if node[0] == key]
-        index, labels = self.labels[label]
-        labels = dict(zip(self.labels[index], labels))
-        new_nodes = {label: (reduce, label) for label in labels.values()}
+        orig_index, labels = self.labels[index]
+        labels = dict(zip(self.labels[orig_index], labels))
+        new_nodes = {label: (reduce, (index, label)) for label in labels.values()}
         graph = self.graph.copy()
         for node in nodes:
-            label = labels[node[1][1]]
-            graph.add_edge(node, new_nodes[label])
-        return TaskGraph2(graph)
+            # Node looks like (key, (orig_index, 2), ('y', 11))
+            # We want to add an edge to (reduce, (index, label), ('y', 11))
+            _, *indices = node
+            orig_label = [i[1] for i in indices if i[0] == orig_index][0]
+            indices = [i for i in indices if i[0] != orig_index]
+            label = labels[orig_label]
+            graph.add_edge(node, (reduce, (index, label), *indices))
+        graph = TaskGraph2(graph)
+        for dim in self.labels:
+            if dim != orig_index:
+                graph.labels[dim] = (index, list(new_nodes))
+        return graph
 
     def _repr_html_(self):
         from IPython.display import display
