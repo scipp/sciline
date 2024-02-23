@@ -1545,18 +1545,18 @@ def test_pipeline_class_new_provider() -> None:
         sl.Pipeline([C], params={int: 3})
 
 
-def test_pipeline_getitem() -> None:
+def test_pipeline_get_provider() -> None:
     def p(c: int) -> float:
-        return float(c)
+        return float(c + 1)
 
     pipeline = sl.Pipeline([p], params={int: 3})
-    assert isinstance(pipeline[int], sl.typing.Provider)
-    assert isinstance(pipeline[float], sl.typing.Provider)
+    assert pipeline.get_provider(int) == 3
+    assert pipeline.get_provider(float) is p
     with pytest.raises(sl.UnsatisfiedRequirement):
-        pipeline[str]
+        pipeline.get_provider(str)
 
 
-def test_pipeline_getitem_generic() -> None:
+def test_pipeline_get_provider_generic() -> None:
     Number = TypeVar('Number', int, float)
 
     @dataclass
@@ -1567,14 +1567,14 @@ def test_pipeline_getitem_generic() -> None:
         return 2 * n
 
     pipeline = sl.Pipeline([p])
-    assert isinstance(pipeline[Double[int]], sl.typing.Provider)
-    assert isinstance(pipeline[Double[float]], sl.typing.Provider)
+    assert pipeline.get_provider(Double[int]) is p
+    assert pipeline.get_provider(Double[float]) is p
 
     with pytest.raises(sl.UnsatisfiedRequirement):
-        pipeline[Double[str]]
+        pipeline.get_provider(Double[str])
 
 
-def test_pipeline_getitem_ambiguous() -> None:
+def test_pipeline_get_provider_ambiguous() -> None:
     N1 = TypeVar('N1', int, float)
     N2 = TypeVar('N2', int, float)
 
@@ -1590,13 +1590,13 @@ def test_pipeline_getitem_ambiguous() -> None:
         return Two[N1, N2](1, n)
 
     pipeline = sl.Pipeline([p1, p2])
-    assert isinstance(pipeline[Two[float, float]], sl.typing.Provider)
-    assert isinstance(pipeline[Two[int, int]], sl.typing.Provider)
+    assert pipeline.get_provider(Two[float, float]) is p1
+    assert pipeline.get_provider(Two[int, int]) is p2
     with pytest.raises(sl.AmbiguousProvider):
-        pipeline[Two[int, float]]
+        pipeline.get_provider(Two[int, float])
 
 
-def test_pipeline_contains() -> None:
+def test_pipeline_has_provider() -> None:
     N1 = TypeVar('N1', int, float)
     N2 = TypeVar('N2', int, float)
 
@@ -1622,12 +1622,12 @@ def test_pipeline_contains() -> None:
         return Two[N1, N2](1, n)
 
     pipeline = sl.Pipeline([p1, p2, p3, p4], params={int: 3})
-    assert float in pipeline
-    assert int in pipeline
-    assert One[int] in pipeline
-    assert One[float] in pipeline
-    assert Two[int, float] in pipeline
+    assert pipeline.has_provider(float)
+    assert pipeline.has_provider(int)
+    assert pipeline.has_provider(One[int])
+    assert pipeline.has_provider(One[float])
+    assert pipeline.has_provider(Two[int, float])
 
-    assert str not in pipeline
-    assert One[str] not in pipeline
-    assert Two[str, float] not in pipeline
+    assert not pipeline.has_provider(str)
+    assert not pipeline.has_provider(One[str])
+    assert not pipeline.has_provider(Two[str, float])
