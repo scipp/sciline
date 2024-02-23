@@ -1543,3 +1543,91 @@ def test_pipeline_class_new_provider() -> None:
 
     with pytest.raises(TypeError):
         sl.Pipeline([C], params={int: 3})
+
+
+def test_pipeline_get_provider() -> None:
+    def p(c: int) -> float:
+        return float(c + 1)
+
+    pipeline = sl.Pipeline([p], params={int: 3})
+    assert pipeline.get_provider(int) == 3
+    assert pipeline.get_provider(float) is p
+    with pytest.raises(sl.UnsatisfiedRequirement):
+        pipeline.get_provider(str)
+
+
+def test_pipeline_get_provider_generic() -> None:
+    Number = TypeVar('Number', int, float)
+
+    @dataclass
+    class Double(Generic[Number]):
+        number: Number
+
+    def p(n: Number) -> Double[Number]:
+        return 2 * n
+
+    pipeline = sl.Pipeline([p])
+    assert pipeline.get_provider(Double[int]) is p
+    assert pipeline.get_provider(Double[float]) is p
+
+    with pytest.raises(sl.UnsatisfiedRequirement):
+        pipeline.get_provider(Double[str])
+
+
+def test_pipeline_get_provider_ambiguous() -> None:
+    N1 = TypeVar('N1', int, float)
+    N2 = TypeVar('N2', int, float)
+
+    @dataclass
+    class Two(Generic[N1, N2]):
+        a: N1
+        b: N2
+
+    def p1(n: N1) -> Two[N1, float]:
+        return Two[N1, N1](n, 1.0)
+
+    def p2(n: N2) -> Two[int, N2]:
+        return Two[N1, N2](1, n)
+
+    pipeline = sl.Pipeline([p1, p2])
+    assert pipeline.get_provider(Two[float, float]) is p1
+    assert pipeline.get_provider(Two[int, int]) is p2
+    with pytest.raises(sl.AmbiguousProvider):
+        pipeline.get_provider(Two[int, float])
+
+
+def test_pipeline_has_provider() -> None:
+    N1 = TypeVar('N1', int, float)
+    N2 = TypeVar('N2', int, float)
+
+    @dataclass
+    class One(Generic[N1]):
+        a: N1
+
+    @dataclass
+    class Two(Generic[N1, N2]):
+        a: N1
+        b: N2
+
+    def p1(c: int) -> float:
+        return float(c)
+
+    def p2(n: N1) -> One[N1]:
+        return 2 * n
+
+    def p3(n: N1) -> Two[N1, float]:
+        return Two[N1, N1](n, 1.0)
+
+    def p4(n: N2) -> Two[int, N2]:
+        return Two[N1, N2](1, n)
+
+    pipeline = sl.Pipeline([p1, p2, p3, p4], params={int: 3})
+    assert pipeline.has_provider(float)
+    assert pipeline.has_provider(int)
+    assert pipeline.has_provider(One[int])
+    assert pipeline.has_provider(One[float])
+    assert pipeline.has_provider(Two[int, float])
+
+    assert not pipeline.has_provider(str)
+    assert not pipeline.has_provider(One[str])
+    assert not pipeline.has_provider(Two[str, float])

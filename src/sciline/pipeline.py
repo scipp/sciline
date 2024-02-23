@@ -368,7 +368,6 @@ class Pipeline:
             Dictionary of concrete values to provide for types.
         """
         self._providers: Dict[Key, Provider] = {}
-        self._subproviders: Dict[type, Dict[Tuple[Key | TypeVar, ...], Provider]] = {}
         self._param_tables: Dict[Key, ParamTable] = {}
         self._param_name_to_table_key: Dict[Key, Key] = {}
         for provider in providers or []:
@@ -433,6 +432,26 @@ class Pipeline:
                 f'Key {key} incompatible to value {param} of type {type(param)}'
             )
         self._set_provider(key, Provider.parameter(param))
+
+    def get_provider(
+        self, tp: Union[Type[T], Item[T]]
+    ) -> Union[Callable[[Any, ...], T], T]:
+        '''Get the provider that produces the type. If the type is provided by a
+        parameter the method returns the value of the parameter.'''
+        provider = self._get_unique_provider(tp, HandleAsBuildTimeException())[0]
+        if provider.kind == 'function':
+            return provider.func
+        return provider.func()
+
+    def has_provider(self, tp: Union[Type[T], Item[T]]) -> bool:
+        '''Determines if the pipeline has a provider that produces the type.'''
+        try:
+            self.get_provider(tp)
+            return True
+        except AmbiguousProvider:
+            return True
+        except UnsatisfiedRequirement:
+            return False
 
     def set_param_table(self, params: ParamTable) -> None:
         """
@@ -532,72 +551,63 @@ class Pipeline:
                 'Series is a special container reserved for use in conjunction with '
                 'sciline.ParamTable and must not be provided directly.'
             )
-        if (origin := get_origin(key)) is not None:
-            subproviders = self._subproviders.setdefault(origin, {})
-            args = get_args(key)
-            subproviders[args] = provider
-        else:
-            self._providers[key] = provider
+        self._providers[key] = provider
 
     def _get_provider(
         self, tp: Union[Type[T], Item[T]], handler: Optional[ErrorHandler] = None
     ) -> Tuple[Provider, Dict[TypeVar, Key]]:
         handler = handler or HandleAsBuildTimeException()
         explanation: List[str] = []
-        if (provider := self._providers.get(tp)) is not None:
-            return provider, {}
-        elif (origin := get_origin(tp)) is not None and (
-            subproviders := self._subproviders.get(origin)
-        ) is not None:
-            requested = get_args(tp)
+
+        if provider := self._providers.get(tp):
+            # Optimization to quickly find non-generic providers
+            matches = [(provider, {})]
+        else:
             matches = [
-                (subprovider, bound)
-                for args, subprovider in subproviders.items()
-                if (
-                    bound := _find_bounds_to_make_compatible_type_tuple(requested, args)
-                )
+                (provider, bound)
+                for return_type, provider in self._providers.items()
+                if (bound := _find_bounds_to_make_compatible_type(tp, return_type))
                 is not None
             ]
-            typevar_counts = [len(bound) for _, bound in matches]
-            min_typevar_count = min(typevar_counts, default=0)
-            matches = [
-                m
-                for count, m in zip(typevar_counts, matches)
-                if count == min_typevar_count
-            ]
+        typevar_counts = [len(bound) for _, bound in matches]
+        min_typevar_count = min(typevar_counts, default=0)
+        matches = [
+            m for count, m in zip(typevar_counts, matches) if count == min_typevar_count
+        ]
 
-            if len(matches) == 1:
-                provider, bound = matches[0]
-                return provider, bound
-            elif len(matches) > 1:
-                matching_providers = [provider.location.name for provider, _ in matches]
-                raise AmbiguousProvider(
-                    f"Multiple providers found for type {tp}."
-                    f" Matching providers are: {matching_providers}."
-                )
-            else:
-                typevars_in_expression = _extract_typevars_from_generic_type(origin)
-                if typevars_in_expression:
-                    explanation = [
-                        ''.join(
-                            map(
-                                str,
+        if len(matches) == 1:
+            provider, bound = matches[0]
+            return provider, bound
+        elif len(matches) > 1:
+            matching_providers = [provider.location.name for provider, _ in matches]
+            raise AmbiguousProvider(
+                f"Multiple providers found for type {tp}."
+                f" Matching providers are: {matching_providers}."
+            )
+        else:
+            origin = get_origin(tp)
+            typevars_of_generic = _extract_typevars_from_generic_type(origin)
+            if typevars_of_generic:
+                explanation = [
+                    ''.join(
+                        map(
+                            str,
+                            (
+                                'Note that ',
+                                keyname(origin[typevars_of_generic]),
+                                ' has constraints ',
                                 (
-                                    'Note that ',
-                                    keyname(origin[typevars_in_expression]),
-                                    ' has constraints ',
-                                    (
-                                        {
-                                            keyname(tv): tuple(
-                                                map(keyname, tv.__constraints__)
-                                            )
-                                            for tv in typevars_in_expression
-                                        }
-                                    ),
+                                    {
+                                        keyname(tv): tuple(
+                                            map(keyname, tv.__constraints__)
+                                        )
+                                        for tv in typevars_of_generic
+                                    }
                                 ),
-                            )
+                            ),
                         )
-                    ]
+                    )
+                ]
         return handler.handle_unsatisfied_requirement(tp, *explanation), {}
 
     def _get_unique_provider(
@@ -923,7 +933,6 @@ class Pipeline:
         """
         out = Pipeline()
         out._providers = self._providers.copy()
-        out._subproviders = {k: v.copy() for k, v in self._subproviders.items()}
         out._param_tables = self._param_tables.copy()
         out._param_name_to_table_key = self._param_name_to_table_key.copy()
         return out
@@ -932,14 +941,8 @@ class Pipeline:
         return self.copy()
 
     def _repr_html_(self) -> str:
-        providers_without_parameters = (
-            (origin, tuple(), value) for origin, value in self._providers.items()
-        )  # type: ignore[var-annotated]
-        providers_with_parameters = (
-            (origin, args, value)
-            for origin in self._subproviders
-            for args, value in self._subproviders[origin].items()
-        )
-        return pipeline_html_repr(
-            chain(providers_without_parameters, providers_with_parameters)
-        )
+        providers = [
+            (get_origin(tp), get_args(tp), value)
+            for tp, value in self._providers.items()
+        ]
+        return pipeline_html_repr(providers)
