@@ -433,17 +433,25 @@ class Pipeline:
             )
         self._set_provider(key, Provider.parameter(param))
 
-    def __getitem__(self, tp: Union[Type[T], Item[T]]) -> Provider:
-        return self._get_unique_provider(tp, HandleAsBuildTimeException())[0]
+    def get_provider(
+        self, tp: Union[Type[T], Item[T]]
+    ) -> Union[Callable[[Any, ...], T], T]:
+        '''Get the provider that produces the type. If the type is provided by a
+        parameter the method returns the value of the parameter.'''
+        provider = self._get_unique_provider(tp, HandleAsBuildTimeException())[0]
+        if provider.kind == 'function':
+            return provider.func
+        return provider.func()
 
-    def __contains__(self, tp: Union[Type[T], Item[T]]) -> bool:
+    def has_provider(self, tp: Union[Type[T], Item[T]]) -> bool:
+        '''Determines if the pipeline has a provider that produces the type.'''
         try:
-            self[tp]
+            self.get_provider(tp)
+            return True
         except AmbiguousProvider:
             return True
         except UnsatisfiedRequirement:
             return False
-        return True
 
     def set_param_table(self, params: ParamTable) -> None:
         """
