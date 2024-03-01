@@ -1,12 +1,14 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright (c) 2023 Scipp contributors (https://github.com/scipp)
+from __future__ import annotations
+
 import importlib.resources
 import json
-from typing import Union, get_args
+from typing import Union
 
 from .._provider import Provider
 from .._utils import key_full_qualname, key_name, provider_full_qualname, provider_name
-from ..typing import Graph, Item, Json, Key
+from ..typing import Graph, Json, Key
 
 
 def json_schema() -> Json:
@@ -41,20 +43,13 @@ def json_serialize_task_graph(graph: Graph) -> dict[str, Json]:
     :
         A JSON object representing the graph.
     """
-    node_ids = _UniqueNodeId()
+    id_gen = _IdGenerator()
     nodes = []
     edges = []
     for key, provider in graph.items():
-        key_id = node_ids.get(key)
-        provider_id = node_ids.get(provider)
-        nodes.append(_serialize_data_node(key, key_id))
-        nodes.append(_serialize_provider_node(provider, key, provider_id))
-
-        edges.append(_serialize_edge(provider_id, key_id))
-        if provider.kind in ('function', 'series'):
-            for arg in provider.arg_spec.keys():
-                edges.append(_serialize_edge(node_ids.get(arg), provider_id))
-
+        n, e = _serialize_provider(key, provider, id_gen)
+        nodes.append(n)
+        edges.extend(e)
     return {
         'directed': True,
         'multigraph': False,
@@ -63,76 +58,86 @@ def json_serialize_task_graph(graph: Graph) -> dict[str, Json]:
     }
 
 
-def _serialize_data_node(key: Key, key_id: str) -> dict[str, Union[str, list[str]]]:
-    if isinstance(key, Item):
-        return {
-            'id': key_id,
-            'kind': 'data_table_cell',
-            'label': key_name(key),
-            'value_type': key_full_qualname(key.tp),
-            'row_types': [key_full_qualname(label.tp) for label in key.label],
-            'row_indices': [key_full_qualname(label.index) for label in key.label],
-        }
-    return {
-        'id': key_id,
-        'kind': 'data',
-        'label': key_name(key),
-        'type': key_full_qualname(key),
-    }
-
-
-def _serialize_provider_node(
-    provider: Provider, key: Key, provider_id: str
-) -> dict[str, Union[str, list[str]]]:
-    from ..pipeline import SeriesProvider
-
-    if isinstance(provider, SeriesProvider):
-        row_dim = provider.row_dim
-        value_type = get_args(key)[1]
-        return {
-            'id': provider_id,
-            'kind': 'p_series',
-            'label': f'provide_series[{key_name(row_dim)}, {key_name(value_type)}]',
-            'value_type': key_full_qualname(value_type),
-            'row_dim': key_full_qualname(row_dim),
-            'labels': list(map(key_full_qualname, provider.labels)),
-        }
+def _serialize_provider(
+    key: Key, provider: Provider, id_gen: _IdGenerator
+) -> tuple[dict[str, Json], list[dict[str, Json]]]:
     if provider.kind == 'function':
-        return {
-            'id': provider_id,
-            'kind': 'p_function',
-            'label': provider_name(provider),
-            'function': provider_full_qualname(provider),
-        }
+        return _serialize_function(key, provider, id_gen)
     if provider.kind == 'parameter':
-        return {
-            'id': provider_id,
-            'kind': 'p_parameter',
-            'label': key_name(key),
-            'type': key_full_qualname(key),
-        }
-    if provider.kind == 'table_cell':
-        return {
-            'id': provider_id,
-            'kind': 'p_table_cell',
-            'label': f'table_cell({key_name(key)})',
-        }
+        return _serialize_param(key, id_gen)
     raise ValueError(
-        f'Cannot serialize graph containing providers of kind {provider.kind}'
+        f'Cannot serialize a task graph that contains {provider.kind} nodes.'
     )
 
 
-def _serialize_edge(source_id: str, target_id: str) -> dict[str, str]:
-    return {'source': source_id, 'target': target_id}
+def _serialize_param(
+    key: Key, id_gen: _IdGenerator
+) -> tuple[dict[str, Json], list[dict[str, Json]]]:
+    node = {
+        'id': id_gen.node_id(key),
+        'kind': 'parameter',
+        'label': key_name(key),
+        'out': key_full_qualname(key),
+    }
+    return node, []
 
 
-class _UniqueNodeId:
+def _serialize_function(
+    key: Key, provider: Provider, id_gen: _IdGenerator
+) -> tuple[dict[str, Json], list[dict[str, Json]]]:
+    node_id = id_gen.node_id(key)
+
+    edges = []
+    args = []
+    kwargs = {}
+    for i, arg in enumerate(provider.arg_spec.args):
+        edge = _serialize_edge(arg, key, i, id_gen)
+        edges.append(edge)
+        args.append(edge['id'])
+    for name, kwarg in provider.arg_spec.kwargs:
+        edge = _serialize_edge(kwarg, key, name, id_gen)
+        edges.append(edge)
+        kwargs[name] = edge['id']
+
+    node = {
+        'id': node_id,
+        'kind': 'function',
+        'label': provider_name(provider),
+        'function': provider_full_qualname(provider),
+        'out': key_full_qualname(key),
+        'args': args,
+        'kwargs': kwargs,
+    }
+
+    return node, edges
+
+
+def _serialize_edge(
+    source: Key, target: Key, arg: Union[int, str], id_gen: _IdGenerator
+) -> dict[str, str]:
+    return {
+        'id': id_gen.edge_id(arg, target),
+        'source': id_gen.node_id(source),
+        'target': id_gen.node_id(target),
+    }
+
+
+class _IdGenerator:
     def __init__(self) -> None:
         self._assigned: dict[int, str] = {}
         self._next = 0
 
-    def get(self, obj: Union[Key, Provider]) -> str:
-        hsh = hash(obj)
+    def node_id(self, key: Key) -> str:
+        # Use the key instead of the provider to avoid problems with
+        # unhashable providers, keys need to be hashable to construct TaskGraph.
+        return self._get_or_insert(hash(key))
+
+    def edge_id(self, arg: Union[int, str], target: Key) -> str:
+        # Uses the arg number or kwarg name instead of the source key
+        # to disambiguate arguments with the same type.
+        return self._get_or_insert(hash((arg, target)))
+
+    def _get_or_insert(self, hsh: int) -> str:
         try:
             return self._assigned[hsh]
         except KeyError:

@@ -3,6 +3,7 @@
 # type: ignore
 
 import sys
+from copy import deepcopy
 from typing import Any, NewType, TypeVar
 
 import jsonschema
@@ -34,7 +35,7 @@ def zeros(n: Int[T]) -> List[T]:
     return List[T]([0] * n)
 
 
-def to_string(a: List[A], b: List[B]) -> str:
+def to_string(b: List[B], a: List[A]) -> str:
     return f'a: {a}, b: {b}'
 
 
@@ -42,6 +43,7 @@ def as_float(x: int) -> float:
     return 0.5 * x
 
 
+# TODO remove
 def check_serialized_graph(
     serialized: dict[str, Json], expected_nodes: Any, expected_edges: Any
 ) -> None:
@@ -74,69 +76,106 @@ def check_serialized_graph(
     assert nodes == expected_nodes
 
 
-# Result of serializing make_complex_task_graph(), sorted by label.
+def make_graph_predictable(graph: dict[str, Json]) -> dict[str, Json]:
+    """Sort nodes and edges and assign ids according to a fixed scheme.
+
+    Nodes:
+    - Sorted by ``out``.
+    - Ids are counted up from 0 for the sorted nodes.
+
+    Edges:
+    - Sorted by ``source + target`` *after* remapping the node ids.
+    - Ids are counted up from 100 for the sorted edges.
+    """
+    id_mapping = {}
+    nodes = sorted(deepcopy(graph['nodes']), key=lambda n: n['out'])
+    for i, node in enumerate(nodes):
+        new_id = str(i)
+        id_mapping[node['id']] = new_id
+        node['id'] = new_id
+    edges = deepcopy(graph['edges'])
+    for edge in edges:
+        edge['source'] = id_mapping[edge['source']]
+        edge['target'] = id_mapping[edge['target']]
+    edges = sorted(edges, key=lambda e: e['source'] + e['target'])
+    for i, edge in enumerate(edges, 100):
+        new_id = str(i)
+        id_mapping[edge['id']] = new_id
+        edge['id'] = new_id
+    for node in nodes:
+        if node['kind'] == 'function':
+            node['args'] = [id_mapping[arg] for arg in node['args']]
+            node['kwargs'] = {k: id_mapping[v] for k, v in node['kwargs'].items()}
+
+    return {**graph, 'nodes': nodes, 'edges': edges}
+
+
+# Ids correspond to the result of assign_predictable_ids
 expected_serialized_nodes = [
     {
-        'label': 'Int[A]',
-        'kind': 'data',
-        'type': 'json_test.Int[json_test.A]',
-    },
-    {
-        'label': 'Int[A]',
-        'kind': 'p_parameter',
-        'type': 'json_test.Int[json_test.A]',
-    },
-    {
-        'label': 'Int[B]',
-        'kind': 'data',
-        'type': 'json_test.Int[json_test.B]',
-    },
-    {
-        'label': 'List[A]',
-        'kind': 'data',
-        'type': 'json_test.List[json_test.A]',
-    },
-    {
-        'label': 'List[B]',
-        'kind': 'data',
-        'type': 'json_test.List[json_test.B]',
-    },
-    {
-        'label': 'make_int_b',
-        'kind': 'p_function',
-        'function': 'json_test.make_int_b',
-    },
-    {'label': 'str', 'kind': 'data', 'type': 'builtins.str'},
-    {
+        'id': '0',
         'label': 'to_string',
-        'kind': 'p_function',
+        'kind': 'function',
         'function': 'json_test.to_string',
+        'out': 'builtins.str',
+        'args': ['103', '102'],
+        'kwargs': {},
     },
-    {'label': 'zeros', 'kind': 'p_function', 'function': 'json_test.zeros'},
-    {'label': 'zeros', 'kind': 'p_function', 'function': 'json_test.zeros'},
+    {
+        'id': '1',
+        'label': 'Int[A]',
+        'kind': 'parameter',
+        'out': 'json_test.Int[json_test.A]',
+    },
+    {
+        'id': '2',
+        'label': 'make_int_b',
+        'kind': 'function',
+        'function': 'json_test.make_int_b',
+        'out': 'json_test.Int[json_test.B]',
+        'args': [],
+        'kwargs': {},
+    },
+    {
+        'id': '3',
+        'label': 'zeros',
+        'kind': 'function',
+        'function': 'json_test.zeros',
+        'out': 'json_test.List[json_test.A]',
+        'args': ['100'],
+        'kwargs': {},
+    },
+    {
+        'id': '4',
+        'label': 'zeros',
+        'kind': 'function',
+        'function': 'json_test.zeros',
+        'out': 'json_test.List[json_test.B]',
+        'args': ['101'],
+        'kwargs': {},
+    },
 ]
-# Ids were replaced by labels here.
 expected_serialized_edges = [
-    {'source': 'Int[A]', 'target': 'Int[A]'},
-    {'source': 'Int[A]', 'target': 'zeros'},
-    {'source': 'Int[B]', 'target': 'zeros'},
-    {'source': 'List[A]', 'target': 'to_string'},
-    {'source': 'List[B]', 'target': 'to_string'},
-    {'source': 'make_int_b', 'target': 'Int[B]'},
-    {'source': 'to_string', 'target': 'str'},
-    {'source': 'zeros', 'target': 'List[A]'},
-    {'source': 'zeros', 'target': 'List[B]'},
+    {'id': '100', 'source': '1', 'target': '3'},
+    {'id': '101', 'source': '2', 'target': '4'},
+    {'id': '102', 'source': '3', 'target': '0'},
+    {'id': '103', 'source': '4', 'target': '0'},
 ]
+expected_serialized_graph = {
+    'directed': True,
+    'multigraph': False,
+    'nodes': expected_serialized_nodes,
+    'edges': expected_serialized_edges,
+}
 
 
 @pytest.mark.skipif(sys.version_info < (3, 10), reason="requires python3.10 or higher")
 def test_serialize() -> None:
-    # We cannot easily test the graph structure because we cannot predict node ids.
     pl = sl.Pipeline([make_int_b, zeros, to_string], params={Int[A]: 3})
-    graph = pl.build(str, handler=sl.HandleAsBuildTimeException())
-    tg = TaskGraph(graph=graph, keys=str)
-    res = tg.serialize()
-    check_serialized_graph(res, expected_serialized_nodes, expected_serialized_edges)
+    graph = pl.get(str)
+    res = graph.serialize()
+    res = make_graph_predictable(res)
+    assert res == expected_serialized_graph
 
 
 # Result of serializing a task graph with a param table, sorted by label.
