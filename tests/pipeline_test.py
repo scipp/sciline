@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright (c) 2023 Scipp contributors (https://github.com/scipp)
+import functools
 from dataclasses import dataclass
 from typing import Any, Callable, Generic, List, NewType, TypeVar
 
@@ -1404,3 +1405,141 @@ def test_number_of_type_vars_defines_most_specialized() -> None:
     with pytest.raises(sl.AmbiguousProvider):
         # provided by p1 and p2 with the same number of typevars
         pipeline.get(Person[Likes[Green], Green])
+
+
+def test_pipeline_with_decorated_provider() -> None:
+    R = TypeVar('R')
+
+    def deco(f: Callable[..., R]) -> Callable[..., R]:
+        @functools.wraps(f)
+        def impl(*args: Any, **kwargs: Any) -> R:
+            return f(*args, **kwargs)
+
+        return impl
+
+    provider = deco(int_to_float)
+    pipeline = sl.Pipeline([provider], params={int: 3})
+    assert pipeline.compute(float) == 1.5
+
+
+def test_pipeline_with_decorated_provider_keyword_only_arg() -> None:
+    R = TypeVar('R')
+
+    def deco(f: Callable[..., R]) -> Callable[..., R]:
+        @functools.wraps(f)
+        def impl(*args: Any, **kwargs: Any) -> R:
+            return f(*args, **kwargs)
+
+        return impl
+
+    @deco
+    def foo(*, k: int) -> float:
+        return float(k)
+
+    provider = deco(foo)
+    pipeline = sl.Pipeline([provider], params={int: 3})
+    assert pipeline.compute(float) == 3.0
+
+
+R = TypeVar('R')
+
+
+def wrapping_decorator(f: Callable[..., R]) -> Callable[..., R]:
+    @functools.wraps(f)
+    def wrapper(*args: Any, **kwargs: Any) -> R:
+        return f(*args, **kwargs)
+
+    return wrapper
+
+
+def null_decorator(f: Callable[..., R]) -> Callable[..., R]:
+    return f
+
+
+@pytest.mark.parametrize('deco', (null_decorator, wrapping_decorator))
+def test_pipeline_lambda_provider(deco: Callable[..., Any]) -> None:
+    lam = lambda x: str(x)  # noqa: E731
+    lam.__annotations__['x'] = int
+    lam.__annotations__['return'] = str
+    func = deco(lam)
+
+    pipeline = sl.Pipeline([func], params={int: 3})
+    assert pipeline.compute(str) == '3'
+
+
+@pytest.mark.parametrize('deco', (null_decorator, wrapping_decorator))
+def test_pipeline_instance_method_provider(deco: Callable[..., Any]) -> None:
+    class C:
+        @deco
+        def to_string(self, x: int) -> str:
+            return str(x)
+
+    c = C()
+    pipeline = sl.Pipeline([c.to_string], params={int: 3})
+    assert pipeline.compute(str) == '3'
+
+
+# Must be outside of test because of string annotation
+class ClassWithSelfAnnotation:
+    def to_string(self: "ClassWithSelfAnnotation", x: int) -> str:
+        return str(x)
+
+
+def test_pipeline_instance_method_with_self_annotation_provider() -> None:
+    c = ClassWithSelfAnnotation()
+    pipeline = sl.Pipeline([c.to_string], params={int: 3})
+    assert pipeline.compute(str) == '3'
+
+
+@pytest.mark.parametrize('deco', (null_decorator, wrapping_decorator))
+def test_pipeline_class_method_provider(deco: Callable[..., Any]) -> None:
+    class C:
+        @classmethod
+        @deco
+        def to_string(cls, x: int) -> str:
+            return str(x)
+
+    pipeline = sl.Pipeline([C.to_string], params={int: 3})
+    assert pipeline.compute(str) == '3'
+
+
+@pytest.mark.parametrize('deco', (null_decorator, wrapping_decorator))
+def test_pipeline_static_method_provider(deco: Callable[..., Any]) -> None:
+    class C:
+        @staticmethod
+        @deco
+        def to_string(x: int) -> str:
+            return str(x)
+
+    pipeline = sl.Pipeline([C.to_string], params={int: 3})
+    assert pipeline.compute(str) == '3'
+
+
+def test_pipeline_callable_instance_provider() -> None:
+    class C:
+        def __init__(self, y: int) -> None:
+            self.y = y
+
+        def __call__(self, x: int) -> str:
+            return str(x + self.y)
+
+    pipeline = sl.Pipeline([C(4)], params={int: 3})
+    assert pipeline.compute(str) == "7"
+
+
+def test_pipeline_class_init_provider() -> None:
+    class C:
+        def __init__(self, x: int) -> None:
+            self.x = x
+
+    with pytest.raises(TypeError):
+        sl.Pipeline([C], params={int: 3})
+
+
+def test_pipeline_class_new_provider() -> None:
+    class C:
+        def __new__(cls, x: int) -> str:  # type: ignore[misc]
+            return str(x)
+
+    with pytest.raises(TypeError):
+        sl.Pipeline([C], params={int: 3})

@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 from html import escape
-from typing import Any, Optional, Sequence, Tuple, TypeVar, Union
+from typing import Any, Generator, Optional, Sequence, Tuple, TypeVar, Union
 
 from ._utils import key_name
 from .scheduler import DaskScheduler, NaiveScheduler, Scheduler
 from .serialize import json_serialize_task_graph
-from .typing import Graph, Item, Json
+from .typing import Graph, Item, Json, Key
 
 T = TypeVar("T")
 
@@ -71,11 +71,11 @@ class TaskGraph:
         self,
         *,
         graph: Graph,
-        keys: Union[type, Tuple[type, ...], Item[T], Tuple[Item[T], ...]],
+        targets: Union[type, Tuple[type, ...], Item[T], Tuple[Item[T], ...]],
         scheduler: Optional[Scheduler] = None,
     ) -> None:
         self._graph = graph
-        self._keys = keys
+        self._keys = targets
         if scheduler is None:
             try:
                 scheduler = DaskScheduler()
@@ -85,7 +85,7 @@ class TaskGraph:
 
     def compute(
         self,
-        keys: Optional[
+        targets: Optional[
             Union[type, Tuple[type, ...], Item[T], Tuple[Item[T], ...]]
         ] = None,
     ) -> Any:
@@ -94,25 +94,38 @@ class TaskGraph:
 
         Parameters
         ----------
-        keys:
+        targets:
             Optional list of keys to compute. This can be used to override the keys
             stored in the graph instance. Note that the keys must be present in the
             graph as intermediate results, otherwise KeyError is raised.
 
         Returns
         -------
-        If ``keys`` is a single type, returns the single result that was computed.
-        If ``keys`` is a tuple of types, returns a dictionary with type as keys
+        If ``targets`` is a single type, returns the single result that was computed.
+        If ``targets`` is a tuple of types, returns a dictionary with type as keys
         and the corresponding results as values.
-
         """
-        if keys is None:
-            keys = self._keys
-        if isinstance(keys, tuple):
-            results = self._scheduler.get(self._graph, list(keys))
-            return dict(zip(keys, results))
+        if targets is None:
+            targets = self._keys
+        if isinstance(targets, tuple):
+            results = self._scheduler.get(self._graph, list(targets))
+            return dict(zip(targets, results))
         else:
-            return self._scheduler.get(self._graph, [keys])[0]
+            return self._scheduler.get(self._graph, [targets])[0]
+
+    def keys(self) -> Generator[Key, None, None]:
+        """
+        Iterate over all keys of the graph.
+
+        Yields all keys, i.e., the types of values that can be computed or are
+        provided as parameters.
+
+        Returns
+        -------
+        :
+            Iterable over keys.
+        """
+        yield from self._graph.keys()
 
     def visualize(
         self, **kwargs: Any

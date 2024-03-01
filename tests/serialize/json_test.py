@@ -11,7 +11,6 @@ import pytest
 
 import sciline as sl
 from sciline.serialize import json_schema
-from sciline.task_graph import TaskGraph
 from sciline.typing import Json
 
 A = NewType('A', int)
@@ -302,8 +301,7 @@ def test_serialize_param_table() -> None:
 
 def test_serialize_validate_schema() -> None:
     pl = sl.Pipeline([make_int_b, zeros, to_string], params={Int[A]: 3})
-    graph = pl.build(str, handler=sl.HandleAsBuildTimeException())
-    tg = TaskGraph(graph=graph, keys=str)
-    res = tg.serialize()
+    graph = pl.get(str)
+    res = graph.serialize()
     schema = json_schema()
     jsonschema.validate(res, schema)

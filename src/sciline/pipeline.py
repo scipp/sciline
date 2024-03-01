@@ -860,7 +860,7 @@ class Pipeline:
         else:
             graph = self.build(keys, handler=handler)  # type: ignore[arg-type]
         return TaskGraph(
-            graph=graph, keys=keys, scheduler=scheduler  # type: ignore[arg-type]
+            graph=graph, targets=keys, scheduler=scheduler  # type: ignore[arg-type]
         )
 
     @overload
