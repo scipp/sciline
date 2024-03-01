@@ -14,6 +14,7 @@
     },
     "nodes": {
       "type": "array",
+      "description": "Array of nodes in the graph.",
       "items": {
         "type": "object",
         "description": "A node in the graph",
@@ -29,135 +30,56 @@
           "kind": {
             "type": "string",
             "enum": [
-              "data",
-              "data_table_cell",
-              "p_function",
-              "p_parameter",
-              "p_series",
-              "p_table_cell"
+              "function",
+              "parameter"
             ],
             "description": "Indicates what kind of object the node represents. Determines the schema of the node."
+          },
+          "out": {
+            "type": "string",
+            "description": "Fully qualified name of the type of object produced by this node."
           }
         },
         "required": [
           "id",
           "label",
-          "kind"
+          "kind",
+          "out"
         ],
         "allOf": [
           {
             "if": {
               "properties": {
                 "kind": {
-                  "const": "data"
-                }
-              }
-            },
-            "then": {
-              "properties": {
-                "type": {
-                  "type": "string"
-                }
-              },
-              "required": [
-                "type"
-              ]
-            }
-          },
-          {
-            "if": {
-              "properties": {
-                "kind": {
-                  "const": "data_table_cell"
-                }
-              }
-            },
-            "then": {
-              "properties": {
-                "value_type": {
-                  "type": "string"
-                },
-                "row_types": {
-                  "type": "array",
-                  "items": {
-                    "type": "string"
-                  }
-                },
-                "row_indices": {
-                  "type": "array",
-                  "items": {
-                    "type": "string"
-                  }
-                }
-              },
-              "required": [
-                "value_type","row_types","row_indices"
-              ]
-            }
-          },
-          {
-            "if": {
-              "properties": {
-                "kind": {
-                  "const": "p_function"
+                  "const": "function"
                 }
               }
             },
             "then": {
               "properties": {
                 "function": {
-                  "type": "string"
-                }
-              },
-              "required": [
-                "function"
-              ]
-            }
-          },
-          {
-            "if": {
-              "properties": {
-                "kind": {
-                  "const": "p_parameter"
-                }
-              }
-            },
-            "then": {
-              "properties": {
-                "type": {
-                  "type": "string"
-                }
-              },
-              "required": [
-                "type"
-              ]
-            }
-          },
-          {
-            "if": {
-              "properties": {
-                "kind": {
-                  "const": "p_series"
-                }
-              }
-            },
-            "then": {
-              "properties": {
-                "value_type": {
-                  "type": "string"
+                  "type": "string",
+                  "description": "Fully qualified name of the function that implements this node."
                 },
-                "row_dim": {
-                  "type": "string"
-                },
-                "labels": {
+                "args": {
                   "type": "array",
+                  "description": "Ids of edges that connect to the positional arguments of this function in the order of the function arguments.",
                   "items": {
+                    "type": "string"
+                  }
+                },
+                "kwargs": {
+                  "type": "object",
+                  "description": "Edges that connect to the keyword arguments of this function where the property name is the argument name and the property value an edge id.",
+                  "additionalProperties": {
                     "type": "string"
                   }
                 }
               },
               "required": [
-                "value_type","row_dim","labels"
+                "function",
+                "args",
+                "kwargs"
               ]
             }
           }
@@ -166,10 +88,15 @@
     },
     "edges": {
       "type": "array",
-      "description": "A directed edge that connects from 'source' to 'target'.",
+      "description": "Array of directed edges in the graph.",
       "items": {
         "type": "object",
+        "description": "A directed edge that connects from 'source' to 'target'.",
         "properties": {
+          "id": {
+            "type": "string",
+            "description": "Unique id of the edge."
+          },
           "source": {
             "type": "string",
             "description": "Id of the source node of the edge."
@@ -180,6 +107,7 @@
           }
         },
         "required": [
+          "id",
           "source",
           "target"
         ]

@@ -307,13 +307,3 @@ def test_serialize_validate_schema() -> None:
     res = tg.serialize()
     schema = json_schema()
     jsonschema.validate(res, schema)
-
-
-def test_serialize_validate_schema_param_table() -> None:
-    pl = sl.Pipeline([as_float])
-    pl.set_param_table(sl.ParamTable(str, {int: [3, -5]}))
-    graph = pl.build(sl.Series[str, float], handler=sl.HandleAsBuildTimeException())
-    tg = TaskGraph(graph=graph, keys=str)
-    res = tg.serialize()
-    schema = json_schema()
-    jsonschema.validate(res, schema)
