@@ -43,39 +43,6 @@ def as_float(x: int) -> float:
     return 0.5 * x
 
 
-# TODO remove
-def check_serialized_graph(
-    serialized: dict[str, Json], expected_nodes: Any, expected_edges: Any
-) -> None:
-    assert serialized.keys() == {'directed', 'multigraph', 'nodes', 'edges'}
-    assert serialized['directed'] is True
-    assert serialized['multigraph'] is False
-
-    # Use predictable node labels instead of ids to check edges.
-    # This is slightly ambiguous because some labels appear multiple times.
-    def node_label(id_: str) -> str:
-        for n in serialized['nodes']:
-            if n['id'] == id_:  # type: ignore[index]
-                return n['label']  # type: ignore[index, return-value]
-        raise AssertionError("Edge refers to invalid node id")
-
-    edges = [
-        {
-            'source': node_label(edge['source']),  # type: ignore[arg-type]
-            'target': node_label(edge['target']),  # type: ignore[arg-type]
-        }
-        for edge in serialized['edges']
-    ]
-    edges = sorted(edges, key=lambda e: e['source'] + e['target'])
-    assert edges == expected_edges
-
-    # Everything except the node id must be predictable.
-    nodes = sorted(serialized['nodes'], key=lambda n: str(n['label']))
-    for node in nodes:
-        del node['id']  # type: ignore[arg-type]
-    assert nodes == expected_nodes
-
-
 def make_graph_predictable(graph: dict[str, Json]) -> dict[str, Json]:
     """Sort nodes and edges and assign ids according to a fixed scheme.
 
@@ -88,12 +55,13 @@ def make_graph_predictable(graph: dict[str, Json]) -> dict[str, Json]:
     - Ids are counted up from 100 for the sorted edges.
     """
     id_mapping = {}
-    nodes = sorted(deepcopy(graph['nodes']), key=lambda n: n['out'])
+    nodes: Any = sorted(deepcopy(graph['nodes']), key=lambda n: n['out'])
+    edges: Any = deepcopy(graph['edges'])
     for i, node in enumerate(nodes):
         new_id = str(i)
         id_mapping[node['id']] = new_id
         node['id'] = new_id
-    edges = deepcopy(graph['edges'])
+
     for edge in edges:
         edge['source'] = id_mapping[edge['source']]
         edge['target'] = id_mapping[edge['target']]
@@ -102,6 +70,7 @@ def make_graph_predictable(graph: dict[str, Json]) -> dict[str, Json]:
         new_id = str(i)
         id_mapping[edge['id']] = new_id
         edge['id'] = new_id
+
     for node in nodes:
         if node['kind'] == 'function':
             node['args'] = [id_mapping[arg] for arg in node['args']]
@@ -178,100 +147,157 @@ def test_serialize() -> None:
     assert res == expected_serialized_graph
 
 
-# Result of serializing a task graph with a param table, sorted by label.
-expected_serialized_nodes_param_table = [
+def fn_w_kwonlyargs(*, x: int) -> float:
+    return 0.5 * x
+
+
+# Ids correspond to the result of assign_predictable_ids
+expected_serialized_kwonlyargs_nodes = [
     {
-        'label': 'Series[str, float]',
-        'kind': 'data',
-        'type': 'sciline.series.Series[builtins.str, builtins.float]',
+        'id': '0',
+        'label': 'fn_w_kwonlyargs',
+        'kind': 'function',
+        'function': 'json_test.fn_w_kwonlyargs',
+        'out': 'builtins.float',
+        'args': [],
+        'kwargs': {'x': '100'},
     },
     {
-        'label': 'as_float',
-        'kind': 'p_function',
-        'function': 'json_test.as_float',
-    },
-    {
-        'label': 'as_float',
-        'kind': 'p_function',
-        'function': 'json_test.as_float',
-    },
-    {
-        'label': 'float(str:0)',
-        'kind': 'data_table_cell',
-        'value_type': 'builtins.float',
-        'row_types': ['builtins.str'],
-        'row_indices': ['0'],
-    },
-    {
-        'label': 'float(str:1)',
-        'kind': 'data_table_cell',
-        'value_type': 'builtins.float',
-        'row_types': ['builtins.str'],
-        'row_indices': ['1'],
-    },
-    {
-        'label': 'int(str:0)',
-        'kind': 'data_table_cell',
-        'value_type': 'builtins.int',
-        'row_types': ['builtins.str'],
-        'row_indices': ['0'],
-    },
-    {
-        'label': 'int(str:1)',
-        'kind': 'data_table_cell',
-        'value_type': 'builtins.int',
-        'row_types': ['builtins.str'],
-        'row_indices': ['1'],
-    },
-    {
-        'label': 'provide_series[str, float]',
-        'kind': 'p_series',
-        'value_type': 'builtins.float',
-        'row_dim': 'builtins.str',
-        'labels': ['0', '1'],
-    },
-    {
-        'label': 'table_cell(int(str:0))',
-        'kind': 'p_table_cell',
-    },
-    {
-        'label': 'table_cell(int(str:1))',
-        'kind': 'p_table_cell',
+        'id': '1',
+        'label': 'int',
+        'kind': 'parameter',
+        'out': 'builtins.int',
     },
 ]
-expected_serialized_edges_param_table = [
-    {'source': 'as_float', 'target': 'float(str:0)'},
-    {'source': 'as_float', 'target': 'float(str:1)'},
-    {'source': 'float(str:0)', 'target': 'provide_series[str, float]'},
-    {'source': 'float(str:1)', 'target': 'provide_series[str, float]'},
-    {'source': 'int(str:0)', 'target': 'as_float'},
-    {'source': 'int(str:1)', 'target': 'as_float'},
-    {'source': 'provide_series[str, float]', 'target': 'Series[str, float]'},
-    {'source': 'table_cell(int(str:0))', 'target': 'int(str:0)'},
-    {'source': 'table_cell(int(str:1))', 'target': 'int(str:1)'},
+expected_serialized_kwonlyargs_edges = [
+    {'id': '100', 'source': '1', 'target': '0'},
 ]
+expected_serialized_kwonlyargs_graph = {
+    'directed': True,
+    'multigraph': False,
+    'nodes': expected_serialized_kwonlyargs_nodes,
+    'edges': expected_serialized_kwonlyargs_edges,
+}
+
+
+@pytest.mark.skipif(sys.version_info < (3, 10), reason="requires python3.10 or higher")
+def test_serialize_kwonlyargs() -> None:
+    pl = sl.Pipeline([fn_w_kwonlyargs], params={int: 3})
+    graph = pl.get(float)
+    res = graph.serialize()
+    res = make_graph_predictable(res)
+    assert res == expected_serialized_kwonlyargs_graph
+
+
+def repeated_arg(a: str, b: str) -> list[str]:
+    return [a, b]
+
+
+# Ids correspond to the result of assign_predictable_ids
+expected_serialized_repeated_arg_nodes = [
+    {
+        'id': '0',
+        'label': 'repeated_arg',
+        'kind': 'function',
+        'function': 'json_test.repeated_arg',
+        'out': 'builtins.list[builtins.str]',
+        'args': ['100', '101'],
+        'kwargs': {},
+    },
+    {
+        'id': '1',
+        'label': 'str',
+        'kind': 'parameter',
+        'out': 'builtins.str',
+    },
+]
+expected_serialized_repeated_arg_edges = [
+    # The edge is repeated
+    {'id': '100', 'source': '1', 'target': '0'},
+    {'id': '101', 'source': '1', 'target': '0'},
+]
+expected_serialized_repeated_arg_graph = {
+    'directed': True,
+    'multigraph': False,
+    'nodes': expected_serialized_repeated_arg_nodes,
+    'edges': expected_serialized_repeated_arg_edges,
+}
+
+
+@pytest.mark.skipif(sys.version_info < (3, 10), reason="requires python3.10 or higher")
+def test_serialize_repeated_arg() -> None:
+    pl = sl.Pipeline([repeated_arg], params={str: 'abc'})
+    graph = pl.get(list[str])
+    res = graph.serialize()
+    res = make_graph_predictable(res)
+    assert res == expected_serialized_repeated_arg_graph
+
+
+def repeated_arg_konlywarg(a: str, *, b: str) -> list[str]:
+    return [a, b]
+
+
+def repeated_konlywargs(*, a: int, b: int) -> str:
+    return str(a + b)
+
+
+# Ids correspond to the result of assign_predictable_ids
+expected_serialized_repeated_konlywarg_nodes = [
+    {
+        'id': '0',
+        'label': 'int',
+        'kind': 'parameter',
+        'out': 'builtins.int',
+    },
+    {
+        'id': '1',
+        'label': 'repeated_arg_konlywarg',
+        'kind': 'function',
+        'function': 'json_test.repeated_arg_konlywarg',
+        'out': 'builtins.list[builtins.str]',
+        'args': ['102'],
+        'kwargs': {'b': '103'},
+    },
+    {
+        'id': '2',
+        'label': 'repeated_konlywargs',
+        'kind': 'function',
+        'function': 'json_test.repeated_konlywargs',
+        'out': 'builtins.str',
+        'args': [],
+        'kwargs': {'a': '100', 'b': '101'},
+    },
+]
+expected_serialized_repeated_konlywarg_edges = [
+    # The edges are repeated
+    {'id': '100', 'source': '0', 'target': '2'},
+    {'id': '101', 'source': '0', 'target': '2'},
+    {'id': '102', 'source': '2', 'target': '1'},
+    {'id': '103', 'source': '2', 'target': '1'},
+]
+expected_serialized_repeated_konlywarg_graph = {
+    'directed': True,
+    'multigraph': False,
+    'nodes': expected_serialized_repeated_konlywarg_nodes,
+    'edges': expected_serialized_repeated_konlywarg_edges,
+}
+
+
+@pytest.mark.skipif(sys.version_info < (3, 10), reason="requires python3.10 or higher")
+def test_serialize_repeated_konlywarg() -> None:
+    pl = sl.Pipeline([repeated_arg_konlywarg, repeated_konlywargs], params={int: 4})
+    graph = pl.get(list[str])
+    res = graph.serialize()
+    res = make_graph_predictable(res)
+    assert res == expected_serialized_repeated_konlywarg_graph
 
 
 def test_serialize_param_table() -> None:
     pl = sl.Pipeline([as_float])
     pl.set_param_table(sl.ParamTable(str, {int: [3, -5]}))
-    graph = pl.build(sl.Series[str, float], handler=sl.HandleAsBuildTimeException())
-    tg = TaskGraph(graph=graph, keys=sl.Series[str, float])
-    res = tg.serialize()
-    check_serialized_graph(
-        res,
-        expected_serialized_nodes_param_table,
-        expected_serialized_edges_param_table,
-    )
-
-
-def test_serialize_ids_are_unique() -> None:
-    pl = sl.Pipeline([make_int_b, zeros, to_string], params={Int[A]: 3})
-    graph = pl.build(str, handler=sl.HandleAsBuildTimeException())
-    tg = TaskGraph(graph=graph, keys=str)
-    res = tg.serialize()
-    node_ids = [node['id'] for node in res['nodes']]
-    assert len(node_ids) == len(set(node_ids))
+    graph = pl.get(sl.Series[str, float])
+    with pytest.raises(ValueError):
+        graph.serialize()
 
 
 def test_serialize_validate_schema() -> None:
