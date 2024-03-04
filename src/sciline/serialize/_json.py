@@ -79,7 +79,7 @@ def _serialize_param(
         'label': key_name(key),
         'out': key_full_qualname(key),
     }
-    return node, []
+    return node, []  # type: ignore[return-value]
 
 
 def _serialize_function(
@@ -109,7 +109,7 @@ def _serialize_function(
         'kwargs': kwargs,
     }
 
-    return node, edges
+    return node, edges  # type: ignore[return-value]
 
 
 def _serialize_edge(
