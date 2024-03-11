@@ -53,8 +53,16 @@ def make_graph_predictable(graph: dict[str, Json]) -> dict[str, Json]:
     - Sorted by ``source + target`` *after* remapping the node ids.
     - Ids are counted up from 100 for the sorted edges.
     """
+
+    def node_sort_key(node: dict[str, Any]) -> str:
+        if node['kind'] == 'data':
+            return node['type'] + 'data'
+        out_edge = next(e for e in graph['edges'] if e['source'] == node['id'])
+        data_node = next(n for n in graph['nodes'] if n['id'] == out_edge['target'])
+        return data_node['type'] + 'function'
+
     id_mapping = {}
-    nodes: Any = sorted(deepcopy(graph['nodes']), key=lambda n: n['out'])
+    nodes: Any = sorted(deepcopy(graph['nodes']), key=node_sort_key)
     edges: Any = deepcopy(graph['edges'])
     for i, node in enumerate(nodes):
         new_id = str(i)
@@ -82,52 +90,76 @@ def make_graph_predictable(graph: dict[str, Json]) -> dict[str, Json]:
 expected_serialized_nodes = [
     {
         'id': '0',
-        'label': 'to_string',
-        'kind': 'function',
-        'function': 'json_test.to_string',
-        'out': 'builtins.str',
-        'args': ['103', '102'],
-        'kwargs': {},
+        'label': 'str',
+        'kind': 'data',
+        'type': 'builtins.str',
     },
     {
         'id': '1',
-        'label': 'Int[A]',
-        'kind': 'parameter',
-        'out': 'json_test.Int[json_test.A]',
+        'label': 'to_string',
+        'kind': 'function',
+        'function': 'json_test.to_string',
+        'args': ['106', '104'],
+        'kwargs': {},
     },
     {
         'id': '2',
+        'label': 'Int[A]',
+        'kind': 'data',
+        'type': 'json_test.Int[json_test.A]',
+    },
+    {
+        'id': '3',
+        'label': 'Int[B]',
+        'kind': 'data',
+        'type': 'json_test.Int[json_test.B]',
+    },
+    {
+        'id': '4',
         'label': 'make_int_b',
         'kind': 'function',
         'function': 'json_test.make_int_b',
-        'out': 'json_test.Int[json_test.B]',
         'args': [],
         'kwargs': {},
     },
     {
-        'id': '3',
+        'id': '5',
+        'label': 'List[A]',
+        'kind': 'data',
+        'type': 'json_test.List[json_test.A]',
+    },
+    {
+        'id': '6',
         'label': 'zeros',
         'kind': 'function',
         'function': 'json_test.zeros',
-        'out': 'json_test.List[json_test.A]',
-        'args': ['100'],
+        'args': ['101'],
         'kwargs': {},
     },
     {
-        'id': '4',
+        'id': '7',
+        'label': 'List[B]',
+        'kind': 'data',
+        'type': 'json_test.List[json_test.B]',
+    },
+    {
+        'id': '8',
         'label': 'zeros',
         'kind': 'function',
         'function': 'json_test.zeros',
-        'out': 'json_test.List[json_test.B]',
-        'args': ['101'],
+        'args': ['102'],
         'kwargs': {},
     },
 ]
 expected_serialized_edges = [
-    {'id': '100', 'source': '1', 'target': '3'},
-    {'id': '101', 'source': '2', 'target': '4'},
-    {'id': '102', 'source': '3', 'target': '0'},
-    {'id': '103', 'source': '4', 'target': '0'},
+    {'id': '100', 'source': '1', 'target': '0'},
+    {'id': '101', 'source': '2', 'target': '6'},
+    {'id': '102', 'source': '3', 'target': '8'},
+    {'id': '103', 'source': '4', 'target': '3'},
+    {'id': '104', 'source': '5', 'target': '1'},
+    {'id': '105', 'source': '6', 'target': '5'},
+    {'id': '106', 'source': '7', 'target': '1'},
+    {'id': '107', 'source': '8', 'target': '7'},
 ]
 expected_serialized_graph = {
     'directed': True,
@@ -154,22 +186,28 @@ def fn_w_kwonlyargs(*, x: int) -> float:
 expected_serialized_kwonlyargs_nodes = [
     {
         'id': '0',
-        'label': 'fn_w_kwonlyargs',
-        'kind': 'function',
-        'function': 'json_test.fn_w_kwonlyargs',
-        'out': 'builtins.float',
-        'args': [],
-        'kwargs': {'x': '100'},
+        'label': 'float',
+        'kind': 'data',
+        'type': 'builtins.float',
     },
     {
         'id': '1',
+        'label': 'fn_w_kwonlyargs',
+        'kind': 'function',
+        'function': 'json_test.fn_w_kwonlyargs',
+        'args': [],
+        'kwargs': {'x': '101'},
+    },
+    {
+        'id': '2',
         'label': 'int',
-        'kind': 'parameter',
-        'out': 'builtins.int',
+        'kind': 'data',
+        'type': 'builtins.int',
     },
 ]
 expected_serialized_kwonlyargs_edges = [
     {'id': '100', 'source': '1', 'target': '0'},
+    {'id': '101', 'source': '2', 'target': '1'},
 ]
 expected_serialized_kwonlyargs_graph = {
     'directed': True,
@@ -196,24 +234,30 @@ def repeated_arg(a: str, b: str) -> list[str]:
 expected_serialized_repeated_arg_nodes = [
     {
         'id': '0',
-        'label': 'repeated_arg',
-        'kind': 'function',
-        'function': 'json_test.repeated_arg',
-        'out': 'builtins.list[builtins.str]',
-        'args': ['100', '101'],
-        'kwargs': {},
+        'label': 'list[str]',
+        'kind': 'data',
+        'type': 'builtins.list[builtins.str]',
     },
     {
         'id': '1',
+        'label': 'repeated_arg',
+        'kind': 'function',
+        'function': 'json_test.repeated_arg',
+        'args': ['101', '102'],
+        'kwargs': {},
+    },
+    {
+        'id': '2',
         'label': 'str',
-        'kind': 'parameter',
-        'out': 'builtins.str',
+        'kind': 'data',
+        'type': 'builtins.str',
     },
 ]
 expected_serialized_repeated_arg_edges = [
-    # The edge is repeated
     {'id': '100', 'source': '1', 'target': '0'},
-    {'id': '101', 'source': '1', 'target': '0'},
+    # The edge is repeated and disambiguated by the `args` of the function node.
+    {'id': '101', 'source': '2', 'target': '1'},
+    {'id': '102', 'source': '2', 'target': '1'},
 ]
 expected_serialized_repeated_arg_graph = {
     'directed': True,
@@ -232,63 +276,74 @@ def test_serialize_repeated_arg() -> None:
     assert res == expected_serialized_repeated_arg_graph
 
 
-def repeated_arg_konlywarg(a: str, *, b: str) -> list[str]:
+def repeated_arg_kwonlyarg(a: str, *, b: str) -> list[str]:
     return [a, b]
 
 
-def repeated_konlywargs(*, a: int, b: int) -> str:
-    return str(a + b)
+def repeated_kwonlyargs(*, x: int, b: int) -> str:
+    return str(x + b)
 
 
 # Ids correspond to the result of assign_predictable_ids
-expected_serialized_repeated_konlywarg_nodes = [
+expected_serialized_repeated_kwonlyarg_nodes = [
     {
         'id': '0',
         'label': 'int',
-        'kind': 'parameter',
-        'out': 'builtins.int',
+        'kind': 'data',
+        'type': 'builtins.int',
     },
     {
         'id': '1',
-        'label': 'repeated_arg_konlywarg',
-        'kind': 'function',
-        'function': 'json_test.repeated_arg_konlywarg',
-        'out': 'builtins.list[builtins.str]',
-        'args': ['102'],
-        'kwargs': {'b': '103'},
+        'label': 'list[str]',
+        'kind': 'data',
+        'type': 'builtins.list[builtins.str]',
     },
     {
         'id': '2',
-        'label': 'repeated_konlywargs',
+        'label': 'repeated_arg_kwonlyarg',
         'kind': 'function',
-        'function': 'json_test.repeated_konlywargs',
-        'out': 'builtins.str',
+        'function': 'json_test.repeated_arg_kwonlyarg',
+        'args': ['103'],
+        'kwargs': {'b': '104'},
+    },
+    {
+        'id': '3',
+        'label': 'str',
+        'kind': 'data',
+        'type': 'builtins.str',
+    },
+    {
+        'id': '4',
+        'label': 'repeated_kwonlyargs',
+        'kind': 'function',
+        'function': 'json_test.repeated_kwonlyargs',
         'args': [],
-        'kwargs': {'a': '100', 'b': '101'},
+        'kwargs': {'x': '100', 'b': '101'},
     },
 ]
-expected_serialized_repeated_konlywarg_edges = [
-    # The edges are repeated
-    {'id': '100', 'source': '0', 'target': '2'},
-    {'id': '101', 'source': '0', 'target': '2'},
+expected_serialized_repeated_kwonlyarg_edges = [
+    {'id': '100', 'source': '0', 'target': '4'},
+    {'id': '101', 'source': '0', 'target': '4'},
     {'id': '102', 'source': '2', 'target': '1'},
-    {'id': '103', 'source': '2', 'target': '1'},
+    {'id': '103', 'source': '3', 'target': '2'},
+    {'id': '104', 'source': '3', 'target': '2'},
+    {'id': '105', 'source': '4', 'target': '3'},
 ]
-expected_serialized_repeated_konlywarg_graph = {
+expected_serialized_repeated_kwonlyarg_graph = {
     'directed': True,
     'multigraph': False,
-    'nodes': expected_serialized_repeated_konlywarg_nodes,
-    'edges': expected_serialized_repeated_konlywarg_edges,
+    'nodes': expected_serialized_repeated_kwonlyarg_nodes,
+    'edges': expected_serialized_repeated_kwonlyarg_edges,
 }
 
 
 @pytest.mark.skipif(sys.version_info < (3, 10), reason="requires python3.10 or higher")
 def test_serialize_repeated_konlywarg() -> None:
-    pl = sl.Pipeline([repeated_arg_konlywarg, repeated_konlywargs], params={int: 4})
+    pl = sl.Pipeline([repeated_arg_kwonlyarg, repeated_kwonlyargs], params={int: 4})
     graph = pl.get(list[str])
     res = graph.serialize()
     res = make_graph_predictable(res)
-    assert res == expected_serialized_repeated_konlywarg_graph
+    assert res == expected_serialized_repeated_kwonlyarg_graph
 
 
 def test_serialize_param_table() -> None:

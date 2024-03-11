@@ -31,20 +31,15 @@
             "type": "string",
             "enum": [
               "function",
-              "parameter"
+              "data"
             ],
             "description": "Indicates what kind of object the node represents. Determines the schema of the node."
-          },
-          "out": {
-            "type": "string",
-            "description": "Fully qualified name of the type of object produced by this node."
           }
         },
         "required": [
           "id",
           "label",
-          "kind",
-          "out"
+          "kind"
         ],
         "allOf": [
           {
@@ -80,6 +75,26 @@
                 "function",
                 "args",
                 "kwargs"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "data"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "description": "Fully qualified name of the Python (domain) type representing this node."
+                }
+              },
+              "required": [
+                "type"
               ]
             }
           }
