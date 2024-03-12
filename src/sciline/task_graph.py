@@ -5,6 +5,7 @@ from __future__ import annotations
 from html import escape
 from typing import Any, Generator, Optional, Sequence, Tuple, TypeVar, Union
 
+from ._provider import ArgSpec, Provider
 from .scheduler import DaskScheduler, NaiveScheduler, Scheduler
 from .typing import Graph, Item, Key
 from .utils import keyname
@@ -81,6 +82,40 @@ class TaskGraph:
             except ImportError:
                 scheduler = NaiveScheduler()
         self._scheduler = scheduler
+
+    def to_networkx(self) -> Any:
+        import networkx as nx
+
+        nx_graph = nx.DiGraph()
+        for key, provider in self._graph.items():
+            for dep in provider.arg_spec.args:
+                nx_graph.add_edge(dep, key)
+            nx_graph.nodes[key]['provider'] = provider
+            nx_graph.nodes[key]['orig_key'] = key
+        nx_graph.graph['keys'] = self._keys
+        return nx_graph
+
+    @staticmethod
+    def from_networkx(nx_graph: Any) -> TaskGraph:
+        graph = {}
+        for key in nx_graph.nodes:
+            node = nx_graph.nodes[key]
+            input_nodes = list(nx_graph.predecessors(key))
+            if (value := node.get('value', None)) is not None:
+                graph[key] = Provider.parameter(value)
+            elif (func := node.get('reduce', None)) is not None:
+                new_spec = ArgSpec.from_args(*input_nodes)
+                graph[key] = Provider(func=func, arg_spec=new_spec, kind='function')
+            elif (provider := node.get('provider', None)) is not None:
+                new_key = {nx_graph.nodes[n].get('orig_key'): n for n in input_nodes}
+                graph[key] = Provider(
+                    func=provider.func,
+                    arg_spec=provider.arg_spec.map_keys(new_key.get),
+                    kind='function',
+                )
+            else:
+                raise ValueError(f'Node {key} has no provider or value')
+        return TaskGraph(graph=graph, targets=nx_graph.graph['keys'])
 
     def compute(
         self,
