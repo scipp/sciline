@@ -103,7 +103,7 @@ def _serialize_function(
     fn_node = {
         'id': id_gen.function_node_id(key),
         'kind': 'function',
-        'label': provider_name(provider),
+        'label': _provider_name(provider),
         'function': provider_full_qualname(provider),
         'args': args,
         'kwargs': kwargs,
@@ -131,6 +131,18 @@ def _serialize_edge_fn_to_data(
         'source': id_gen.function_node_id(source),
         'target': id_gen.data_node_id(target),
     }
+
+
+def _provider_name(provider: Provider) -> str:
+    try:
+        return provider_name(provider)
+    except AttributeError:
+        # E.g. with callable objects:
+        # AttributeError: '<class>' object has no attribute '__name__'
+        raise ValueError(
+            f"Unsupported provider for serializing graph: '{provider}' "
+            'Callable objects cannot be serialized.'
+        )
 
 
 class _IdGenerator:
