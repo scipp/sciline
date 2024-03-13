@@ -346,6 +346,64 @@ def test_serialize_repeated_konlywarg() -> None:
     assert res == expected_serialized_repeated_kwonlyarg_graph
 
 
+# Ids correspond to the result of assign_predictable_ids
+expected_serialized_lambda_nodes = [
+    {
+        'id': '0',
+        'label': 'float',
+        'kind': 'data',
+        'type': 'builtins.float',
+    },
+    {
+        'id': '1',
+        'label': '<lambda>',
+        'kind': 'function',
+        'function': 'json_test.test_serialize_lambda.<locals>.<lambda>',
+        'args': ['101'],
+        'kwargs': {},
+    },
+    {
+        'id': '2',
+        'label': 'int',
+        'kind': 'data',
+        'type': 'builtins.int',
+    },
+]
+expected_serialized_lambda_edges = [
+    {'id': '100', 'source': '1', 'target': '0'},
+    {'id': '101', 'source': '2', 'target': '1'},
+]
+expected_serialized_lambda_graph = {
+    'directed': True,
+    'multigraph': False,
+    'nodes': expected_serialized_lambda_nodes,
+    'edges': expected_serialized_lambda_edges,
+}
+
+
+@pytest.mark.skipif(sys.version_info < (3, 10), reason="requires python3.10 or higher")
+def test_serialize_lambda() -> None:
+    lam = lambda x: float(x)  # noqa: E731
+    lam.__annotations__['x'] = int
+    lam.__annotations__['return'] = float
+    pl = sl.Pipeline((lam,), params={int: 4})
+    graph = pl.get(float)
+    res = graph.serialize()
+    res = make_graph_predictable(res)
+    assert res == expected_serialized_lambda_graph
+
+
+def test_serialize_does_not_support_callable_objects() -> None:
+    class C:
+        def __call__(self, x: int) -> float:
+            return float(x)
+
+    pl = sl.Pipeline((C(),), params={int: 4})
+    graph = pl.get(float)
+    with pytest.raises(ValueError):
+        graph.serialize()
+
+
 def test_serialize_param_table() -> None:
     pl = sl.Pipeline([as_float])
     pl.set_param_table(sl.ParamTable(str, {int: [3, -5]}))
