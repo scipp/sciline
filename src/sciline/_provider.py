@@ -238,7 +238,7 @@ class ProviderLocation:
     @classmethod
     def from_function(cls, func: ToProvider) -> ProviderLocation:
         try:
-            name = func.__name__
+            name = func.__qualname__
         except AttributeError:
             name = str(func)
         return cls(name=name, module=_module_name(func))

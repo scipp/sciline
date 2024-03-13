@@ -5,9 +5,10 @@ from __future__ import annotations
 from html import escape
 from typing import Any, Generator, Optional, Sequence, Tuple, TypeVar, Union
 
+from ._utils import key_name
 from .scheduler import DaskScheduler, NaiveScheduler, Scheduler
-from .typing import Graph, Item, Key
-from .utils import keyname
+from .serialize import json_serialize_task_graph
+from .typing import Graph, Item, Json, Key
 
 T = TypeVar("T")
 
@@ -141,10 +142,23 @@ class TaskGraph:
 
         return to_graphviz(self._graph, **kwargs)
 
+    def serialize(self) -> dict[str, Json]:
+        """Serialize the graph to JSON.
+
+        See the user guide on
+        `Serializing Providers <../../user-guide/serialization.rst>`_.
+
+        Returns
+        -------
+        :
+            A JSON object representing the graph.
+        """
+        return json_serialize_task_graph(self._graph)
+
     def _repr_html_(self) -> str:
         leafs = sorted(
             [
-                escape(keyname(key))
+                escape(key_name(key))
                 for key in (
                     self._keys if isinstance(self._keys, tuple) else [self._keys]
                 )
@@ -152,7 +166,7 @@ class TaskGraph:
         )
         roots = sorted(
             {
-                escape(keyname(key))
+                escape(key_name(key))
                 for key, provider in self._graph.items()
                 if provider.kind != 'function'
             }

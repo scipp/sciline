@@ -53,6 +53,8 @@ addopts = """
 testpaths = "tests"
 filterwarnings = [
   "error",
+    # From jsonschema
+    "ignore:datetime.datetime.utcfromtimestamp:DeprecationWarning",
 ]
 
 [tool.bandit]

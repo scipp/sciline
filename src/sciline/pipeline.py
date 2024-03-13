@@ -28,6 +28,7 @@ from typing import (
 from sciline.task_graph import TaskGraph
 
 from ._provider import ArgSpec, Provider, ProviderLocation, ToProvider
+from ._utils import key_name
 from .display import pipeline_html_repr
 from .domain import Scope, ScopeTwoParams
 from .handler import (
@@ -40,7 +41,6 @@ from .param_table import ParamTable
 from .scheduler import Scheduler
 from .series import Series
 from .typing import Graph, Item, Key, Label, get_optional, get_union
-from .utils import keyname
 
 T = TypeVar('T')
 KeyType = TypeVar('KeyType', bound=Key)
@@ -584,12 +584,12 @@ class Pipeline:
                                 str,
                                 (
                                     'Note that ',
-                                    keyname(origin[typevars_in_expression]),
+                                    key_name(origin[typevars_in_expression]),
                                     ' has constraints ',
                                     (
                                         {
-                                            keyname(tv): tuple(
-                                                map(keyname, tv.__constraints__)
+                                            key_name(tv): tuple(
+                                                map(key_name, tv.__constraints__)
                                             )
                                             for tv in typevars_in_expression
                                         }

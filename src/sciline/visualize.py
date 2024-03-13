@@ -83,18 +83,16 @@ def to_graphviz(
 
 
 def _to_subgraphs(graph: FormattedGraph) -> Dict[str, FormattedGraph]:
-    def get_subgraph_name(name: str) -> str:
-        sgname = name.split('[')[0]
-        if sgname == 'Series':
+    def get_subgraph_name(name: str, kind: str) -> str:
+        if kind == 'series':
             # Example: Series[RowId, Material[Country]] -> RowId, Material[Country]
             return name.partition('[')[-1].rpartition(']')[0]
-        return sgname
+        return name
 
     subgraphs: Dict[str, FormattedGraph] = {}
     for p, formatted_p in graph.items():
-        subgraph_name = get_subgraph_name(formatted_p.ret.name)
-        if subgraph_name not in subgraphs:
-            subgraphs[subgraph_name] = {}
+        subgraph_name = get_subgraph_name(formatted_p.ret.name, formatted_p.kind)
+        subgraphs.setdefault(subgraph_name, {})
         subgraphs[subgraph_name][p] = formatted_p
     return subgraphs
 

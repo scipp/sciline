@@ -17,7 +17,7 @@
    scheduler.Scheduler
    scheduler.DaskScheduler
    scheduler.NaiveScheduler
-   task_graph.TaskGraph
+   TaskGraph
 ```
 
 ## Exceptions
@@ -41,5 +41,6 @@
    :template: module-template.rst
    :recursive:
 
+   serialize
    sphinxext
 ```
