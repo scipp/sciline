@@ -108,10 +108,12 @@ class TaskGraph:
                 graph[key] = Provider(func=func, arg_spec=new_spec, kind='function')
             elif (provider := node.get('provider', None)) is not None:
                 new_key = {nx_graph.nodes[n].get('orig_key'): n for n in input_nodes}
+                if None in new_key:
+                    arg_spec = ArgSpec.from_args(*input_nodes)
+                else:
+                    arg_spec = provider.arg_spec.map_keys(new_key.get)
                 graph[key] = Provider(
-                    func=provider.func,
-                    arg_spec=provider.arg_spec.map_keys(new_key.get),
-                    kind='function',
+                    func=provider.func, arg_spec=arg_spec, kind='function'
                 )
             else:
                 raise ValueError(f'Node {key} has no provider or value')
