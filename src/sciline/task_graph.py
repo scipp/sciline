@@ -89,9 +89,8 @@ class TaskGraph:
         nx_graph = nx.DiGraph()
         for key, provider in self._graph.items():
             for dep in provider.arg_spec.args:
-                nx_graph.add_edge(dep, key)
+                nx_graph.add_edge(dep, key, orig_key=dep)
             nx_graph.nodes[key]['provider'] = provider
-            nx_graph.nodes[key]['orig_key'] = key
         nx_graph.graph['keys'] = self._keys
         return nx_graph
 
@@ -101,17 +100,21 @@ class TaskGraph:
         for key in nx_graph.nodes:
             node = nx_graph.nodes[key]
             input_nodes = list(nx_graph.predecessors(key))
+            input_edges = list(nx_graph.in_edges(key, data=True))
+            orig_keys = [edge[2].get('orig_key', None) for edge in input_edges]
             if (value := node.get('value', None)) is not None:
                 graph[key] = Provider.parameter(value)
             elif (func := node.get('reduce', None)) is not None:
                 new_spec = ArgSpec.from_args(*input_nodes)
                 graph[key] = Provider(func=func, arg_spec=new_spec, kind='function')
             elif (provider := node.get('provider', None)) is not None:
-                new_key = {nx_graph.nodes[n].get('orig_key'): n for n in input_nodes}
-                if None in new_key:
-                    arg_spec = ArgSpec.from_args(*input_nodes)
-                else:
-                    arg_spec = provider.arg_spec.map_keys(new_key.get)
+                if input_nodes == orig_keys:
+                    graph[key] = provider
+                    continue
+                if None in orig_keys:
+                    raise ValueError(f'Node {key} has no orig_key')
+                new_key = {orig_key: n for n, orig_key in zip(input_nodes, orig_keys)}
+                arg_spec = provider.arg_spec.map_keys(new_key.get)
                 graph[key] = Provider(
                     func=provider.func, arg_spec=arg_spec, kind='function'
                 )
