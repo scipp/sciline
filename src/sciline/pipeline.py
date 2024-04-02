@@ -127,6 +127,8 @@ def _find_all_paths(
         return []
     paths = []
     for node in dependencies[start]:
+        if start == node:
+            continue
         for path in _find_all_paths(dependencies, node, end):
             paths.append([start] + path)
     return paths
