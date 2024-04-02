@@ -719,3 +719,23 @@ def test_set_param_series_sets_up_pipeline_so_derived_series_can_be_computed() -
     pl = sl.Pipeline((to_str,))
     pl.set_param_series(int, ints)
     assert pl.compute(sl.Series[int, str]) == sl.Series(int, {1: '1', 2: '2', 3: '3'})
+
+
+def test_multiple_param_series_can_be_broadcast() -> None:
+    ints = [1, 2, 3]
+    floats = [1.0, 2.0]
+
+    def to_str(x: int, y: float) -> str:
+        return str(x) + str(y)
+
+    pl = sl.Pipeline((to_str,))
+    pl.set_param_series(int, ints)
+    pl.set_param_series(float, floats)
+    assert pl.compute(sl.Series[int, sl.Series[float, str]]) == sl.Series(
+        int,
+        {
+            1: sl.Series(float, {1.0: '11.0', 2.0: '12.0'}),
+            2: sl.Series(float, {1.0: '21.0', 2.0: '22.0'}),
+            3: sl.Series(float, {1.0: '31.0', 2.0: '32.0'}),
+        },
+    )
