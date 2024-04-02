@@ -19,6 +19,7 @@ test:
   requires:
     - dask
     - python-graphviz
+    - jsonschema
     - numpy
     - pytest
   source_files:
