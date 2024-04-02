@@ -2,5 +2,6 @@
 # Do not make an environment from this file, use test.txt instead!
 
 graphviz
+jsonschema
 numpy
 pytest

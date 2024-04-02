@@ -106,7 +106,7 @@ def _format_new_type(annotation: Any, prefix: str, aliases: dict[str, str]) -> s
 
 def _is_type_alias_type(annotation: Any) -> bool:
     try:
-        from typing import TypeAliasType  # type: ignore[attr-defined]
+        from typing import TypeAliasType  # type: ignore[attr-defined, unused-ignore]
 
         return isinstance(annotation, TypeAliasType)
     except ImportError:
