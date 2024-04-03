@@ -21,6 +21,7 @@ class DependencyGraph:
             self.add(provider)
 
     def add(self, provider):
+        # TODO If provider is generic, add multiple nodes/edges
         if not isinstance(provider, Provider):
             provider = Provider.from_function(provider)
         return_type = provider.deduce_key()
@@ -40,6 +41,8 @@ class DependencyGraph:
 
     def __setitem__(self, key: Key, value: DependencyGraph | Any) -> None:
         if isinstance(value, DependencyGraph):
+            # TODO If key is generic, should we support multi-sink case and update all?
+            # Would imply that we need the same for __getitem__.
             # key must be a unique sink node in value
             sinks = [n for n in value._graph.nodes if value._graph.out_degree(n) == 0]
             if len(sinks) != 1:
