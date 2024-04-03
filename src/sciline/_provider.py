@@ -218,11 +218,6 @@ class ArgSpec:
         yield from self._args.values()
         yield from self._kwargs.values()
 
-    def items(self) -> Generator[tuple[str, Key], None, None]:
-        """Iterator over argument names and types."""
-        yield from self._args.items()
-        yield from self._kwargs.items()
-
     def bind_type_vars(self, bound: dict[TypeVar, Key]) -> ArgSpec:
         """Bind concrete types to TypeVars."""
         return self.map_keys(lambda arg: _bind_free_typevars(arg, bound=bound))

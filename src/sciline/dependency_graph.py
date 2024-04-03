@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from types import UnionType
-from typing import Any, get_args
+from typing import Any, Union, get_args, get_origin
 
 import networkx as nx
 
@@ -45,13 +45,13 @@ class DependencyGraph:
         else:
             self._graph.add_node(return_type)
         self._graph.nodes[return_type]['provider'] = provider
-        for name, dep in provider.arg_spec.items():
-            if isinstance(dep, UnionType):
+        for dep in provider.arg_spec.keys():
+            if isinstance(dep, UnionType) or get_origin(dep) == Union:
                 for arg in get_args(dep):
                     # Same key for all edges
-                    self._graph.add_edge(arg, return_type, key=name)
+                    self._graph.add_edge(arg, return_type, key=dep)
             else:
-                self._graph.add_edge(dep, return_type, key=name)
+                self._graph.add_edge(dep, return_type, key=dep)
 
     def __setitem__(self, key: Key, value: DependencyGraph | Any) -> None:
         if isinstance(value, DependencyGraph):
@@ -72,23 +72,44 @@ class DependencyGraph:
             self._graph.nodes[key]['value'] = value
 
     def bind(self, params: dict[Key, Any]) -> DependencyGraph:
-        graph = self._graph.copy()
-        for key, value in params.items():
-            graph.nodes[key]['value'] = value
         out = DependencyGraph([])
-        out._graph = graph
+        out._graph = self._graph.copy()
+        for key, value in params.items():
+            out[key] = value
         return out
 
+    def _prune_unsatisfied(self) -> nx.DiGraph:
+        """Remove nodes without value or provider."""
+        # TODO This prunes only source, but we may need to prune more, until we reach
+        # an optional/union node.
+        graph = self._graph.copy()
+        for node in list(graph.nodes):
+            if not graph.nodes[node].get('value') and not graph.nodes[node].get(
+                'provider'
+            ):
+                graph.remove_node(node)
+        return graph
+
     def build(self, target: Key) -> TaskGraph:
-        graph = {}
-        for key in self._graph.nodes:
-            node = self._graph.nodes[key]
+        graph = self._prune_unsatisfied()
+        out = {}
+
+        for key in graph.nodes:
+            node = graph.nodes[key]
+            input_nodes = list(graph.predecessors(key))
+            input_edges = list(graph.in_edges(key, data=True))
+            orig_keys = [edge[2].get('key', None) for edge in input_edges]
             if (value := node.get('value')) is not None:
-                graph[key] = Provider.parameter(value)
+                out[key] = Provider.parameter(value)
             elif (provider := node.get('provider')) is not None:
-                # TODO Handle graph modification and optional/union
-                graph[key] = provider
-        return TaskGraph(graph=graph, targets=target)
+                new_key = {orig_key: n for n, orig_key in zip(input_nodes, orig_keys)}
+                arg_spec = provider.arg_spec.map_keys(new_key.get)
+                out[key] = Provider(
+                    func=provider.func, arg_spec=arg_spec, kind='function'
+                )
+            else:
+                raise ValueError('Node must have a provider or a value')
+        return TaskGraph(graph=out, targets=target)
 
     def visualize(
         self, **kwargs: Any
