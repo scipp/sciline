@@ -87,7 +87,7 @@ def _to_subgraphs(graph: FormattedGraph) -> Dict[str, FormattedGraph]:
         if kind == 'series':
             # Example: Series[RowId, Material[Country]] -> RowId, Material[Country]
             return name.partition('[')[-1].rpartition(']')[0]
-        return name
+        return name.split('[')[0]
 
     subgraphs: Dict[str, FormattedGraph] = {}
     for p, formatted_p in graph.items():
