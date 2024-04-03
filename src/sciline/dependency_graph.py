@@ -56,14 +56,16 @@ class DependencyGraph:
     def __setitem__(self, key: Key, value: DependencyGraph | Any) -> None:
         if isinstance(value, DependencyGraph):
             # key must be a unique sink node in value
-            sink_nodes = [
-                n for n in value._graph.nodes if value._graph.out_degree(n) == 0
-            ]
-            if len(sink_nodes) != 1:
+            sinks = [n for n in value._graph.nodes if value._graph.out_degree(n) == 0]
+            if len(sinks) != 1:
                 raise ValueError('Value must have exactly one sink node')
-            if key not in sink_nodes:
+            if key not in sinks:
                 raise ValueError('Key must be a sink node in value')
-            # TODO
+            self._graph.remove_edges_from(self._graph.in_edges(key))
+            self._graph.nodes[key].pop('value', None)
+            self._graph.nodes[key].pop('provider', None)
+            # TODO Conflict handling?
+            self._graph = nx.compose(self._graph, value._graph)
         else:
             self._graph.remove_edges_from(self._graph.in_edges(key))
             self._graph.nodes[key].pop('provider', None)
