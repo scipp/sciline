@@ -13,21 +13,6 @@ from sciline.task_graph import TaskGraph
 from ._provider import Provider, ToProvider
 from .typing import Key
 
-# Refactoring plan
-# ----------------
-# 1. Build graph directly in init
-# 2. Graph is a data graph
-#    - Providers are node attrs
-#    - Function arg names are edge attrs
-#    - Optional/Union means we have multiple edges with same attr.
-#      This will be resolved when building a task graph.
-#    - Generics must be constrained and are spelled out explicitly.
-# 3. Setting values sets a node attr
-#    - This may replace a provider, and thus remove incoming edges
-# 4. We may want to split the graph building and value setting into two classes,
-#    but initially we can keep it as one such that unit tests can be reused.
-# 5. Should default values be allowed? Could be stored as edge attr? Sounds brittle.
-
 
 class DependencyGraph:
     def __init__(self, providers: Iterable[ToProvider | Provider]) -> None:
