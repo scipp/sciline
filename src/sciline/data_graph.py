@@ -69,6 +69,16 @@ class DataGraph:
         for provider in providers or []:
             self.add(provider)
 
+    def _get_clean_node(self, key: Key) -> Any:
+        """Return node ready for setting value or provider."""
+        if key in self._graph:
+            self._graph.remove_edges_from(list(self._graph.in_edges(key)))
+            self._graph.nodes[key].pop('value', None)
+            self._graph.nodes[key].pop('provider', None)
+        else:
+            self._graph.add_node(key)
+        return self._graph.nodes[key]
+
     def add(self, provider):
         if not isinstance(provider, Provider):
             provider = Provider.from_function(provider)
@@ -77,12 +87,7 @@ class DataGraph:
             for bound in _mapping_to_constrained(typevars):
                 self.add(provider.bind_type_vars(bound))
             return
-        if return_type in self._graph:
-            self._graph.remove_edges_from(list(self._graph.in_edges(return_type)))
-            self._graph.nodes[return_type].pop('value', None)
-        else:
-            self._graph.add_node(return_type)
-        self._graph.nodes[return_type]['provider'] = provider
+        self._get_clean_node(return_type)['provider'] = provider
         for dep in provider.arg_spec.keys():
             if isinstance(dep, UnionType) or get_origin(dep) == Union:
                 for arg in get_args(dep):
@@ -105,18 +110,11 @@ class DataGraph:
                 raise ValueError('Value must have exactly one sink node')
             if key not in sinks:
                 raise ValueError('Key must be a sink node in value')
-            self._graph.remove_edges_from(list(self._graph.in_edges(key)))
-            self._graph.nodes[key].pop('value', None)
-            self._graph.nodes[key].pop('provider', None)
+            _ = self._get_clean_node(key)
             # TODO Conflict handling?
             self._graph = nx.compose(self._graph, value._graph)
-        elif key in self._graph:
-            self._graph.remove_edges_from(list(self._graph.in_edges(key)))
-            self._graph.nodes[key].pop('provider', None)
-            self._graph.nodes[key]['value'] = value
         else:
-            self._graph.add_node(key)
-            self._graph.nodes[key]['value'] = value
+            self._get_clean_node(key)['value'] = value
 
     def copy(self) -> DataGraph:
         out = self.__class__([])
