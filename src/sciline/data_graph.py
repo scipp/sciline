@@ -55,10 +55,9 @@ def _prune_unsatisfied(graph: nx.DiGraph) -> nx.DiGraph:
             for out_key, descendant in zip(out_keys, descendants):
                 in_edges = list(graph.in_edges(descendant, data=True))
                 in_keys = [edge[2].get('key') for edge in in_edges]
+                # TODO If the input has a default we would not want to raise?
                 if in_keys.count(out_key) == 1:
-                    raise UnsatisfiedRequirement(
-                        f'No provider found for type {out_key}'
-                    )
+                    raise UnsatisfiedRequirement(f'No provider for type {out_key}')
             graph.remove_node(node)
     return graph
 
@@ -135,12 +134,12 @@ class DataGraph:
         ancestors = list(targets)
         for node in targets:
             if node not in self._graph:
-                raise UnsatisfiedRequirement(f'No provider found for type {node}')
+                raise UnsatisfiedRequirement(f'No provider for type {node}')
             ancestors.extend(nx.ancestors(self._graph, node))
         graph = self._graph.subgraph(set(ancestors))
         graph = _prune_unsatisfied(graph)
         if any(node not in graph for node in targets):
-            raise UnsatisfiedRequirement(f'No provider found for type {target}')
+            raise UnsatisfiedRequirement(f'No provider for type {target}')
         out = {}
 
         for key in graph.nodes:
