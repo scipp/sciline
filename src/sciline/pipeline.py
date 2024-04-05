@@ -370,9 +370,6 @@ class Pipeline(DataGraph):
     ) -> TaskGraph:
         return self.build(tp, scheduler=scheduler)
 
-    def compute(self, target: Key, **kwargs: Any) -> Any:
-        return self.get(target, **kwargs).compute()
-
 
 class OldPipeline:
     """A container for providers that can be assembled into a task graph."""
@@ -902,3 +899,7 @@ class OldPipeline:
         return pipeline_html_repr(
             chain(providers_without_parameters, providers_with_parameters)
         )
+
+
+Pipeline.bind_and_call = OldPipeline.bind_and_call
+Pipeline.compute = OldPipeline.compute

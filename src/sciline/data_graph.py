@@ -11,7 +11,7 @@ import networkx as nx
 
 from sciline.task_graph import TaskGraph
 
-from ._provider import Provider, ToProvider
+from ._provider import Provider, ToProvider, _bind_free_typevars
 from .handler import UnsatisfiedRequirement
 from .scheduler import Scheduler
 from .typing import Key
@@ -70,7 +70,7 @@ class DataGraph:
                 self.add(new_provider)
             return
         if return_type in self._graph:
-            self._graph.remove_edges_from(self._graph.in_edges(return_type))
+            self._graph.remove_edges_from(list(self._graph.in_edges(return_type)))
             self._graph.nodes[return_type].pop('value', None)
         else:
             self._graph.add_node(return_type)
@@ -84,7 +84,13 @@ class DataGraph:
                 self._graph.add_edge(dep, return_type, key=dep)
 
     def __setitem__(self, key: Key, value: DataGraph | Any) -> None:
-        # graph[BeamCenter] = beam_center_graph
+        if typevars := find_all_typevars(key):
+            constraints = [get_typevar_constraints(t) for t in typevars]
+            if any(len(c) == 0 for c in constraints):
+                raise ValueError('Typevars must have constraints')
+            for combination in itertools.product(*constraints):
+                self[_bind_free_typevars(key, dict(zip(typevars, combination)))] = value
+            return
         if isinstance(value, DataGraph):
             # TODO If key is generic, should we support multi-sink case and update all?
             # Would imply that we need the same for __getitem__.
@@ -94,13 +100,13 @@ class DataGraph:
                 raise ValueError('Value must have exactly one sink node')
             if key not in sinks:
                 raise ValueError('Key must be a sink node in value')
-            self._graph.remove_edges_from(self._graph.in_edges(key))
+            self._graph.remove_edges_from(list(self._graph.in_edges(key)))
             self._graph.nodes[key].pop('value', None)
             self._graph.nodes[key].pop('provider', None)
             # TODO Conflict handling?
             self._graph = nx.compose(self._graph, value._graph)
         elif key in self._graph:
-            self._graph.remove_edges_from(self._graph.in_edges(key))
+            self._graph.remove_edges_from(list(self._graph.in_edges(key)))
             self._graph.nodes[key].pop('provider', None)
             self._graph.nodes[key]['value'] = value
         else:
@@ -125,6 +131,8 @@ class DataGraph:
             targets = (target,)
         ancestors = list(targets)
         for node in targets:
+            if node not in self._graph:
+                raise UnsatisfiedRequirement(f'No provider found for type {node}')
             ancestors.extend(nx.ancestors(self._graph, node))
         graph = self._graph.subgraph(set(ancestors))
         graph = _prune_unsatisfied(graph)
