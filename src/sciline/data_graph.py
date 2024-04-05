@@ -32,11 +32,11 @@ def _is_multiple_keys(keys: type | Iterable[type]) -> bool:
     )
 
 
-def _prune_unsatisfied(graph: nx.DiGraph) -> None:
+def _prune_unsatisfied(graph: nx.DiGraph) -> nx.DiGraph:
     """Remove nodes without value or provider."""
     # TODO This prunes only source, but we may need to prune more, until we reach
     # an optional/union node.
-    # TODO Copy?
+    graph = graph.copy()
     for node in list(graph.nodes):
         if not graph.nodes[node].get('value') and not graph.nodes[node].get('provider'):
             descendants = nx.descendants(graph, node)
@@ -50,6 +50,7 @@ def _prune_unsatisfied(graph: nx.DiGraph) -> None:
                         f'No provider found for type {out_key}'
                     )
             graph.remove_node(node)
+    return graph
 
 
 class DataGraph:
@@ -126,6 +127,9 @@ class DataGraph:
         for node in targets:
             ancestors.extend(nx.ancestors(self._graph, node))
         graph = self._graph.subgraph(set(ancestors))
+        graph = _prune_unsatisfied(graph)
+        if any(node not in graph for node in targets):
+            raise UnsatisfiedRequirement(f'No provider found for type {target}')
         out = {}
 
         for key in graph.nodes:
