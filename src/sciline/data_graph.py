@@ -12,8 +12,44 @@ import networkx as nx
 from sciline.task_graph import TaskGraph
 
 from ._provider import Provider, ToProvider
+from .handler import UnsatisfiedRequirement
+from .scheduler import Scheduler
 from .typing import Key
 from .util import find_all_typevars, get_typevar_constraints
+
+
+def _is_multiple_keys(keys: type | Iterable[type]) -> bool:
+    # Cannot simply use isinstance(keys, Iterable) because that is True for
+    # generic aliases of iterable types, e.g.,
+    #
+    # class Str(sl.Scope[Param, str], str): ...
+    # keys = Str[int]
+    #
+    # And isinstance(keys, type) does not work on its own because
+    # it is False for the above type.
+    return (
+        not isinstance(keys, type) and not get_args(keys) and isinstance(keys, Iterable)
+    )
+
+
+def _prune_unsatisfied(graph: nx.DiGraph) -> None:
+    """Remove nodes without value or provider."""
+    # TODO This prunes only source, but we may need to prune more, until we reach
+    # an optional/union node.
+    # TODO Copy?
+    for node in list(graph.nodes):
+        if not graph.nodes[node].get('value') and not graph.nodes[node].get('provider'):
+            descendants = nx.descendants(graph, node)
+            out_edges = list(graph.out_edges(node, data=True))
+            out_keys = [edge[2].get('key') for edge in out_edges]
+            for out_key, descendant in zip(out_keys, descendants):
+                in_edges = list(graph.in_edges(descendant, data=True))
+                in_keys = [edge[2].get('key') for edge in in_edges]
+                if in_keys.count(out_key) == 1:
+                    raise UnsatisfiedRequirement(
+                        f'No provider found for type {out_key}'
+                    )
+            graph.remove_node(node)
 
 
 class DataGraph:
@@ -70,27 +106,26 @@ class DataGraph:
             self._graph.add_node(key)
             self._graph.nodes[key]['value'] = value
 
-    def bind(self, params: dict[Key, Any]) -> DataGraph:
-        out = DataGraph([])
+    def copy(self) -> DataGraph:
+        out = self.__class__([])
         out._graph = self._graph.copy()
+        return out
+
+    def bind(self, params: dict[Key, Any]) -> DataGraph:
+        out = self.copy()
         for key, value in params.items():
             out[key] = value
         return out
 
-    def _prune_unsatisfied(self) -> nx.DiGraph:
-        """Remove nodes without value or provider."""
-        # TODO This prunes only source, but we may need to prune more, until we reach
-        # an optional/union node.
-        graph = self._graph.copy()
-        for node in list(graph.nodes):
-            if not graph.nodes[node].get('value') and not graph.nodes[node].get(
-                'provider'
-            ):
-                graph.remove_node(node)
-        return graph
-
-    def build(self, target: Key) -> TaskGraph:
-        graph = self._prune_unsatisfied()
+    def build(self, target: Key, scheduler: None | Scheduler = None) -> TaskGraph:
+        if _is_multiple_keys(target):
+            targets = tuple(target)  # type: ignore[arg-type]
+        else:
+            targets = (target,)
+        ancestors = list(targets)
+        for node in targets:
+            ancestors.extend(nx.ancestors(self._graph, node))
+        graph = self._graph.subgraph(set(ancestors))
         out = {}
 
         for key in graph.nodes:
@@ -108,10 +143,7 @@ class DataGraph:
                 )
             else:
                 raise ValueError('Node must have a provider or a value')
-        return TaskGraph(graph=out, targets=target)
-
-    def compute(self, target: Key) -> Any:
-        return self.build(target).compute()
+        return TaskGraph(graph=out, targets=target, scheduler=scheduler)
 
     def visualize(
         self, **kwargs: Any

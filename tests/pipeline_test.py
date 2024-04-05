@@ -107,8 +107,8 @@ def test_Scope_subclass_can_be_set_as_param_with_unbound_typevar() -> None:
 
 
 def test_ScopeTwoParam_subclass_can_be_set_as_param() -> None:
-    Param1 = TypeVar('Param1')
-    Param2 = TypeVar('Param2')
+    Param1 = TypeVar('Param1', int, float)
+    Param2 = TypeVar('Param2', float, int)
 
     class Str(sl.ScopeTwoParams[Param1, Param2, str], str):
         ...
@@ -133,7 +133,7 @@ def test_ScopeTwoParam_subclass_can_be_set_as_param_with_unbound_typevar() -> No
 
 
 def test_generic_providers_produce_use_dependencies_based_on_bound_typevar() -> None:
-    Param = TypeVar('Param')
+    Param = TypeVar('Param', int, float)
 
     class Str(sl.Scope[Param, str], str):
         ...

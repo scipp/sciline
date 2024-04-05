@@ -362,6 +362,17 @@ class Pipeline(DataGraph):
     def insert(self, provider: Union[ToProvider, Provider], /) -> None:
         self.add(provider)
 
+    def get(
+        self,
+        tp: Union[Type[T], Item[T]],
+        /,
+        scheduler: Optional[Scheduler] = None,
+    ) -> TaskGraph:
+        return self.build(tp, scheduler=scheduler)
+
+    def compute(self, target: Key, **kwargs: Any) -> Any:
+        return self.get(target, **kwargs).compute()
+
 
 class OldPipeline:
     """A container for providers that can be assembled into a task graph."""
