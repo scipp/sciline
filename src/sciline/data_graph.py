@@ -5,7 +5,7 @@ from __future__ import annotations
 import itertools
 from collections.abc import Iterable
 from types import UnionType
-from typing import Any, Union, get_args, get_origin
+from typing import Any, Generator, TypeVar, Union, get_args, get_origin
 
 import networkx as nx
 
@@ -16,6 +16,16 @@ from .handler import UnsatisfiedRequirement
 from .scheduler import Scheduler
 from .typing import Key
 from .util import find_all_typevars, get_typevar_constraints
+
+
+def _mapping_to_constrained(
+    type_vars: set[TypeVar],
+) -> Generator[dict[TypeVar, type], None, None]:
+    constraints = [get_typevar_constraints(t) for t in type_vars]
+    if any(len(c) == 0 for c in constraints):
+        raise ValueError('Typevars must have constraints')
+    for combination in itertools.product(*constraints):
+        yield dict(zip(type_vars, combination))
 
 
 def _is_multiple_keys(keys: type | Iterable[type]) -> bool:
@@ -64,10 +74,8 @@ class DataGraph:
             provider = Provider.from_function(provider)
         return_type = provider.deduce_key()
         if typevars := find_all_typevars(return_type):
-            constraints = [get_typevar_constraints(t) for t in typevars]
-            for combination in itertools.product(*constraints):
-                new_provider = provider.bind_type_vars(dict(zip(typevars, combination)))
-                self.add(new_provider)
+            for bound in _mapping_to_constrained(typevars):
+                self.add(provider.bind_type_vars(bound))
             return
         if return_type in self._graph:
             self._graph.remove_edges_from(list(self._graph.in_edges(return_type)))
@@ -85,11 +93,8 @@ class DataGraph:
 
     def __setitem__(self, key: Key, value: DataGraph | Any) -> None:
         if typevars := find_all_typevars(key):
-            constraints = [get_typevar_constraints(t) for t in typevars]
-            if any(len(c) == 0 for c in constraints):
-                raise ValueError('Typevars must have constraints')
-            for combination in itertools.product(*constraints):
-                self[_bind_free_typevars(key, dict(zip(typevars, combination)))] = value
+            for bound in _mapping_to_constrained(typevars):
+                self[_bind_free_typevars(key, bound)] = value
             return
         if isinstance(value, DataGraph):
             # TODO If key is generic, should we support multi-sink case and update all?
