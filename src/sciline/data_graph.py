@@ -1,7 +1,8 @@
 # SPDX-License-Identifier: BSD-3-Clause
-# Copyright (c) 2023 Scipp contributors (https://github.com/scipp)
+# Copyright (c) 2024 Scipp contributors (https://github.com/scipp)
 from __future__ import annotations
 
+import itertools
 from collections.abc import Iterable
 from types import UnionType
 from typing import Any, Union, get_args, get_origin
@@ -12,19 +13,25 @@ from sciline.task_graph import TaskGraph
 
 from ._provider import Provider, ToProvider
 from .typing import Key
+from .util import find_all_typevars, get_typevar_constraints
 
 
 class DataGraph:
-    def __init__(self, providers: Iterable[ToProvider | Provider]) -> None:
+    def __init__(self, providers: None | Iterable[ToProvider | Provider]) -> None:
         self._graph = nx.DiGraph()
-        for provider in providers:
+        for provider in providers or []:
             self.add(provider)
 
     def add(self, provider):
-        # TODO If provider is generic, add multiple nodes/edges
         if not isinstance(provider, Provider):
             provider = Provider.from_function(provider)
         return_type = provider.deduce_key()
+        if typevars := find_all_typevars(return_type):
+            constraints = [get_typevar_constraints(t) for t in typevars]
+            for combination in itertools.product(*constraints):
+                new_provider = provider.bind_type_vars(dict(zip(typevars, combination)))
+                self.add(new_provider)
+            return
         if return_type in self._graph:
             self._graph.remove_edges_from(self._graph.in_edges(return_type))
             self._graph.nodes[return_type].pop('value', None)
@@ -55,9 +62,12 @@ class DataGraph:
             self._graph.nodes[key].pop('provider', None)
             # TODO Conflict handling?
             self._graph = nx.compose(self._graph, value._graph)
-        else:
+        elif key in self._graph:
             self._graph.remove_edges_from(self._graph.in_edges(key))
             self._graph.nodes[key].pop('provider', None)
+            self._graph.nodes[key]['value'] = value
+        else:
+            self._graph.add_node(key)
             self._graph.nodes[key]['value'] = value
 
     def bind(self, params: dict[Key, Any]) -> DataGraph:
@@ -99,6 +109,9 @@ class DataGraph:
             else:
                 raise ValueError('Node must have a provider or a value')
         return TaskGraph(graph=out, targets=target)
+
+    def compute(self, target: Key) -> Any:
+        return self.build(target).compute()
 
     def visualize(
         self, **kwargs: Any

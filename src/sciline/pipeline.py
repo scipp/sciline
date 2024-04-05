@@ -26,10 +26,9 @@ from typing import (
     overload,
 )
 
-from sciline.task_graph import TaskGraph
-
 from ._provider import ArgSpec, Provider, ProviderLocation, ToProvider
 from ._utils import key_name
+from .data_graph import DataGraph
 from .display import pipeline_html_repr
 from .handler import (
     ErrorHandler,
@@ -41,6 +40,7 @@ from .param_table import ParamTable
 from .scheduler import Scheduler
 from .series import Series
 from .typing import Graph, Item, Key, Label
+from .task_graph import TaskGraph
 
 T = TypeVar('T')
 KeyType = TypeVar('KeyType', bound=Key)
@@ -348,7 +348,22 @@ class _ParamSentinel(Provider):
         )
 
 
-class Pipeline:
+class Pipeline(DataGraph):
+    def __init__(
+        self,
+        providers: Optional[Iterable[Union[ToProvider, Provider]]] = None,
+        *,
+        params: Optional[Dict[Type[Any], Any]] = None,
+    ):
+        super().__init__(providers)
+        for tp, param in (params or {}).items():
+            self[tp] = param
+
+    def insert(self, provider: Union[ToProvider, Provider], /) -> None:
+        self.add(provider)
+
+
+class OldPipeline:
     """A container for providers that can be assembled into a task graph."""
 
     def __init__(
@@ -711,20 +726,16 @@ class Pipeline:
         return graph
 
     @overload
-    def compute(self, tp: Type[T], **kwargs: Any) -> T:
-        ...
+    def compute(self, tp: Type[T], **kwargs: Any) -> T: ...
 
     @overload
-    def compute(self, tp: Iterable[Type[T]], **kwargs: Any) -> Dict[Type[T], T]:
-        ...
+    def compute(self, tp: Iterable[Type[T]], **kwargs: Any) -> Dict[Type[T], T]: ...
 
     @overload
-    def compute(self, tp: Item[T], **kwargs: Any) -> T:
-        ...
+    def compute(self, tp: Item[T], **kwargs: Any) -> T: ...
 
     @overload
-    def compute(self, tp: UnionType, **kwargs: Any) -> Any:
-        ...
+    def compute(self, tp: UnionType, **kwargs: Any) -> Any: ...
 
     def compute(
         self, tp: type | Iterable[type] | Item[T] | UnionType, **kwargs: Any
@@ -801,12 +812,12 @@ class Pipeline:
         )
 
     @overload
-    def bind_and_call(self, fns: Callable[..., T], /) -> T:
-        ...
+    def bind_and_call(self, fns: Callable[..., T], /) -> T: ...
 
     @overload
-    def bind_and_call(self, fns: Iterable[Callable[..., Any]], /) -> Tuple[Any, ...]:
-        ...
+    def bind_and_call(
+        self, fns: Iterable[Callable[..., Any]], /
+    ) -> Tuple[Any, ...]: ...
 
     def bind_and_call(
         self, fns: Union[Callable[..., Any], Iterable[Callable[..., Any]]], /
