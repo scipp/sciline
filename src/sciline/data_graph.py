@@ -14,7 +14,7 @@ from ._provider import Provider, ToProvider
 from .typing import Key
 
 
-class DependencyGraph:
+class DataGraph:
     def __init__(self, providers: Iterable[ToProvider | Provider]) -> None:
         self._graph = nx.DiGraph()
         for provider in providers:
@@ -39,8 +39,9 @@ class DependencyGraph:
             else:
                 self._graph.add_edge(dep, return_type, key=dep)
 
-    def __setitem__(self, key: Key, value: DependencyGraph | Any) -> None:
-        if isinstance(value, DependencyGraph):
+    def __setitem__(self, key: Key, value: DataGraph | Any) -> None:
+        # graph[BeamCenter] = beam_center_graph
+        if isinstance(value, DataGraph):
             # TODO If key is generic, should we support multi-sink case and update all?
             # Would imply that we need the same for __getitem__.
             # key must be a unique sink node in value
@@ -59,8 +60,8 @@ class DependencyGraph:
             self._graph.nodes[key].pop('provider', None)
             self._graph.nodes[key]['value'] = value
 
-    def bind(self, params: dict[Key, Any]) -> DependencyGraph:
-        out = DependencyGraph([])
+    def bind(self, params: dict[Key, Any]) -> DataGraph:
+        out = DataGraph([])
         out._graph = self._graph.copy()
         for key, value in params.items():
             out[key] = value
