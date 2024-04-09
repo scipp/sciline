@@ -11,7 +11,7 @@ import networkx as nx
 
 from sciline.task_graph import TaskGraph
 
-from ._provider import Provider, ToProvider, _bind_free_typevars
+from ._provider import ArgSpec, Provider, ToProvider, _bind_free_typevars
 from .handler import UnsatisfiedRequirement
 from .scheduler import Scheduler
 from .typing import Key
@@ -49,15 +49,18 @@ def _prune_unsatisfied(graph: nx.DiGraph) -> nx.DiGraph:
     graph = graph.copy()
     for node in list(graph.nodes):
         if not graph.nodes[node].get('value') and not graph.nodes[node].get('provider'):
-            descendants = nx.descendants(graph, node)
-            out_edges = list(graph.out_edges(node, data=True))
-            out_keys = [edge[2].get('key') for edge in out_edges]
-            for out_key, descendant in zip(out_keys, descendants):
-                in_edges = list(graph.in_edges(descendant, data=True))
-                in_keys = [edge[2].get('key') for edge in in_edges]
-                # TODO If the input has a default we would not want to raise?
-                if in_keys.count(out_key) == 1:
-                    raise UnsatisfiedRequirement(f'No provider for type {out_key}')
+            # TODO This was a way of handling missing inputs, but it interferes with
+            # the support for Optional and Union. Need to think of a better way.
+            #
+            # descendants = nx.descendants(graph, node)
+            # out_edges = list(graph.out_edges(node, data=True))
+            # out_keys = [edge[2].get('key') for edge in out_edges]
+            # for out_key, descendant in zip(out_keys, descendants):
+            #     in_edges = list(graph.in_edges(descendant, data=True))
+            #     in_keys = [edge[2].get('key') for edge in in_edges]
+            #     # TODO If the input has a default we would not want to raise?
+            #     # if in_keys.count(out_key) == 1:
+            #     #    raise UnsatisfiedRequirement(f'No provider for type {out_key}')
             graph.remove_node(node)
     return graph
 
@@ -115,6 +118,13 @@ class DataGraph:
         else:
             self._get_clean_node(key)['value'] = value
 
+    def to_cyclebane(
+        self,
+    ) -> cyclebane.Graph:  # type: ignore[no-untyped-def] # noqa: F821
+        import cyclebane as cb
+
+        return cb.Graph(self._graph)
+
     def copy(self) -> DataGraph:
         out = self.__class__([])
         out._graph = self._graph.copy()
@@ -127,37 +137,7 @@ class DataGraph:
         return out
 
     def build(self, target: Key, scheduler: None | Scheduler = None) -> TaskGraph:
-        if _is_multiple_keys(target):
-            targets = tuple(target)  # type: ignore[arg-type]
-        else:
-            targets = (target,)
-        ancestors = list(targets)
-        for node in targets:
-            if node not in self._graph:
-                raise UnsatisfiedRequirement(f'No provider for type {node}')
-            ancestors.extend(nx.ancestors(self._graph, node))
-        graph = self._graph.subgraph(set(ancestors))
-        graph = _prune_unsatisfied(graph)
-        if any(node not in graph for node in targets):
-            raise UnsatisfiedRequirement(f'No provider for type {target}')
-        out = {}
-
-        for key in graph.nodes:
-            node = graph.nodes[key]
-            input_nodes = list(graph.predecessors(key))
-            input_edges = list(graph.in_edges(key, data=True))
-            orig_keys = [edge[2].get('key', None) for edge in input_edges]
-            if (value := node.get('value')) is not None:
-                out[key] = Provider.parameter(value)
-            elif (provider := node.get('provider')) is not None:
-                new_key = {orig_key: n for n, orig_key in zip(input_nodes, orig_keys)}
-                arg_spec = provider.arg_spec.map_keys(new_key.get)
-                out[key] = Provider(
-                    func=provider.func, arg_spec=arg_spec, kind='function'
-                )
-            else:
-                raise ValueError('Node must have a provider or a value')
-        return TaskGraph(graph=out, targets=target, scheduler=scheduler)
+        return to_task_graph(self._graph, target=target, scheduler=scheduler)
 
     def visualize(
         self, **kwargs: Any
@@ -183,3 +163,47 @@ class DataGraph:
                 str(edge[0]), str(edge[1]), label=str(self._graph.edges[edge]['key'])
             )
         return dot
+
+
+def to_task_graph(
+    graph: nx.DiGraph, target: Key, scheduler: None | Scheduler = None
+) -> TaskGraph:
+    if _is_multiple_keys(target):
+        targets = tuple(target)  # type: ignore[arg-type]
+    else:
+        targets = (target,)
+    ancestors = list(targets)
+    for node in targets:
+        if node not in graph:
+            raise UnsatisfiedRequirement(f'No provider for type {node}')
+        ancestors.extend(nx.ancestors(graph, node))
+    graph = graph.subgraph(set(ancestors))
+    graph = _prune_unsatisfied(graph)
+    if any(node not in graph for node in targets):
+        raise UnsatisfiedRequirement(f'No provider for type {target}')
+    out = {}
+
+    for key in graph.nodes:
+        node = graph.nodes[key]
+        input_nodes = list(graph.predecessors(key))
+        input_edges = list(graph.in_edges(key, data=True))
+        orig_keys = [edge[2].get('key', None) for edge in input_edges]
+        if (value := node.get('value')) is not None:
+            out[key] = Provider.parameter(value)
+        elif (provider := node.get('provider')) is not None:
+            if not isinstance(provider, Provider):
+                # This happens when using cyclebane
+                new_spec = ArgSpec.from_args(*input_nodes)
+                out[key] = Provider(func=provider, arg_spec=new_spec, kind='function')
+            else:
+                new_key = {orig_key: n for n, orig_key in zip(input_nodes, orig_keys)}
+                spec = provider.arg_spec.map_keys(new_key.get)
+                # TODO I added this for optional/default/missing handling but it breaks
+                # map-reduce ops
+                # spec._args = {k: v for k, v in spec._args.items() if v in new_key}
+                # TODO also kwargs
+                # TODO Raise if no default?
+                out[key] = Provider(func=provider.func, arg_spec=spec, kind='function')
+        else:
+            raise ValueError('Node must have a provider or a value')
+    return TaskGraph(graph=out, targets=target, scheduler=scheduler)
