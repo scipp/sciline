@@ -114,16 +114,21 @@ class DataGraph:
                 raise ValueError('Key must be a sink node in value')
             _ = self._get_clean_node(key)
             # TODO Conflict handling?
+            # TODO Remove nodes that `key` as their only "anchor"?
             self._graph = nx.compose(self._graph, value._graph)
         else:
             self._get_clean_node(key)['value'] = value
 
-    def to_cyclebane(
-        self,
-    ) -> cyclebane.Graph:  # type: ignore[no-untyped-def] # noqa: F821
+    def to_cyclebane(self) -> Any:
         import cyclebane as cb
 
         return cb.Graph(self._graph)
+
+    @classmethod
+    def from_cyclebane(cls, graph: Any) -> DataGraph:
+        out = cls([])
+        out._graph = graph.to_networkx()
+        return out
 
     def copy(self) -> DataGraph:
         out = self.__class__([])
@@ -149,7 +154,13 @@ class DataGraph:
             dot.node(str(node), label=str(node), shape='box')
             provider = self._graph.nodes[node].get('provider')
             value = self._graph.nodes[node].get('value')
-            if provider:
+            if provider and not isinstance(provider, Provider):
+                dot.node(
+                    str(node),
+                    label=f'{node}\nprovider={provider.__qualname__}',
+                    shape='box',
+                )
+            elif provider:
                 dot.node(
                     str(node),
                     label=f'{node}\nprovider={provider.func.__qualname__}',
@@ -159,9 +170,9 @@ class DataGraph:
                 dot.node(str(node), label=f'{node}\nvalue={value}', shape='box')
 
         for edge in self._graph.edges:
-            dot.edge(
-                str(edge[0]), str(edge[1]), label=str(self._graph.edges[edge]['key'])
-            )
+            key = self._graph.edges[edge].get('key')
+            label = str(key) if key is not None else ''
+            dot.edge(str(edge[0]), str(edge[1]), label=label)
         return dot
 
 
