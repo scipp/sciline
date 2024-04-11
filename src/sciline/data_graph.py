@@ -149,8 +149,6 @@ def to_task_graph(
             raise UnsatisfiedRequirement(f'No provider for type {node}')
         ancestors.extend(nx.ancestors(graph, node))
     graph = graph.subgraph(set(ancestors))
-    if any(node not in graph for node in targets):
-        raise UnsatisfiedRequirement(f'No provider for type {target}')
     out = {}
 
     for key in graph.nodes:
@@ -168,11 +166,7 @@ def to_task_graph(
             else:
                 new_key = {orig_key: n for n, orig_key in zip(input_nodes, orig_keys)}
                 spec = provider.arg_spec.map_keys(new_key.get)
-                # TODO I added this for optional/default/missing handling but it breaks
-                # map-reduce ops
-                # spec._args = {k: v for k, v in spec._args.items() if v in new_key}
                 # TODO also kwargs
-                # TODO Raise if no default?
                 out[key] = Provider(func=provider.func, arg_spec=spec, kind='function')
         else:
             raise UnsatisfiedRequirement(f'Node {key} must have a provider or a value')
