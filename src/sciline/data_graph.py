@@ -7,6 +7,7 @@ from collections.abc import Iterable
 from types import UnionType
 from typing import Any, Generator, TypeVar, Union, get_args, get_origin
 
+import cyclebane as cb
 import networkx as nx
 
 from sciline.task_graph import TaskGraph
@@ -67,9 +68,13 @@ def _prune_unsatisfied(graph: nx.DiGraph) -> nx.DiGraph:
 
 class DataGraph:
     def __init__(self, providers: None | Iterable[ToProvider | Provider]) -> None:
-        self._graph = nx.DiGraph()
+        self._cbgraph = cb.Graph(nx.DiGraph())
         for provider in providers or []:
             self.add(provider)
+
+    @property
+    def _graph(self) -> nx.DiGraph:
+        return self._cbgraph.graph
 
     def _get_clean_node(self, key: Key) -> Any:
         """Return node ready for setting value or provider."""
@@ -104,6 +109,8 @@ class DataGraph:
                 self[_bind_free_typevars(key, bound)] = value
             return
         if isinstance(value, DataGraph):
+            self._cbgraph[key] = value._cbgraph
+            return
             # TODO If key is generic, should we support multi-sink case and update all?
             # Would imply that we need the same for __getitem__.
             # key must be a unique sink node in value
@@ -118,6 +125,21 @@ class DataGraph:
             self._graph = nx.compose(self._graph, value._graph)
         else:
             self._get_clean_node(key)['value'] = value
+
+    def __getitem__(self, key: Key) -> DataGraph:
+        out = DataGraph([])
+        out._cbgraph = self._cbgraph[key]
+        return out
+
+    def map(self, *args, **kwargs) -> DataGraph:
+        out = DataGraph([])
+        out._cbgraph = self._cbgraph.map(*args, **kwargs)
+        return out
+
+    def reduce(self, *args, **kwargs) -> DataGraph:
+        out = DataGraph([])
+        out._cbgraph = self._cbgraph.reduce(*args, **kwargs)
+        return out
 
     def to_cyclebane(self) -> Any:
         import cyclebane as cb
@@ -142,7 +164,9 @@ class DataGraph:
         return out
 
     def build(self, target: Key, scheduler: None | Scheduler = None) -> TaskGraph:
-        return to_task_graph(self._graph, target=target, scheduler=scheduler)
+        return to_task_graph(
+            self._cbgraph.to_networkx(), target=target, scheduler=scheduler
+        )
 
     def visualize(
         self, **kwargs: Any
@@ -152,23 +176,9 @@ class DataGraph:
         dot = graphviz.Digraph(strict=True, **kwargs)
         for node in self._graph.nodes:
             dot.node(str(node), label=str(node), shape='box')
-            provider = self._graph.nodes[node].get('provider')
-            value = self._graph.nodes[node].get('value')
-            if provider and not isinstance(provider, Provider):
-                dot.node(
-                    str(node),
-                    label=f'{node}\nprovider={provider.__qualname__}',
-                    shape='box',
-                )
-            elif provider:
-                dot.node(
-                    str(node),
-                    label=f'{node}\nprovider={provider.func.__qualname__}',
-                    shape='box',
-                )
-            elif value:
-                dot.node(str(node), label=f'{node}\nvalue={value}', shape='box')
-
+            attrs = self._graph.nodes[node]
+            attrs = '\n'.join(f'{k}={v}' for k, v in attrs.items())
+            dot.node(str(node), label=f'{node}\n{attrs}', shape='box')
         for edge in self._graph.edges:
             key = self._graph.edges[edge].get('key')
             label = str(key) if key is not None else ''
