@@ -40,7 +40,7 @@ from .handler import (
 from .param_table import ParamTable
 from .scheduler import Scheduler
 from .series import Series
-from .typing import Graph, Item, Key, Label, get_optional, get_union
+from .typing import Graph, Item, Key, Label
 
 T = TypeVar('T')
 KeyType = TypeVar('KeyType', bound=Key)
@@ -149,7 +149,7 @@ def _find_nodes_in_paths(graph: Graph, end: Key) -> List[Key]:
 
 
 def _is_multiple_keys(
-    keys: type | Iterable[type] | Item[T],
+    keys: type | Iterable[type] | Item[T] | object,
 ) -> bool:
     # Cannot simply use isinstance(keys, Iterable) because that is True for
     # generic aliases of iterable types, e.g.,
@@ -205,7 +205,6 @@ class ReplicatorBase(Generic[IndexType]):
         )
 
     def key(self, i: IndexType, value_name: Union[Type[T], Item[T]]) -> Item[T]:
-        value_name = get_optional(value_name) or value_name
         label = Label(self._index_name, i)
         if isinstance(value_name, Item):
             return Item(value_name.label + (label,), value_name.tp)
@@ -404,8 +403,6 @@ class Pipeline:
         param:
             Concrete value to provide.
         """
-        if get_origin(key) == Union:
-            raise ValueError('Union (or Optional) parameters are not allowed.')
         # TODO Switch to isinstance(key, NewType) once our minimum is Python 3.10
         # Note that we cannot pass mypy in Python<3.10 since NewType is not a type.
         if hasattr(key, '__supertype__'):
@@ -419,6 +416,8 @@ class Pipeline:
                 expected = np_origin
             else:
                 expected = underlying
+        elif origin == Union:
+            expected = underlying
         elif issubclass(origin, (Scope, ScopeTwoParams)):
             scope = origin.__orig_bases__[0]
             while (orig := get_origin(scope)) is not None and orig not in (
@@ -524,10 +523,6 @@ class Pipeline:
         # isinstance does not work here and types.NoneType available only in 3.10+
         if key == type(None):  # noqa: E721
             raise ValueError(f'Provider {provider} returning `None` is not allowed')
-        if get_origin(key) == Union:
-            raise ValueError(
-                f'Provider {provider} returning a Union (or Optional) is not allowed.'
-            )
         if get_origin(key) == Series:
             raise ValueError(
                 f'Provider {provider} returning a sciline.Series is not allowed. '
@@ -602,29 +597,6 @@ class Pipeline:
                     ]
         return handler.handle_unsatisfied_requirement(tp, *explanation), {}
 
-    def _get_unique_provider(
-        self, tp: Union[Type[T], Item[T]], handler: ErrorHandler
-    ) -> Tuple[Provider, Dict[TypeVar, Key]]:
-        """Get a unique provider for a potential Union type."""
-        if (union_args := get_union(tp)) is None:
-            return self._get_provider(tp, handler=handler)
-        matching_types = []
-        for option in union_args:
-            try:
-                provider, bound = self._get_provider(option, handler=None)
-            except UnsatisfiedRequirement:
-                continue
-            else:
-                matching_types.append(option)
-        if len(matching_types) == 0:
-            return handler.handle_unsatisfied_requirement(tp), {}
-        if len(matching_types) > 1:
-            raise AmbiguousProvider(
-                f"Multiple providers found for Union type {tp}."
-                f" Matching types are: {matching_types}."
-            )
-        return provider, bound
-
     def build(
         self,
         tp: Union[Type[T], Item[T]],
@@ -666,20 +638,7 @@ class Pipeline:
                 sub = self._build_series(tp, handler=handler)  # type: ignore[arg-type]
                 graph.update(sub)
                 continue
-            if (optional_arg := get_optional(tp)) is not None:
-                try:
-                    optional_subgraph = self.build(
-                        optional_arg,
-                        search_param_tables=search_param_tables,
-                        handler=HandleAsBuildTimeException(),
-                    )
-                except UnsatisfiedRequirement:
-                    graph[tp] = Provider.provide_none()
-                else:
-                    graph[tp] = optional_subgraph.pop(optional_arg)
-                    graph.update(optional_subgraph)
-                continue
-            provider, bound = self._get_unique_provider(tp, handler=handler)
+            provider, bound = self._get_provider(tp, handler=handler)
             provider = provider.bind_type_vars(bound)
             graph[tp] = provider
             stack.extend(provider.arg_spec.keys() - graph.keys())
@@ -793,7 +752,13 @@ class Pipeline:
     def compute(self, tp: Item[T], **kwargs: Any) -> T:
         ...
 
-    def compute(self, tp: type | Iterable[type] | Item[T], **kwargs: Any) -> Any:
+    @overload
+    def compute(self, tp: object, **kwargs: Any) -> Any:
+        ...
+
+    def compute(
+        self, tp: type | Iterable[type] | Item[T] | object, **kwargs: Any
+    ) -> Any:
         """
         Compute result for the given keys.
 
@@ -829,7 +794,7 @@ class Pipeline:
 
     def get(
         self,
-        keys: type | Iterable[type] | Item[T],
+        keys: type | Iterable[type] | Item[T] | object,
         *,
         scheduler: Optional[Scheduler] = None,
         handler: Optional[ErrorHandler] = None,
@@ -857,7 +822,7 @@ class Pipeline:
         if _is_multiple_keys(keys):
             keys = tuple(keys)  # type: ignore[arg-type]
             graph: Graph = {}
-            for t in keys:
+            for t in keys:  # type: ignore[var-annotated]
                 graph.update(self.build(t, handler=handler))
         else:
             graph = self.build(keys, handler=handler)  # type: ignore[arg-type]
