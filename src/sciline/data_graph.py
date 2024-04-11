@@ -4,8 +4,7 @@ from __future__ import annotations
 
 import itertools
 from collections.abc import Iterable
-from types import UnionType
-from typing import Any, Generator, TypeVar, Union, get_args, get_origin
+from typing import Any, Generator, TypeVar, get_args
 
 import cyclebane as cb
 import networkx as nx
@@ -43,29 +42,6 @@ def _is_multiple_keys(keys: type | Iterable[type]) -> bool:
     )
 
 
-def _prune_unsatisfied(graph: nx.DiGraph) -> nx.DiGraph:
-    """Remove nodes without value or provider."""
-    # TODO This prunes only source, but we may need to prune more, until we reach
-    # an optional/union node.
-    graph = graph.copy()
-    for node in list(graph.nodes):
-        if not graph.nodes[node].get('value') and not graph.nodes[node].get('provider'):
-            # TODO This was a way of handling missing inputs, but it interferes with
-            # the support for Optional and Union. Need to think of a better way.
-            #
-            # descendants = nx.descendants(graph, node)
-            # out_edges = list(graph.out_edges(node, data=True))
-            # out_keys = [edge[2].get('key') for edge in out_edges]
-            # for out_key, descendant in zip(out_keys, descendants):
-            #     in_edges = list(graph.in_edges(descendant, data=True))
-            #     in_keys = [edge[2].get('key') for edge in in_edges]
-            #     # TODO If the input has a default we would not want to raise?
-            #     # if in_keys.count(out_key) == 1:
-            #     #    raise UnsatisfiedRequirement(f'No provider for type {out_key}')
-            graph.remove_node(node)
-    return graph
-
-
 class DataGraph:
     def __init__(self, providers: None | Iterable[ToProvider | Provider]) -> None:
         self._cbgraph = cb.Graph(nx.DiGraph())
@@ -96,12 +72,7 @@ class DataGraph:
             return
         self._get_clean_node(return_type)['provider'] = provider
         for dep in provider.arg_spec.keys():
-            if isinstance(dep, UnionType) or get_origin(dep) == Union:
-                for arg in get_args(dep):
-                    # Same key for all edges
-                    self._graph.add_edge(arg, return_type, key=dep)
-            else:
-                self._graph.add_edge(dep, return_type, key=dep)
+            self._graph.add_edge(dep, return_type, key=dep)
 
     def __setitem__(self, key: Key, value: DataGraph | Any) -> None:
         if typevars := find_all_typevars(key):
@@ -109,20 +80,10 @@ class DataGraph:
                 self[_bind_free_typevars(key, bound)] = value
             return
         if isinstance(value, DataGraph):
-            self._cbgraph[key] = value._cbgraph
-            return
             # TODO If key is generic, should we support multi-sink case and update all?
             # Would imply that we need the same for __getitem__.
             # key must be a unique sink node in value
-            sinks = [n for n in value._graph.nodes if value._graph.out_degree(n) == 0]
-            if len(sinks) != 1:
-                raise ValueError('Value must have exactly one sink node')
-            if key not in sinks:
-                raise ValueError('Key must be a sink node in value')
-            _ = self._get_clean_node(key)
-            # TODO Conflict handling?
-            # TODO Remove nodes that `key` as their only "anchor"?
-            self._graph = nx.compose(self._graph, value._graph)
+            self._cbgraph[key] = value._cbgraph
         else:
             self._get_clean_node(key)['value'] = value
 
@@ -141,20 +102,9 @@ class DataGraph:
         out._cbgraph = self._cbgraph.reduce(*args, **kwargs)
         return out
 
-    def to_cyclebane(self) -> Any:
-        import cyclebane as cb
-
-        return cb.Graph(self._graph)
-
-    @classmethod
-    def from_cyclebane(cls, graph: Any) -> DataGraph:
-        out = cls([])
-        out._graph = graph.to_networkx()
-        return out
-
     def copy(self) -> DataGraph:
         out = self.__class__([])
-        out._graph = self._graph.copy()
+        out._cbgraph = self._cbgraph.copy()
         return out
 
     def bind(self, params: dict[Key, Any]) -> DataGraph:
@@ -199,7 +149,6 @@ def to_task_graph(
             raise UnsatisfiedRequirement(f'No provider for type {node}')
         ancestors.extend(nx.ancestors(graph, node))
     graph = graph.subgraph(set(ancestors))
-    graph = _prune_unsatisfied(graph)
     if any(node not in graph for node in targets):
         raise UnsatisfiedRequirement(f'No provider for type {target}')
     out = {}
@@ -226,5 +175,5 @@ def to_task_graph(
                 # TODO Raise if no default?
                 out[key] = Provider(func=provider.func, arg_spec=spec, kind='function')
         else:
-            raise ValueError('Node must have a provider or a value')
+            raise UnsatisfiedRequirement(f'Node {key} must have a provider or a value')
     return TaskGraph(graph=out, targets=target, scheduler=scheduler)
