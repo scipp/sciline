@@ -1,0 +1,10 @@
+diff a/docs/conf.py b/docs/conf.py	(rejected hunks)
+@@ -133,7 +133,7 @@ html_theme_options = {
+     },
+     "external_links": [
+         {"name": "Scipp", "url": "https://scipp.github.io"},
+-        ],
++    ],
+     "icon_links": [
+         {
+             "name": "GitHub",
