@@ -7,4 +7,4 @@ diff a/requirements/make_base.py b/requirements/make_base.py	(rejected hunks)
 +    if dependencies is None:
          raise RuntimeError("No dependencies found in pyproject.toml")
      dependencies = [dep.strip().strip('"') for dep in dependencies]
- 
+
