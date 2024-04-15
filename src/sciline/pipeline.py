@@ -543,7 +543,7 @@ class Pipeline:
 
         if provider := self._providers.get(tp):
             # Optimization to quickly find non-generic providers
-            matches = [(provider, {})]
+            matches: List[Tuple[Provider, Dict[TypeVar, Key]]] = [(provider, {})]
         else:
             matches = [
                 (provider, bound)
@@ -568,28 +568,30 @@ class Pipeline:
             )
         else:
             origin = get_origin(tp)
-            typevars_of_generic = _extract_typevars_from_generic_type(origin)
-            if typevars_of_generic:
-                explanation = [
-                    ''.join(
-                        map(
-                            str,
-                            (
-                                'Note that ',
-                                key_name(origin[typevars_of_generic]),
-                                ' has constraints ',
+            # Not sure this is necessary, but mypy complains
+            if isinstance(origin, type) and hasattr(origin, '__getitem__'):
+                typevars_of_generic = _extract_typevars_from_generic_type(origin)
+                if typevars_of_generic:
+                    explanation = [
+                        ''.join(
+                            map(
+                                str,
                                 (
-                                    {
-                                        key_name(tv): tuple(
-                                            map(key_name, tv.__constraints__)
-                                        )
-                                        for tv in typevars_of_generic
-                                    }
+                                    'Note that ',
+                                    key_name(origin[typevars_of_generic]),
+                                    ' has constraints ',
+                                    (
+                                        {
+                                            key_name(tv): tuple(
+                                                map(key_name, tv.__constraints__)
+                                            )
+                                            for tv in typevars_of_generic
+                                        }
+                                    ),
                                 ),
-                            ),
+                            )
                         )
-                    )
-                ]
+                    ]
         return handler.handle_unsatisfied_requirement(tp, *explanation), {}
 
     def _get_unique_provider(
