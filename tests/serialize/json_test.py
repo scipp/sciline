@@ -2,7 +2,6 @@
 # Copyright (c) 2023 Scipp contributors (https://github.com/scipp)
 # type: ignore
 
-import sys
 from copy import deepcopy
 from typing import Any, NewType, TypeVar
 
@@ -98,7 +97,7 @@ expected_serialized_nodes = [
         'id': '1',
         'label': 'to_string',
         'kind': 'function',
-        'function': 'json_test.to_string',
+        'function': 'tests.serialize.json_test.to_string',
         'args': ['106', '104'],
         'kwargs': {},
     },
@@ -106,19 +105,19 @@ expected_serialized_nodes = [
         'id': '2',
         'label': 'Int[A]',
         'kind': 'data',
-        'type': 'json_test.Int[json_test.A]',
+        'type': 'tests.serialize.json_test.Int[tests.serialize.json_test.A]',
     },
     {
         'id': '3',
         'label': 'Int[B]',
         'kind': 'data',
-        'type': 'json_test.Int[json_test.B]',
+        'type': 'tests.serialize.json_test.Int[tests.serialize.json_test.B]',
     },
     {
         'id': '4',
         'label': 'make_int_b',
         'kind': 'function',
-        'function': 'json_test.make_int_b',
+        'function': 'tests.serialize.json_test.make_int_b',
         'args': [],
         'kwargs': {},
     },
@@ -126,13 +125,13 @@ expected_serialized_nodes = [
         'id': '5',
         'label': 'List[A]',
         'kind': 'data',
-        'type': 'json_test.List[json_test.A]',
+        'type': 'tests.serialize.json_test.List[tests.serialize.json_test.A]',
     },
     {
         'id': '6',
         'label': 'zeros',
         'kind': 'function',
-        'function': 'json_test.zeros',
+        'function': 'tests.serialize.json_test.zeros',
         'args': ['101'],
         'kwargs': {},
     },
@@ -140,13 +139,13 @@ expected_serialized_nodes = [
         'id': '7',
         'label': 'List[B]',
         'kind': 'data',
-        'type': 'json_test.List[json_test.B]',
+        'type': 'tests.serialize.json_test.List[tests.serialize.json_test.B]',
     },
     {
         'id': '8',
         'label': 'zeros',
         'kind': 'function',
-        'function': 'json_test.zeros',
+        'function': 'tests.serialize.json_test.zeros',
         'args': ['102'],
         'kwargs': {},
     },
@@ -169,7 +168,6 @@ expected_serialized_graph = {
 }
 
 
-@pytest.mark.skipif(sys.version_info < (3, 10), reason="requires python3.10 or higher")
 def test_serialize() -> None:
     pl = sl.Pipeline([make_int_b, zeros, to_string], params={Int[A]: 3})
     graph = pl.get(str)
@@ -194,7 +192,7 @@ expected_serialized_kwonlyargs_nodes = [
         'id': '1',
         'label': 'fn_w_kwonlyargs',
         'kind': 'function',
-        'function': 'json_test.fn_w_kwonlyargs',
+        'function': 'tests.serialize.json_test.fn_w_kwonlyargs',
         'args': [],
         'kwargs': {'x': '101'},
     },
@@ -217,7 +215,6 @@ expected_serialized_kwonlyargs_graph = {
 }
 
 
-@pytest.mark.skipif(sys.version_info < (3, 10), reason="requires python3.10 or higher")
 def test_serialize_kwonlyargs() -> None:
     pl = sl.Pipeline([fn_w_kwonlyargs], params={int: 3})
     graph = pl.get(float)
@@ -242,7 +239,7 @@ expected_serialized_repeated_arg_nodes = [
         'id': '1',
         'label': 'repeated_arg',
         'kind': 'function',
-        'function': 'json_test.repeated_arg',
+        'function': 'tests.serialize.json_test.repeated_arg',
         'args': ['101', '102'],
         'kwargs': {},
     },
@@ -267,7 +264,6 @@ expected_serialized_repeated_arg_graph = {
 }
 
 
-@pytest.mark.skipif(sys.version_info < (3, 10), reason="requires python3.10 or higher")
 def test_serialize_repeated_arg() -> None:
     pl = sl.Pipeline([repeated_arg], params={str: 'abc'})
     graph = pl.get(list[str])
@@ -302,7 +298,7 @@ expected_serialized_repeated_kwonlyarg_nodes = [
         'id': '2',
         'label': 'repeated_arg_kwonlyarg',
         'kind': 'function',
-        'function': 'json_test.repeated_arg_kwonlyarg',
+        'function': 'tests.serialize.json_test.repeated_arg_kwonlyarg',
         'args': ['103'],
         'kwargs': {'b': '104'},
     },
@@ -316,7 +312,7 @@ expected_serialized_repeated_kwonlyarg_nodes = [
         'id': '4',
         'label': 'repeated_kwonlyargs',
         'kind': 'function',
-        'function': 'json_test.repeated_kwonlyargs',
+        'function': 'tests.serialize.json_test.repeated_kwonlyargs',
         'args': [],
         'kwargs': {'x': '100', 'b': '101'},
     },
@@ -337,7 +333,6 @@ expected_serialized_repeated_kwonlyarg_graph = {
 }
 
 
-@pytest.mark.skipif(sys.version_info < (3, 10), reason="requires python3.10 or higher")
 def test_serialize_repeated_konlywarg() -> None:
     pl = sl.Pipeline([repeated_arg_kwonlyarg, repeated_kwonlyargs], params={int: 4})
     graph = pl.get(list[str])
@@ -358,7 +353,7 @@ expected_serialized_lambda_nodes = [
         'id': '1',
         'label': '<lambda>',
         'kind': 'function',
-        'function': 'json_test.test_serialize_lambda.<locals>.<lambda>',
+        'function': 'tests.serialize.json_test.test_serialize_lambda.<locals>.<lambda>',
         'args': ['101'],
         'kwargs': {},
     },
@@ -381,7 +376,6 @@ expected_serialized_lambda_graph = {
 }
 
 
-@pytest.mark.skipif(sys.version_info < (3, 10), reason="requires python3.10 or higher")
 def test_serialize_lambda() -> None:
     lam = lambda x: float(x)  # noqa: E731
     lam.__annotations__['x'] = int

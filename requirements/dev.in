@@ -9,3 +9,6 @@ copier
 jupyterlab
 pip-compile-multi
 pre-commit
+
+# See https://github.com/copier-org/copier/issues/1568
+pyyaml-include<2
