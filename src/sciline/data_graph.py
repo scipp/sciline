@@ -15,7 +15,18 @@ from ._provider import ArgSpec, Provider, ToProvider, _bind_free_typevars
 from .handler import UnsatisfiedRequirement
 from .scheduler import Scheduler
 from .typing import Key
-from .util import find_all_typevars, get_typevar_constraints
+
+
+def find_all_typevars(t: type | TypeVar) -> set[TypeVar]:
+    """Returns the set of all TypeVars in a type expression."""
+    if isinstance(t, TypeVar):
+        return {t}
+    return set(itertools.chain(*map(find_all_typevars, get_args(t))))
+
+
+def get_typevar_constraints(t: TypeVar) -> set[type]:
+    """Returns the set of constraints of a TypeVar."""
+    return set(t.__constraints__)
 
 
 def _mapping_to_constrained(
