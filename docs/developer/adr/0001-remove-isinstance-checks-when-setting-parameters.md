@@ -1,6 +1,6 @@
 # ADR 0001: Remove isinstance checks when setting parameters
 
-- Status: proposed
+- Status: accepted
 - Deciders: Jan-Lukas, Neil, Simon
 - Date: 2024-04-15
 
