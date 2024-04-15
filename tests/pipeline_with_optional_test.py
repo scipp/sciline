@@ -64,17 +64,27 @@ def test_optional_dependency_cannot_be_filled_by_non_optional_param_kwarg() -> N
         pipeline.get(str)
 
 
-def test_Union_and_optional_are_distinct() -> None:
+def test_Optional_T_is_same_as_Union_T_comma_None() -> None:
     def use_union1(x: Union[int, None]) -> str:
         return f'{x or 123}'
 
     def use_union2(x: Union[None, int]) -> str:
         return f'{x or 123}'
 
-    pipeline = sl.Pipeline([use_union1], params={int: 1})
+    pipeline = sl.Pipeline([use_union1], params={Optional[int]: 1})
+    assert pipeline.compute(str) == '1'
+    pipeline = sl.Pipeline([use_union2], params={Optional[int]: 1})
     with pytest.raises(sl.UnsatisfiedRequirement):
         pipeline.get(str)
-    pipeline = sl.Pipeline([use_union2], params={int: 1})
+
+
+def test_Union_argument_order_matters() -> None:
+    def use_union(x: Union[int, float]) -> str:
+        return f'{x}'
+
+    pipeline = sl.Pipeline([use_union], params={Union[int, float]: 1})
+    assert pipeline.compute(str) == '1'
+    pipeline = sl.Pipeline([use_union], params={Union[float, int]: 1})
     with pytest.raises(sl.UnsatisfiedRequirement):
         pipeline.get(str)
 
