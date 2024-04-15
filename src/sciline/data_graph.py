@@ -59,6 +59,12 @@ class DataGraph:
         for provider in providers or []:
             self.add(provider)
 
+    @classmethod
+    def from_cyclebane(cls, graph: cb.Graph) -> DataGraph:
+        out = cls([])
+        out._cbgraph = graph
+        return out
+
     @property
     def _graph(self) -> nx.DiGraph:
         return self._cbgraph.graph
@@ -69,6 +75,7 @@ class DataGraph:
             self._graph.remove_edges_from(list(self._graph.in_edges(key)))
             self._graph.nodes[key].pop('value', None)
             self._graph.nodes[key].pop('provider', None)
+            self._graph.nodes[key].pop('reduce', None)
         else:
             self._graph.add_node(key)
         return self._graph.nodes[key]
@@ -99,24 +106,22 @@ class DataGraph:
             self._get_clean_node(key)['value'] = value
 
     def __getitem__(self, key: Key) -> DataGraph:
-        out = DataGraph([])
-        out._cbgraph = self._cbgraph[key]
-        return out
+        graph = self._cbgraph[key]
+        return self.from_cyclebane(graph)
 
     def map(self, *args, **kwargs) -> DataGraph:
-        out = DataGraph([])
-        out._cbgraph = self._cbgraph.map(*args, **kwargs)
-        return out
+        graph = self._cbgraph.map(*args, **kwargs)
+        return self.from_cyclebane(graph)
 
-    def reduce(self, *args, **kwargs) -> DataGraph:
-        out = DataGraph([])
-        out._cbgraph = self._cbgraph.reduce(*args, **kwargs)
-        return out
+    def reduce(self, *, func, **kwargs) -> DataGraph:
+        # Note that the type hints of `func` are not checked here. As we are explicit
+        # about the modification, this is in line with __setitem__ which does not
+        # perform such checks and allows for using generic reduction functions.
+        graph = self._cbgraph.reduce(attrs={'reduce': func}, **kwargs)
+        return self.from_cyclebane(graph)
 
     def copy(self) -> DataGraph:
-        out = self.__class__([])
-        out._cbgraph = self._cbgraph.copy()
-        return out
+        return self.from_cyclebane(self._cbgraph.copy())
 
     def bind(self, params: dict[Key, Any]) -> DataGraph:
         out = self.copy()
@@ -170,15 +175,13 @@ def to_task_graph(
         if (value := node.get('value')) is not None:
             out[key] = Provider.parameter(value)
         elif (provider := node.get('provider')) is not None:
-            if not isinstance(provider, Provider):
-                # This happens when using cyclebane
-                new_spec = ArgSpec.from_args(*input_nodes)
-                out[key] = Provider(func=provider, arg_spec=new_spec, kind='function')
-            else:
-                new_key = {orig_key: n for n, orig_key in zip(input_nodes, orig_keys)}
-                spec = provider.arg_spec.map_keys(new_key.get)
-                # TODO also kwargs
-                out[key] = Provider(func=provider.func, arg_spec=spec, kind='function')
+            new_key = {orig_key: n for n, orig_key in zip(input_nodes, orig_keys)}
+            spec = provider.arg_spec.map_keys(new_key.get)
+            # TODO also kwargs
+            out[key] = Provider(func=provider.func, arg_spec=spec, kind='function')
+        elif (func := node.get('reduce')) is not None:
+            spec = ArgSpec.from_args(*input_nodes)
+            out[key] = Provider(func=func, arg_spec=spec, kind='function')
         else:
             raise UnsatisfiedRequirement(f'Node {key} must have a provider or a value')
     return TaskGraph(graph=out, targets=target, scheduler=scheduler)
