@@ -17,7 +17,7 @@ This has a series of problems, which we exemplify for the case of `Optional`.
 
 1. Default values (which are currently ignored by Sciline) are overridden by the implicit `None` provider.
    In other words, Sciline assumes that the default value of the optional input is `None`.
-2. Entire branches a pruned, which can hide bugs.
+2. Entire branches are pruned, which can hide bugs.
    If the users added providers for the optional input, they will not be used if any of them has unintentionally unsatisfied dependencies.
 3. The special mechanism prevents the (in principle very valid) use of any providers that return an `Optional` or `Union` type.
 4. Optional inputs cannot be set to `None` *explicitly*.
