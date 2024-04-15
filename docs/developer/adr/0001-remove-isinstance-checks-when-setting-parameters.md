@@ -38,7 +38,7 @@ pipeline[QBins] = sc.linspace(..., unit='m')  # no error, but wrong unit
 
 Checking the type catches the first error, but not the second.
 Paradoxically, setting an integer would often be a valid operation in the example, since `scipp.hist` can handle this case, whereas the wrong unit would not be valid.
-This may indicate that defining `QBins` as an alias of `scipp.Variable` is actually an anti-pattern.
+This may indicate that defining `QBins` as an alias of `scipp.Variable` is actually an instance of an anti-pattern.
 Instead, imagine we have defined a specific `class QBins`, which performs validation in its constructor, and defines `__call__` so it can be used as a provider:
 
 ```python
@@ -51,6 +51,8 @@ This example illustrates that a clearer and more specific expression of intent c
 
 ## Decision
 
+- The core scope of Sciline is the definition of task graphs.
+  Type validation is not.
 - Remove the mechanism that checks if a value is an instance of the key when setting it as a parameter.
 - Encourage users to validate inputs in providers, which can also be tested in unit tests without setting up the full workflow.
 - Encourage users to use a more general parameter validation mechanism using other libraries.
