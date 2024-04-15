@@ -17,14 +17,11 @@ from .handler import (
     HandleAsComputeTimeException,
     UnsatisfiedRequirement,
 )
-from .param_table import ParamTable
-from .pipeline import AmbiguousProvider, Pipeline
+from .pipeline import Pipeline
 from .series import Series
 from .task_graph import TaskGraph
 
 __all__ = [
-    "AmbiguousProvider",
-    "ParamTable",
     "Pipeline",
     "scheduler",
     "Series",

@@ -93,6 +93,16 @@ class DataGraph:
             self._graph.add_edge(dep, return_type, key=dep)
 
     def __setitem__(self, key: Key, value: DataGraph | Any) -> None:
+        """
+        Provide a concrete value for a type.
+
+        Parameters
+        ----------
+        key:
+            Type to provide a value for.
+        param:
+            Concrete value to provide.
+        """
         if typevars := find_all_typevars(key):
             for bound in _mapping_to_constrained(typevars):
                 self[_bind_free_typevars(key, bound)] = value
