@@ -21,7 +21,7 @@ from typing import (
 from ._provider import Provider, ToProvider
 from .data_graph import DataGraph
 from .display import pipeline_html_repr
-from .handler import ErrorHandler, HandleAsBuildTimeException
+from .handler import ErrorHandler
 from .scheduler import Scheduler
 from .task_graph import TaskGraph
 from .typing import Item, Key
@@ -123,9 +123,7 @@ class Pipeline(DataGraph):
             raises an exception only when the graph is computed. This can be achieved
             by passing :py:class:`HandleAsComputeTimeException` as the handler.
         """
-        handler = handler or HandleAsBuildTimeException()
-        # TODO handle handler
-        return self.build(keys, scheduler=scheduler)
+        return self.build(keys, scheduler=scheduler, handler=handler)
 
     @overload
     def bind_and_call(self, fns: Callable[..., T], /) -> T: ...

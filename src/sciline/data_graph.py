@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import itertools
 from collections.abc import Iterable
-from typing import Any, Generator, TypeVar, get_args
+from typing import Any, Generator, Optional, TypeVar, get_args
 
 import cyclebane as cb
 import networkx as nx
@@ -12,7 +12,7 @@ import networkx as nx
 from sciline.task_graph import TaskGraph
 
 from ._provider import ArgSpec, Provider, ToProvider, _bind_free_typevars
-from .handler import UnsatisfiedRequirement
+from .handler import ErrorHandler, HandleAsBuildTimeException
 from .scheduler import Scheduler
 from .typing import Key
 
@@ -139,9 +139,17 @@ class DataGraph:
             out[key] = value
         return out
 
-    def build(self, target: Key, scheduler: None | Scheduler = None) -> TaskGraph:
+    def build(
+        self,
+        target: Key,
+        scheduler: None | Scheduler = None,
+        handler: Optional[ErrorHandler] = None,
+    ) -> TaskGraph:
         return to_task_graph(
-            self._cbgraph.to_networkx(), target=target, scheduler=scheduler
+            self._cbgraph.to_networkx(),
+            target=target,
+            scheduler=scheduler,
+            handler=handler,
         )
 
     def visualize(
@@ -163,8 +171,12 @@ class DataGraph:
 
 
 def to_task_graph(
-    graph: nx.DiGraph, target: Key, scheduler: None | Scheduler = None
+    graph: nx.DiGraph,
+    target: Key,
+    scheduler: None | Scheduler = None,
+    handler: Optional[ErrorHandler] = None,
 ) -> TaskGraph:
+    handler = handler or HandleAsBuildTimeException()
     if _is_multiple_keys(target):
         targets = tuple(target)  # type: ignore[arg-type]
     else:
@@ -172,7 +184,7 @@ def to_task_graph(
     ancestors = list(targets)
     for node in targets:
         if node not in graph:
-            raise UnsatisfiedRequirement(f'No provider for type {node}')
+            handler.handle_unsatisfied_requirement(node)
         ancestors.extend(nx.ancestors(graph, node))
     graph = graph.subgraph(set(ancestors))
     out = {}
@@ -193,5 +205,5 @@ def to_task_graph(
             spec = ArgSpec.from_args(*input_nodes)
             out[key] = Provider(func=func, arg_spec=spec, kind='function')
         else:
-            raise UnsatisfiedRequirement(f'Node {key} must have a provider or a value')
+            out[key] = handler.handle_unsatisfied_requirement(key)
     return TaskGraph(graph=out, targets=target, scheduler=scheduler)
