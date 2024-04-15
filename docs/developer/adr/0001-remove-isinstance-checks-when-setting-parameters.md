@@ -23,13 +23,38 @@ Therefore, we should remove this mechanism and replace it with a more general va
 The more general validation mechanism can be considered out of scope for Sciline, and should be implemented in the user code or using other common libraries such as `pydantic`.
 
 Finally, we can think of this mechanism as a form of runtime type checking.
-This is not the intended scope of Sciline.
+We should ask ourselves if this is the intended scope of Sciline.
+If it is, shouldn't we also check that each provider actually returns the correct type?
+
+The main problem with not checking value types when setting parameters is that it is not possible to catch such errors with `mypy`, in contrast to return values of providers, which `mypy` *can* check.
+
+Consider the following example of setting $Q$ bins for a workflow, given by a `scipp.Variable`, which would then be passed to `scipp.hist` to create a histogram:
+
+```python
+pipeline[QBins] = sc.linspace(...)
+pipeline[QBins] = 1000  # error in current implementation
+pipeline[QBins] = sc.linspace(..., unit='m')  # no error, but wrong unit
+```
+
+Checking the type catches the first error, but not the second.
+Paradoxically, setting an integer would often be a valid operation in the example, since `scipp.hist` can handle this case, whereas the wrong unit would not be valid.
+This may indicate that defining `QBins` as an alias of `scipp.Variable` is actually an anti-pattern.
+Instead, imagine we have defined a specific `class QBins`, which performs validation in its constructor, and defines `__call__` so it can be used as a provider:
+
+```python
+pipeline.insert(QBins(sc.linspace(...)))
+pipeline.insert(QBins(1000))  # ok
+pipeline.insert(QBins(sc.linspace(..., unit='m')))  # error constructing QBins
+```
+
+This example illustrates that a clearer and more specific expression of intent can avoid the need for relying on checking the type of the value when setting a parameter.
 
 ## Decision
 
 - Remove the mechanism that checks if a value is an instance of the key when setting it as a parameter.
 - Encourage users to validate inputs in providers, which can also be tested in unit tests without setting up the full workflow.
 - Encourage users to use a more general parameter validation mechanism using other libraries.
+- Consider adding a mechanism to inject a callable to use for parameter validation as a argument when creating a `Pipeline`.
 
 ## Consequences
 
@@ -40,4 +65,4 @@ This is not the intended scope of Sciline.
 
 ### Negative
 
-- The correctness guarantees will be slightly diminished.
+- `sciline.Pipeline` will support duck-typing for parameters, in a way that cannot be checked with `mypy`.
