@@ -6,12 +6,22 @@ package:
 source:
   path: ..
 
+
+{% set pyproject = load_file_data('pyproject.toml') %}
+{% set dependencies = pyproject.get('project', {}).get('dependencies', {}) %}
+
+
 requirements:
   build:
     - setuptools
     - setuptools_scm
   run:
-    - python>=3.9
+    - python>=3.10
+
+  {% for package in dependencies %}
+    - {% if package == "graphviz" %}python-graphviz{% else %}{{ package }}{% endif %}
+  {% endfor %}
+
 
 test:
   imports:
