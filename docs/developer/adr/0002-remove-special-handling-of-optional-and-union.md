@@ -1,8 +1,8 @@
 # ADR 0002: Remove special handling of Optional and Union
 
-- Status: proposed
-- Deciders:
-- Date: 2024-04-11
+- Status: accepted
+- Deciders: Jan-Lukas, Johannes, Mridul, Simon, Sunyoung
+- Date: 2024-04-15
 
 ## Context
 
@@ -102,4 +102,4 @@ Remove the special handling of `Optional` and `Union`.
 
 ### Negative
 
-- Workarounds are needed for the use case of using a provider returning a non-optional output to fulfill an optional input.
+- Workarounds are needed for the use case of using a provider returning a non-optional output to fulfill an optional input, and for setting union parameters.
