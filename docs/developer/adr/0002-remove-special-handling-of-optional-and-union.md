@@ -72,6 +72,19 @@ There are a couple of possible workarounds:
 - Add an explicit `Optional` provider that wraps (or depends on) the non-optional provider.
 - Modify the graph structure (which we plan to support in the redesign of Sciline) using something like `pipeline[Optional[MyParam]] = pipeline[MyParam]`.
 
+#### Using a provider to return one of a union's types
+
+Same as above, for `Optional[T]`.
+
+#### Setting union parameters is unwieldy
+
+Given a provider `f(x: A | B | C) -> D: ...`, a user would need to set a value for the input of `f` like `pipeline[A | B | C] = ...`.
+It would be easier if they could be more specific, like `pipeline[A] = ...`.
+
+In this case, we think defining an alias for `A | B | C` would be a better solution than the current special handling of `Union`.
+It would force the user to be more explicit about the input type, which is a good thing.
+Conceptually the use of `Union` may just be an indicator that `f` depends on some common aspect of `A`, `B`, and `C`, which could be made explicit by defining a new type or protocol.
+
 ## Decision
 
 Remove the special handling of `Optional` and `Union`.
