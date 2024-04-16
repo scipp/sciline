@@ -1,4 +1,4 @@
-# Developer documentation
+# Development
 
 ```{include} ../../CONTRIBUTING.md
 ```
@@ -14,4 +14,5 @@ getting-started
 coding-conventions
 dependency-management
 architecture-and-design/index
+architecture-decision-records
 ```
