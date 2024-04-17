@@ -155,9 +155,10 @@ T = TypeVar('T')
 def _extract_type_and_labels(
     key: Union[Item[T], Type[T]], compact: bool
 ) -> Tuple[Type[T], List[Union[type, Tuple[type, Any]]]]:
-    if isinstance(key, Item):
-        label = key.label
-        return key.tp, [lb.tp if compact else (lb.tp, lb.index) for lb in label]
+    import cyclebane
+
+    if isinstance(key, cyclebane.graph.NodeName):
+        return key.name, tuple(key.index.axes)
     return key, []
 
 
@@ -169,7 +170,6 @@ def _format_type(tp: Key, compact: bool = False) -> Node:
     but strip all module prefixes from the type name as well as the params.
     We may make this configurable in the future.
     """
-
     tp, labels = _extract_type_and_labels(tp, compact=compact)
 
     if (tp_ := get_optional(tp)) is not None:

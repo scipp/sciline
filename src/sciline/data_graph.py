@@ -152,7 +152,7 @@ class DataGraph:
             handler=handler,
         )
 
-    def visualize(
+    def visualize_data_graph(
         self, **kwargs: Any
     ) -> graphviz.Digraph:  # type: ignore[name-defined] # noqa: F821
         import graphviz
@@ -168,6 +168,9 @@ class DataGraph:
             label = str(key) if key is not None else ''
             dot.edge(str(edge[0]), str(edge[1]), label=label)
         return dot
+
+
+_no_value = object()
 
 
 def to_task_graph(
@@ -194,7 +197,7 @@ def to_task_graph(
         input_nodes = list(graph.predecessors(key))
         input_edges = list(graph.in_edges(key, data=True))
         orig_keys = [edge[2].get('key', None) for edge in input_edges]
-        if (value := node.get('value')) is not None:
+        if (value := node.get('value', _no_value)) is not _no_value:
             out[key] = Provider.parameter(value)
         elif (provider := node.get('provider')) is not None:
             new_key = {orig_key: n for n, orig_key in zip(input_nodes, orig_keys)}
