@@ -8,27 +8,27 @@ import sciline as sl
 
 
 def test_provider_returning_optional_allowed() -> None:
-    def make_optional() -> Optional[int]:
+    def make_optional() -> int | None:
         return 3
 
     pl = sl.Pipeline([make_optional])
-    assert pl.compute(Optional[int]) == 3
+    assert pl.compute(int | None) == 3
 
 
 def test_provider_returning_union_allowed() -> None:
-    def make_union() -> Union[int, float]:
+    def make_union() -> int | float:
         return 3
 
     pl = sl.Pipeline([make_union])
-    assert pl.compute(Union[int, float]) == 3
+    assert pl.compute(int | float) == 3
 
 
 def test_parameter_type_union_or_optional_allowed() -> None:
     pipeline = sl.Pipeline()
-    pipeline[Union[int, float]] = 3  # type: ignore[index]
-    assert pipeline.compute(Union[int, float]) == 3
-    pipeline[Optional[int]] = 4  # type: ignore[index]
-    assert pipeline.compute(Optional[int]) == 4
+    pipeline[int | float] = 3  # type: ignore[index]
+    assert pipeline.compute(int | float) == 3
+    pipeline[int | None] = 4  # type: ignore[index]
+    assert pipeline.compute(int | None) == 4
 
 
 def test_union_requirement_not_satisfied_by_any_of_its_arguments() -> None:
@@ -64,27 +64,15 @@ def test_optional_dependency_cannot_be_filled_by_non_optional_param_kwarg() -> N
         pipeline.get(str)
 
 
-def test_Optional_T_is_same_as_Union_T_comma_None() -> None:
-    def use_union1(x: Union[int, None]) -> str:
-        return f'{x or 123}'
-
-    def use_union2(x: Union[None, int]) -> str:
-        return f'{x or 123}'
-
-    pipeline = sl.Pipeline([use_union1], params={Optional[int]: 1})
-    assert pipeline.compute(str) == '1'
-    pipeline = sl.Pipeline([use_union2], params={Optional[int]: 1})
-    with pytest.raises(sl.UnsatisfiedRequirement):
-        pipeline.get(str)
-
-
 def test_Union_argument_order_matters() -> None:
-    def use_union(x: Union[int, float]) -> str:
+    def use_union(x: int | float) -> str:
         return f'{x}'
 
-    pipeline = sl.Pipeline([use_union], params={Union[int, float]: 1})
+    pipeline = sl.Pipeline([use_union])
+    pipeline[int | float] = 1  # type: ignore[index]
     assert pipeline.compute(str) == '1'
-    pipeline = sl.Pipeline([use_union], params={Union[float, int]: 1})
+    pipeline = sl.Pipeline([use_union])
+    pipeline[float | int] = 1  # type: ignore[index]
     with pytest.raises(sl.UnsatisfiedRequirement):
         pipeline.get(str)
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import inspect
 from dataclasses import dataclass
+from types import UnionType
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -261,6 +262,8 @@ def _bind_free_typevars(tp: Union[TypeVar, Key], bound: dict[TypeVar, Key]) -> K
             raise UnboundTypeVar(f'Unbound type variable {tp}')
         return result
     elif (origin := get_origin(tp)) is not None:
+        if origin is UnionType:
+            return tp
         result = origin[tuple(_bind_free_typevars(arg, bound) for arg in get_args(tp))]
         if result is None:
             raise ValueError(f'Binding type variables in {tp} resulted in `None`')

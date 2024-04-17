@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections import defaultdict
 from collections.abc import Iterable
 from itertools import chain
+from types import UnionType
 from typing import (
     Any,
     Callable,
@@ -722,11 +723,11 @@ class Pipeline:
         ...
 
     @overload
-    def compute(self, tp: object, **kwargs: Any) -> Any:
+    def compute(self, tp: UnionType, **kwargs: Any) -> Any:
         ...
 
     def compute(
-        self, tp: type | Iterable[type] | Item[T] | object, **kwargs: Any
+        self, tp: type | Iterable[type] | Item[T] | UnionType, **kwargs: Any
     ) -> Any:
         """
         Compute result for the given keys.
