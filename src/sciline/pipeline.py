@@ -21,7 +21,7 @@ from typing import (
 from ._provider import Provider, ToProvider
 from .data_graph import DataGraph
 from .display import pipeline_html_repr
-from .handler import ErrorHandler
+from .handler import ErrorHandler, HandleAsComputeTimeException
 from .scheduler import Scheduler
 from .task_graph import TaskGraph
 from .typing import Item, Key
@@ -68,16 +68,20 @@ class Pipeline(DataGraph):
         self.add(provider)
 
     @overload
-    def compute(self, tp: Type[T], **kwargs: Any) -> T: ...
+    def compute(self, tp: Type[T], **kwargs: Any) -> T:
+        ...
 
     @overload
-    def compute(self, tp: Iterable[Type[T]], **kwargs: Any) -> Dict[Type[T], T]: ...
+    def compute(self, tp: Iterable[Type[T]], **kwargs: Any) -> Dict[Type[T], T]:
+        ...
 
     @overload
-    def compute(self, tp: Item[T], **kwargs: Any) -> T: ...
+    def compute(self, tp: Item[T], **kwargs: Any) -> T:
+        ...
 
     @overload
-    def compute(self, tp: UnionType, **kwargs: Any) -> Any: ...
+    def compute(self, tp: UnionType, **kwargs: Any) -> Any:
+        ...
 
     def compute(
         self, tp: type | Iterable[type] | Item[T] | UnionType, **kwargs: Any
@@ -96,6 +100,24 @@ class Pipeline(DataGraph):
             Keyword arguments passed to the ``.get()`` method.
         """
         return self.get(tp, **kwargs).compute()
+
+    def visualize(
+        self, tp: type | Iterable[type], **kwargs: Any
+    ) -> graphviz.Digraph:  # type: ignore[name-defined] # noqa: F821
+        """
+        Return a graphviz Digraph object representing the graph for the given keys.
+
+        Equivalent to ``self.get(tp).visualize()``.
+
+        Parameters
+        ----------
+        tp:
+            Type to visualize the graph for.
+            Can be a single type or an iterable of types.
+        kwargs:
+            Keyword arguments passed to :py:class:`graphviz.Digraph`.
+        """
+        return self.get(tp, handler=HandleAsComputeTimeException()).visualize(**kwargs)
 
     def get(
         self,
@@ -126,12 +148,12 @@ class Pipeline(DataGraph):
         return self.build(keys, scheduler=scheduler, handler=handler)
 
     @overload
-    def bind_and_call(self, fns: Callable[..., T], /) -> T: ...
+    def bind_and_call(self, fns: Callable[..., T], /) -> T:
+        ...
 
     @overload
-    def bind_and_call(
-        self, fns: Iterable[Callable[..., Any]], /
-    ) -> Tuple[Any, ...]: ...
+    def bind_and_call(self, fns: Iterable[Callable[..., Any]], /) -> Tuple[Any, ...]:
+        ...
 
     def bind_and_call(
         self, fns: Union[Callable[..., Any], Iterable[Callable[..., Any]]], /
