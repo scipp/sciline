@@ -561,23 +561,6 @@ def test_setitem_generic_works_without_params() -> None:
     assert pl.compute(A) == A(3)
 
 
-def test_setitem_raises_TypeError_if_instance_does_not_match_key() -> None:
-    A = NewType('A', int)
-    T = TypeVar('T')
-
-    @dataclass
-    class B(Generic[T]):
-        value: T
-
-    pl = sl.Pipeline()
-    with pytest.raises(TypeError):
-        pl[int] = 1.0
-    with pytest.raises(TypeError):
-        pl[A] = 1.0
-    with pytest.raises(TypeError):
-        pl[B[int]] = 1.0
-
-
 def test_setitem_can_replace_param_with_param() -> None:
     pl = sl.Pipeline()
     pl[int] = 1
