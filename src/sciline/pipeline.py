@@ -30,7 +30,6 @@ from sciline.task_graph import TaskGraph
 from ._provider import ArgSpec, Provider, ProviderLocation, ToProvider
 from ._utils import key_name
 from .display import pipeline_html_repr
-from .domain import Scope, ScopeTwoParams
 from .handler import (
     ErrorHandler,
     HandleAsBuildTimeException,
@@ -403,36 +402,6 @@ class Pipeline:
         param:
             Concrete value to provide.
         """
-        # TODO Switch to isinstance(key, NewType) once our minimum is Python 3.10
-        # Note that we cannot pass mypy in Python<3.10 since NewType is not a type.
-        if hasattr(key, '__supertype__'):
-            underlying = key.__supertype__  # type: ignore[attr-defined]
-        else:
-            underlying = key
-        if (origin := get_origin(underlying)) is None:
-            # In Python 3.8, get_origin does not work with numpy.typing.NDArray,
-            # but it defines __origin__
-            if (np_origin := getattr(underlying, '__origin__', None)) is not None:
-                expected = np_origin
-            else:
-                expected = underlying
-        elif origin == Union:
-            expected = underlying
-        elif issubclass(origin, (Scope, ScopeTwoParams)):
-            scope = origin.__orig_bases__[0]
-            while (orig := get_origin(scope)) is not None and orig not in (
-                Scope,
-                ScopeTwoParams,
-            ):
-                scope = orig.__orig_bases__[0]
-            expected = get_args(scope)[-1]
-        else:
-            expected = origin
-
-        if not isinstance(param, expected):
-            raise TypeError(
-                f'Key {key} incompatible to value {param} of type {type(param)}'
-            )
         self._set_provider(key, Provider.parameter(param))
 
     def set_param_table(self, params: ParamTable) -> None:
