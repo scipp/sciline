@@ -200,7 +200,7 @@ def to_task_graph(
         if (value := node.get('value', _no_value)) is not _no_value:
             out[key] = Provider.parameter(value)
         elif (provider := node.get('provider')) is not None:
-            new_key = {orig_key: n for n, orig_key in zip(input_nodes, orig_keys)}
+            new_key = dict(zip(orig_keys, input_nodes))
             spec = provider.arg_spec.map_keys(new_key.get)
             # TODO also kwargs
             out[key] = Provider(func=provider.func, arg_spec=spec, kind='function')
