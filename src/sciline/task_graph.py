@@ -83,7 +83,7 @@ class TaskGraph:
                 scheduler = NaiveScheduler()
         elif not isinstance(scheduler, Scheduler):
             raise ValueError(
-                "Scheduler interface must becompatible with sciline.Scheduler"
+                "Scheduler interface must be compatible with sciline.Scheduler"
             )
         self._scheduler = scheduler
 
