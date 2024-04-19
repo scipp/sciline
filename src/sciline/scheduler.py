@@ -1,7 +1,16 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright (c) 2023 Scipp contributors (https://github.com/scipp)
 import inspect
-from typing import Any, Callable, Dict, List, Optional, Protocol, Tuple
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    List,
+    Optional,
+    Protocol,
+    Tuple,
+    runtime_checkable,
+)
 
 from sciline.typing import Graph, Key
 
@@ -10,6 +19,7 @@ class CycleError(Exception):
     pass
 
 
+@runtime_checkable
 class Scheduler(Protocol):
     """
     Scheduler interface compatible with :py:class:`sciline.Pipeline`.

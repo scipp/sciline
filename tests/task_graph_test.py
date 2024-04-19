@@ -81,3 +81,13 @@ def test_keys_iter() -> None:
     tg = pl.get(list[str])
     assert len(list(tg.keys())) == 4  # there are no duplicates
     assert set(tg.keys()) == {A, B, Str[B], list[str]}
+
+
+def test_scheduler_not_supported() -> None:
+    with pytest.raises(
+        ValueError,
+        match="Scheduler interface must be compatible with sciline.Scheduler",
+    ):
+        TaskGraph(
+            graph={}, targets=(), scheduler="not a scheduler"  # type: ignore[arg-type]
+        )
