@@ -404,14 +404,6 @@ def test_serialize_does_not_support_callable_objects() -> None:
         graph.serialize()
 
 
-def test_serialize_param_table() -> None:
-    pl = sl.Pipeline([as_float])
-    pl.set_param_table(sl.ParamTable(str, {int: [3, -5]}))
-    graph = pl.get(sl.Series[str, float])
-    with pytest.raises(ValueError):
-        graph.serialize()
-
-
 def test_serialize_validate_schema() -> None:
     pl = sl.Pipeline([make_int_b, zeros, to_string], params={Int[A]: 3})
     graph = pl.get(str)

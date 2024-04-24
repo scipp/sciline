@@ -22,7 +22,7 @@ DetectorMask = NewType('DetectorMask', npt.NDArray[np.int64])
 DirectBeam = NewType('DirectBeam', npt.NDArray[np.float64])
 SolidAngle = NewType('SolidAngle', npt.NDArray[np.float64])
 
-Run = TypeVar('Run')
+Run = TypeVar('Run', SampleRun, BackgroundRun)
 
 
 # TODO Giving the base twice works with mypy, how can we avoid typing it twice?

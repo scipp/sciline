@@ -64,7 +64,7 @@ def test_optional_dependency_cannot_be_filled_by_non_optional_param_kwarg() -> N
         pipeline.get(str)
 
 
-def test_Union_argument_order_matters() -> None:
+def test_Union_argument_order_does_not_matter() -> None:
     def use_union(x: int | float) -> str:
         return f'{x}'
 
@@ -73,8 +73,10 @@ def test_Union_argument_order_matters() -> None:
     assert pipeline.compute(str) == '1'
     pipeline = sl.Pipeline([use_union])
     pipeline[float | int] = 1  # type: ignore[index]
-    with pytest.raises(sl.UnsatisfiedRequirement):
-        pipeline.get(str)
+    assert pipeline.compute(str) == '1'
+    # Note that the above works because the hashes are the same:
+    assert hash(int | float) == hash(float | int)
+    assert hash(Union[int, float]) == hash(Union[float, int])
 
 
 def test_optional_dependency_cannot_be_filled_transitively() -> None:
