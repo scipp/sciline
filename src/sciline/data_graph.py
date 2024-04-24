@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import itertools
 from collections.abc import Iterable
+from types import NoneType
 from typing import Any, Generator, Optional, TypeVar, get_args
 
 import cyclebane as cb
@@ -71,6 +72,8 @@ class DataGraph:
 
     def _get_clean_node(self, key: Key) -> Any:
         """Return node ready for setting value or provider."""
+        if key is NoneType:
+            raise ValueError('Key must not be None')
         if key in self._graph:
             self._graph.remove_edges_from(list(self._graph.in_edges(key)))
             self._graph.nodes[key].pop('value', None)
@@ -88,6 +91,8 @@ class DataGraph:
             for bound in _mapping_to_constrained(typevars):
                 self.add(provider.bind_type_vars(bound))
             return
+        # Trigger UnboundTypeVar error if any input typevars are not bound
+        provider = provider.bind_type_vars({})
         self._get_clean_node(return_type)['provider'] = provider
         for dep in provider.arg_spec.keys():
             self._graph.add_edge(dep, return_type, key=dep)
@@ -180,7 +185,7 @@ def to_task_graph(
     handler: Optional[ErrorHandler] = None,
 ) -> TaskGraph:
     handler = handler or HandleAsBuildTimeException()
-    if _is_multiple_keys(target):
+    if multi := _is_multiple_keys(target):
         targets = tuple(target)  # type: ignore[arg-type]
     else:
         targets = (target,)
@@ -209,4 +214,8 @@ def to_task_graph(
             out[key] = Provider(func=func, arg_spec=spec, kind='function')
         else:
             out[key] = handler.handle_unsatisfied_requirement(key)
-    return TaskGraph(graph=out, targets=target, scheduler=scheduler)
+    return TaskGraph(
+        graph=out,
+        targets=targets if multi else target,
+        scheduler=scheduler,
+    )

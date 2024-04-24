@@ -269,6 +269,12 @@ def test_inserting_provider_returning_None_raises() -> None:
         pipeline.insert(provide_none)
 
 
+def test_setting_None_param_raises() -> None:
+    pipeline = sl.Pipeline()
+    with pytest.raises(ValueError):
+        pipeline[None] = 3
+
+
 def test_inserting_provider_with_no_return_type_raises() -> None:
     def provide_none():  # type: ignore[no-untyped-def]
         return None
@@ -281,31 +287,30 @@ def test_inserting_provider_with_no_return_type_raises() -> None:
 
 
 def test_TypeVar_requirement_of_provider_can_be_bound() -> None:
-    T = TypeVar('T')
+    T = TypeVar('T', int, float)
 
     def provider_int() -> int:
         return 3
 
-    def provider(x: T) -> List[T]:
+    def provider(x: T) -> list[T]:
         return [x, x]
 
     pipeline = sl.Pipeline([provider_int, provider])
-    assert pipeline.compute(List[int]) == [3, 3]
+    assert pipeline.compute(list[int]) == [3, 3]
 
 
 def test_TypeVar_that_cannot_be_bound_raises_UnboundTypeVar() -> None:
-    T = TypeVar('T')
+    T = TypeVar('T', int, float)
 
-    def provider(_: T) -> int:
-        return 1
+    def provider(_: T) -> str:
+        return 'abc'
 
-    pipeline = sl.Pipeline([provider])
     with pytest.raises(sl.UnboundTypeVar):
-        pipeline.compute(int)
+        sl.Pipeline([provider])
 
 
 def test_unsatisfiable_TypeVar_requirement_of_provider_raises() -> None:
-    T = TypeVar('T')
+    T = TypeVar('T', int, float)
 
     def provider_int() -> int:
         return 3
@@ -319,8 +324,8 @@ def test_unsatisfiable_TypeVar_requirement_of_provider_raises() -> None:
 
 
 def test_TypeVar_params_are_not_associated_unless_they_match() -> None:
-    T1 = TypeVar('T1')
-    T2 = TypeVar('T2')
+    T1 = TypeVar('T1', int, float)
+    T2 = TypeVar('T2', int, float)
 
     class A(Generic[T1]):
         ...
@@ -337,15 +342,15 @@ def test_TypeVar_params_are_not_associated_unless_they_match() -> None:
     def matching(x: A[T1]) -> B[T1]:
         return B[T1]()
 
-    pipeline = sl.Pipeline([source, not_matching])
     with pytest.raises(sl.UnboundTypeVar):
-        pipeline.compute(B[int])
+        sl.Pipeline([source, not_matching])
 
     pipeline = sl.Pipeline([source, matching])
     pipeline.compute(B[int])
 
 
 def test_multi_Generic_with_fully_bound_arguments() -> None:
+    # Note that no constraints necessary here, Sciline never sees the typevars
     T1 = TypeVar('T1')
     T2 = TypeVar('T2')
 
@@ -362,8 +367,8 @@ def test_multi_Generic_with_fully_bound_arguments() -> None:
 
 
 def test_multi_Generic_with_partially_bound_arguments() -> None:
-    T1 = TypeVar('T1')
-    T2 = TypeVar('T2')
+    T1 = TypeVar('T1', int, float)
+    T2 = TypeVar('T2', int, float)
 
     @dataclass
     class A(Generic[T1, T2]):
@@ -381,8 +386,8 @@ def test_multi_Generic_with_partially_bound_arguments() -> None:
 
 
 def test_multi_Generic_with_multiple_unbound() -> None:
-    T1 = TypeVar('T1')
-    T2 = TypeVar('T2')
+    T1 = TypeVar('T1', int, float)
+    T2 = TypeVar('T2', int, float)
 
     @dataclass
     class A(Generic[T1, T2]):
@@ -404,6 +409,7 @@ def test_multi_Generic_with_multiple_unbound() -> None:
 
 
 def test_distinct_fully_bound_instances_yield_distinct_results() -> None:
+    # Note that no constraints necessary here, Sciline never sees the typevar
     T1 = TypeVar('T1')
 
     @dataclass
@@ -422,8 +428,8 @@ def test_distinct_fully_bound_instances_yield_distinct_results() -> None:
 
 
 def test_distinct_partially_bound_instances_yield_distinct_results() -> None:
-    T1 = TypeVar('T1')
-    T2 = TypeVar('T2')
+    T1 = TypeVar('T1', int, str)
+    T2 = TypeVar('T2', int, float)
 
     @dataclass
     class A(Generic[T1, T2]):
@@ -444,9 +450,9 @@ def test_distinct_partially_bound_instances_yield_distinct_results() -> None:
     assert pipeline.compute(A[float, str]) == A[float, str](2.0, 'a')
 
 
-def test_multiple_matching_partial_providers_raises() -> None:
-    T1 = TypeVar('T1')
-    T2 = TypeVar('T2')
+def test_multiple_matching_partial_providers_uses_latest() -> None:
+    T1 = TypeVar('T1', int, float)
+    T2 = TypeVar('T2', int, float)
 
     @dataclass
     class A(Generic[T1, T2]):
@@ -457,7 +463,7 @@ def test_multiple_matching_partial_providers_raises() -> None:
         return 1
 
     def float_source() -> float:
-        return 2.0
+        return 1.0
 
     def provider1(x: T1) -> A[int, T1]:
         return A[int, T1](1, x)
@@ -467,14 +473,14 @@ def test_multiple_matching_partial_providers_raises() -> None:
 
     pipeline = sl.Pipeline([int_source, float_source, provider1, provider2])
     assert pipeline.compute(A[int, int]) == A[int, int](1, 1)
-    assert pipeline.compute(A[float, float]) == A[float, float](2.0, 2.0)
-    with pytest.raises(sl.AmbiguousProvider):
-        pipeline.compute(A[int, float])
+    assert pipeline.compute(A[float, float]) == A[float, float](1.0, 2.0)
+    # Multiple matches, but the latest one (provider2) is used
+    assert pipeline.compute(A[int, float]) == A[int, float](1, 2.0)
 
 
 def test_TypeVar_params_track_to_multiple_sources() -> None:
-    T1 = TypeVar('T1')
-    T2 = TypeVar('T2')
+    T1 = TypeVar('T1', int, float)
+    T2 = TypeVar('T2', int, float)
 
     @dataclass
     class A(Generic[T1]):
@@ -949,8 +955,8 @@ def test_prioritizes_specialized_provider_over_generic() -> None:
 def test_prioritizes_specialized_provider_over_generic_several_typevars() -> None:
     A = NewType('A', str)
     B = NewType('B', str)
-    T1 = TypeVar('T1')
-    T2 = TypeVar('T2')
+    T1 = TypeVar('T1', A, B)
+    T2 = TypeVar('T2', A, B)
 
     @dataclass
     class C(Generic[T1, T2]):
