@@ -14,6 +14,7 @@ from typing import (
     Type,
     TypeVar,
     Union,
+    get_args,
     get_type_hints,
     overload,
 )
@@ -28,6 +29,20 @@ from .typing import Item, Key
 
 T = TypeVar('T')
 KeyType = TypeVar('KeyType', bound=Key)
+
+
+def _is_multiple_keys(keys: type | Iterable[type]) -> bool:
+    # Cannot simply use isinstance(keys, Iterable) because that is True for
+    # generic aliases of iterable types, e.g.,
+    #
+    # class Str(sl.Scope[Param, str], str): ...
+    # keys = Str[int]
+    #
+    # And isinstance(keys, type) does not work on its own because
+    # it is False for the above type.
+    return (
+        not isinstance(keys, type) and not get_args(keys) and isinstance(keys, Iterable)
+    )
 
 
 class Pipeline(DataGraph):
@@ -145,7 +160,16 @@ class Pipeline(DataGraph):
             raises an exception only when the graph is computed. This can be achieved
             by passing :py:class:`HandleAsComputeTimeException` as the handler.
         """
-        return self.build(keys, scheduler=scheduler, handler=handler)
+        if multi := _is_multiple_keys(keys):
+            targets = tuple(keys)  # type: ignore[arg-type]
+        else:
+            targets = (keys,)
+        graph = self.build(targets=targets, handler=handler)
+        return TaskGraph(
+            graph=graph,
+            targets=targets if multi else keys,
+            scheduler=scheduler,
+        )
 
     @overload
     def bind_and_call(self, fns: Callable[..., T], /) -> T:

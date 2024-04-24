@@ -10,12 +10,9 @@ from typing import Any, Generator, Optional, TypeVar, get_args
 import cyclebane as cb
 import networkx as nx
 
-from sciline.task_graph import TaskGraph
-
 from ._provider import ArgSpec, Provider, ToProvider, _bind_free_typevars
 from .handler import ErrorHandler, HandleAsBuildTimeException
-from .scheduler import Scheduler
-from .typing import Key
+from .typing import Graph, Key
 
 
 def find_all_typevars(t: type | TypeVar) -> set[TypeVar]:
@@ -38,20 +35,6 @@ def _mapping_to_constrained(
         raise ValueError('Typevars must have constraints')
     for combination in itertools.product(*constraints):
         yield dict(zip(type_vars, combination))
-
-
-def _is_multiple_keys(keys: type | Iterable[type]) -> bool:
-    # Cannot simply use isinstance(keys, Iterable) because that is True for
-    # generic aliases of iterable types, e.g.,
-    #
-    # class Str(sl.Scope[Param, str], str): ...
-    # keys = Str[int]
-    #
-    # And isinstance(keys, type) does not work on its own because
-    # it is False for the above type.
-    return (
-        not isinstance(keys, type) and not get_args(keys) and isinstance(keys, Iterable)
-    )
 
 
 class DataGraph:
@@ -145,15 +128,11 @@ class DataGraph:
         return out
 
     def build(
-        self,
-        target: Key,
-        scheduler: None | Scheduler = None,
-        handler: Optional[ErrorHandler] = None,
-    ) -> TaskGraph:
+        self, targets: tuple[Key, ...], handler: Optional[ErrorHandler] = None
+    ) -> Graph:
         return to_task_graph(
             self._cbgraph.to_networkx(),
-            target=target,
-            scheduler=scheduler,
+            targets=targets,
             handler=handler,
         )
 
@@ -179,16 +158,9 @@ _no_value = object()
 
 
 def to_task_graph(
-    graph: nx.DiGraph,
-    target: Key,
-    scheduler: None | Scheduler = None,
-    handler: Optional[ErrorHandler] = None,
-) -> TaskGraph:
+    graph: nx.DiGraph, targets: tuple[Key, ...], handler: Optional[ErrorHandler] = None
+) -> Graph:
     handler = handler or HandleAsBuildTimeException()
-    if multi := _is_multiple_keys(target):
-        targets = tuple(target)  # type: ignore[arg-type]
-    else:
-        targets = (target,)
     ancestors = list(targets)
     for node in targets:
         if node not in graph:
@@ -214,8 +186,4 @@ def to_task_graph(
             out[key] = Provider(func=func, arg_spec=spec, kind='function')
         else:
             out[key] = handler.handle_unsatisfied_requirement(key)
-    return TaskGraph(
-        graph=out,
-        targets=targets if multi else target,
-        scheduler=scheduler,
-    )
+    return out
