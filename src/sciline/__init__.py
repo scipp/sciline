@@ -18,13 +18,11 @@ from .handler import (
     UnsatisfiedRequirement,
 )
 from .pipeline import Pipeline
-from .series import Series
 from .task_graph import TaskGraph
 
 __all__ = [
     "Pipeline",
     "scheduler",
-    "Series",
     "Scope",
     "ScopeTwoParams",
     'TaskGraph',
