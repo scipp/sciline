@@ -15,6 +15,13 @@ from .handler import ErrorHandler, HandleAsBuildTimeException
 from .typing import Graph, Key
 
 
+def _as_graph(key: Key, value: Any) -> cb.Graph:
+    """Create a cyclebane.Graph with a single value."""
+    graph = nx.DiGraph()
+    graph.add_node(key, value=value)
+    return cb.Graph(graph)
+
+
 def find_all_typevars(t: type | TypeVar) -> set[TypeVar]:
     """Returns the set of all TypeVars in a type expression."""
     if isinstance(t, TypeVar):
@@ -95,13 +102,12 @@ class DataGraph:
             for bound in _mapping_to_constrained(typevars):
                 self[_bind_free_typevars(key, bound)] = value
             return
-        if isinstance(value, DataGraph):
-            # TODO If key is generic, should we support multi-sink case and update all?
-            # Would imply that we need the same for __getitem__.
-            # key must be a unique sink node in value
-            self._cbgraph[key] = value._cbgraph
-        else:
-            self._get_clean_node(key)['value'] = value
+
+        # TODO If key is generic, should we support multi-sink case and update all?
+        # Would imply that we need the same for __getitem__.
+        self._cbgraph[key] = (
+            value._cbgraph if isinstance(value, DataGraph) else _as_graph(key, value)
+        )
 
     def __getitem__(self, key: Key) -> DataGraph:
         graph = self._cbgraph[key]
