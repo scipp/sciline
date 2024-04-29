@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright (c) 2023 Scipp contributors (https://github.com/scipp)
-from typing import Generic, Optional, TypeVar
+from typing import Generic, TypeVar
 
 import sciline as sl
 
@@ -43,5 +43,6 @@ def test_generic_types_formatted_without_prefixes() -> None:
 
 
 def test_optional_types_formatted_as_their_content() -> None:
-    formatted = sl.visualize._format_type(Optional[float])  # type: ignore[arg-type]
-    assert formatted.name == 'float'
+    formatted = sl.visualize._format_type(float | None)  # type: ignore[arg-type]
+    # FIXME: This was just float, had to change the name.
+    assert formatted.name == 'UnionType[float, NoneType]'

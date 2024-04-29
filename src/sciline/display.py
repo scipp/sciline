@@ -1,7 +1,8 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright (c) 2023 Scipp contributors (https://github.com/scipp)
+from collections.abc import Iterable
 from html import escape
-from typing import Iterable, List, Tuple, TypeVar, Union
+from typing import TypeVar
 
 from ._provider import Provider
 from ._utils import groupby, key_name
@@ -18,7 +19,7 @@ def _details(summary: str, body: str) -> str:
 
 
 def _provider_name(
-    p: Tuple[Key, Tuple[Union[Key, TypeVar], ...], List[Provider]],
+    p: tuple[Key, tuple[Key | TypeVar, ...], list[Provider]],
 ) -> str:
     key, args, _ = p
     if args:
@@ -29,7 +30,7 @@ def _provider_name(
 
 
 def _provider_source(
-    p: Tuple[Key, Tuple[Union[Key, TypeVar], ...], List[Provider]],
+    p: tuple[Key, tuple[Key | TypeVar, ...], list[Provider]],
 ) -> str:
     key, _, (v, *rest) = p
     if v.kind == 'table_cell':
@@ -47,7 +48,7 @@ def _provider_source(
 
 
 def _provider_value(
-    p: Tuple[Key, Tuple[Union[Key, TypeVar], ...], List[Provider]],
+    p: tuple[Key, tuple[Key | TypeVar, ...], list[Provider]],
 ) -> str:
     _, _, (v, *_) = p
     if v.kind == 'parameter':
@@ -57,11 +58,11 @@ def _provider_value(
 
 
 def pipeline_html_repr(
-    providers: Iterable[Tuple[Key, Tuple[Union[Key, TypeVar], ...], Provider]],
+    providers: Iterable[tuple[Key, tuple[Key | TypeVar, ...], list[Provider]]],
 ) -> str:
     def associate_table_values(
-        p: Tuple[Key, Tuple[Union[Key, TypeVar], ...], Provider],
-    ) -> Tuple[Key, Union[type, Tuple[Union[Key, TypeVar], ...]]]:
+        p: tuple[Key, tuple[Key | TypeVar, ...], list[Provider]],
+    ) -> tuple[Key, type | tuple[Key | TypeVar, ...]]:
         key, args, v = p
         if isinstance(key, Item):
             return (key.label[0].tp, key.tp)
@@ -75,17 +76,15 @@ def pipeline_html_repr(
         ).values()
     )
     provider_rows = '\n'.join(
-        (
-            f'''
+        f'''
         <tr>
           <td scope="row">{_provider_name(p)}</td>
           <td scope="row">{_provider_value(p)}</td>
           <td scope="row">{_provider_source(p)}</th>
         </tr>'''
-            for p in sorted(
-                providers_collected,
-                key=_provider_name,
-            )
+        for p in sorted(
+            providers_collected,
+            key=_provider_name,
         )
     )
     return f'''

@@ -1,8 +1,9 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright (c) 2023 Scipp contributors (https://github.com/scipp)
 import functools
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Callable, Generic, List, NewType, TypeVar
+from typing import Any, Generic, NewType, TypeVar
 
 import numpy as np
 import numpy.typing as npt
@@ -274,11 +275,11 @@ def test_TypeVar_requirement_of_provider_can_be_bound() -> None:
     def provider_int() -> int:
         return 3
 
-    def provider(x: T) -> List[T]:
+    def provider(x: T) -> list[T]:
         return [x, x]
 
     pipeline = sl.Pipeline([provider_int, provider])
-    assert pipeline.compute(List[int]) == [3, 3]
+    assert pipeline.compute(list[int]) == [3, 3]
 
 
 def test_TypeVar_that_cannot_be_bound_raises_UnboundTypeVar() -> None:
@@ -298,12 +299,12 @@ def test_unsatisfiable_TypeVar_requirement_of_provider_raises() -> None:
     def provider_int() -> int:
         return 3
 
-    def provider(x: T) -> List[T]:
+    def provider(x: T) -> list[T]:
         return [x, x]
 
     pipeline = sl.Pipeline([provider_int, provider])
     with pytest.raises(sl.UnsatisfiedRequirement):
-        pipeline.compute(List[float])
+        pipeline.compute(list[float])
 
 
 def test_TypeVar_params_are_not_associated_unless_they_match() -> None:

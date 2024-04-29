@@ -2,7 +2,8 @@
 # Copyright (c) 2023 Scipp contributors (https://github.com/scipp)
 from __future__ import annotations
 
-from typing import Any, Collection, Dict, Mapping, Optional
+from collections.abc import Collection, Mapping
+from typing import Any
 
 
 class ParamTable(Mapping[type, Collection[Any]]):
@@ -11,9 +12,9 @@ class ParamTable(Mapping[type, Collection[Any]]):
     def __init__(
         self,
         row_dim: type,
-        columns: Dict[type, Collection[Any]],
+        columns: dict[type, Collection[Any]],
         *,
-        index: Optional[Collection[Any]] = None,
+        index: Collection[Any] | None = None,
     ):
         """
         Create a new param table.

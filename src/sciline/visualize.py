@@ -3,13 +3,7 @@
 from dataclasses import dataclass
 from typing import (
     Any,
-    Dict,
-    List,
-    Optional,
-    Tuple,
-    Type,
     TypeVar,
-    Union,
     get_args,
     get_origin,
 )
@@ -34,14 +28,14 @@ class FormattedProvider:
     kind: ProviderKind
 
 
-FormattedGraph = Dict[str, FormattedProvider]
+FormattedGraph = dict[str, FormattedProvider]
 
 
 def to_graphviz(
     graph: Graph,
     compact: bool = False,
     cluster_generics: bool = True,
-    cluster_color: Optional[str] = '#f0f0ff',
+    cluster_color: str | None = '#f0f0ff',
     **kwargs: Any,
 ) -> Digraph:
     """
@@ -82,14 +76,14 @@ def to_graphviz(
     return dot
 
 
-def _to_subgraphs(graph: FormattedGraph) -> Dict[str, FormattedGraph]:
+def _to_subgraphs(graph: FormattedGraph) -> dict[str, FormattedGraph]:
     def get_subgraph_name(name: str, kind: str) -> str:
         if kind == 'series':
             # Example: Series[RowId, Material[Country]] -> RowId, Material[Country]
             return name.partition('[')[-1].rpartition(']')[0]
         return name.split('[')[0]
 
-    subgraphs: Dict[str, FormattedGraph] = {}
+    subgraphs: dict[str, FormattedGraph] = {}
     for p, formatted_p in graph.items():
         subgraph_name = get_subgraph_name(formatted_p.ret.name, formatted_p.kind)
         subgraphs.setdefault(subgraph_name, {})
@@ -153,8 +147,8 @@ T = TypeVar('T')
 
 
 def _extract_type_and_labels(
-    key: Union[Item[T], Type[T]], compact: bool
-) -> Tuple[Type[T], List[Union[type, Tuple[type, Any]]]]:
+    key: Item[T] | type[T], compact: bool
+) -> tuple[type[T], list[type | tuple[type, Any]]]:
     if isinstance(key, Item):
         label = key.label
         return key.tp, [lb.tp if compact else (lb.tp, lb.index) for lb in label]
@@ -178,7 +172,7 @@ def _format_type(tp: Key, compact: bool = False) -> Node:
     def get_base(tp: Key) -> str:
         return tp.__name__ if hasattr(tp, '__name__') else str(tp).split('.')[-1]
 
-    def format_label(label: Union[type, Tuple[type, Any]]) -> str:
+    def format_label(label: type | tuple[type, Any]) -> str:
         if isinstance(label, tuple):
             tp, index = label
             return f'{get_base(tp)}={index}'

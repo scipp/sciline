@@ -1,6 +1,5 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright (c) 2023 Scipp contributors (https://github.com/scipp)
-from typing import Optional, Union
 
 import pytest
 
@@ -32,7 +31,7 @@ def test_parameter_type_union_or_optional_allowed() -> None:
 
 
 def test_union_requirement_not_satisfied_by_any_of_its_arguments() -> None:
-    def require_union(x: Union[int, float]) -> str:  # noqa: PYI041
+    def require_union(x: int | float) -> str:  # noqa: PYI041
         return f'{x}'
 
     pipeline = sl.Pipeline([require_union])
@@ -47,7 +46,7 @@ def test_union_requirement_not_satisfied_by_any_of_its_arguments() -> None:
 
 
 def test_optional_dependency_cannot_be_filled_by_non_optional_param() -> None:
-    def use_optional(x: Optional[int]) -> str:
+    def use_optional(x: int | None) -> str:
         return f'{x or 123}'
 
     pipeline = sl.Pipeline([use_optional], params={int: 1})
@@ -56,7 +55,7 @@ def test_optional_dependency_cannot_be_filled_by_non_optional_param() -> None:
 
 
 def test_optional_dependency_cannot_be_filled_by_non_optional_param_kwarg() -> None:
-    def use_optional(*, x: Optional[int]) -> str:
+    def use_optional(*, x: int | None) -> str:
         return f'{x or 123}'
 
     pipeline = sl.Pipeline([use_optional], params={int: 1})
@@ -78,7 +77,7 @@ def test_Union_argument_order_matters() -> None:
 
 
 def test_optional_dependency_cannot_be_filled_transitively() -> None:
-    def use_optional(x: Optional[int]) -> str:
+    def use_optional(x: int | None) -> str:
         return f'{x or 123}'
 
     def make_int(x: float) -> int:
@@ -90,9 +89,9 @@ def test_optional_dependency_cannot_be_filled_transitively() -> None:
 
 
 def test_optional_dependency_can_be_set_to_None() -> None:
-    def use_optional(x: Optional[int]) -> str:
+    def use_optional(x: int | None) -> str:
         return f'{x or 123}'
 
     pipeline = sl.Pipeline([use_optional])
-    pipeline[Optional[int]] = None  # type: ignore[index]
+    pipeline[int | None] = None  # type: ignore[index]
     assert pipeline.compute(str) == '123'

@@ -2,7 +2,8 @@
 # Copyright (c) 2023 Scipp contributors (https://github.com/scipp)
 import inspect
 from collections import defaultdict
-from typing import Any, Callable, DefaultDict, Iterable, TypeVar, Union, get_args
+from collections.abc import Callable, Iterable
+from typing import Any, TypeVar, get_args
 
 from ._provider import Provider
 from .typing import Item, Key
@@ -11,7 +12,7 @@ T = TypeVar('T')
 G = TypeVar('G')
 
 
-def groupby(f: Callable[[T], G], a: Iterable[T]) -> DefaultDict[G, list[T]]:
+def groupby(f: Callable[[T], G], a: Iterable[T]) -> defaultdict[G, list[T]]:
     g = defaultdict(lambda: [])
     for e in a:
         g[f(e)].append(e)
@@ -30,7 +31,7 @@ def full_qualname(obj: Any) -> str:
     return f'{module.__name__}.{obj_name}'
 
 
-def key_name(key: Union[Key, TypeVar]) -> str:
+def key_name(key: Key | TypeVar) -> str:
     if isinstance(key, Item):
         parameters = ", ".join(
             f'{key_name(label.tp)}:{label.index}' for label in key.label
@@ -46,7 +47,7 @@ def key_name(key: Union[Key, TypeVar]) -> str:
     return key.__name__
 
 
-def key_full_qualname(key: Union[Key, TypeVar]) -> str:
+def key_full_qualname(key: Key | TypeVar) -> str:
     if isinstance(key, Item):
         parameters = ", ".join(
             f'{key_full_qualname(label.tp)}:{label.index}' for label in key.label

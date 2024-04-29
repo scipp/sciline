@@ -1,14 +1,10 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright (c) 2023 Scipp contributors (https://github.com/scipp)
 import inspect
+from collections.abc import Callable
 from typing import (
     Any,
-    Callable,
-    Dict,
-    List,
-    Optional,
     Protocol,
-    Tuple,
     runtime_checkable,
 )
 
@@ -25,7 +21,7 @@ class Scheduler(Protocol):
     Scheduler interface compatible with :py:class:`sciline.Pipeline`.
     """
 
-    def get(self, graph: Graph, keys: List[Key]) -> Tuple[Any, ...]:
+    def get(self, graph: Graph, keys: list[Key]) -> tuple[Any, ...]:
         """
         Compute the result for given keys from the graph.
 
@@ -44,7 +40,7 @@ class NaiveScheduler:
     :py:class:`DaskScheduler` instead.
     """
 
-    def get(self, graph: Graph, keys: List[Key]) -> Tuple[Any, ...]:
+    def get(self, graph: Graph, keys: list[Key]) -> tuple[Any, ...]:
         import graphlib
 
         dependencies = {
@@ -56,7 +52,7 @@ class NaiveScheduler:
             tasks = list(ts.static_order())
         except graphlib.CycleError as e:
             raise CycleError from e
-        results: Dict[Key, Any] = {}
+        results: dict[Key, Any] = {}
         for t in tasks:
             results[t] = graph[t].call(results)
         return tuple(results[key] for key in keys)
@@ -71,7 +67,7 @@ class DaskScheduler:
     Note that this currently only works if all providers support posargs.
     """
 
-    def __init__(self, scheduler: Optional[Callable[..., Any]] = None) -> None:
+    def __init__(self, scheduler: Callable[..., Any] | None = None) -> None:
         """Wrap a dask scheduler or the default `dask.threaded.get`.
 
         Parameters
@@ -87,7 +83,7 @@ class DaskScheduler:
         else:
             self._dask_get = scheduler
 
-    def get(self, graph: Graph, keys: List[Key]) -> Any:
+    def get(self, graph: Graph, keys: list[Key]) -> Any:
         from dask.utils import apply
 
         # Use `apply` to allow passing keyword arguments.

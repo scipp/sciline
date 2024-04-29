@@ -3,12 +3,7 @@
 from dataclasses import dataclass
 from typing import (
     Any,
-    Dict,
     Generic,
-    List,
-    Optional,
-    Tuple,
-    Type,
     TypeVar,
     Union,
     get_args,
@@ -29,18 +24,18 @@ T = TypeVar('T')
 
 @dataclass(frozen=True)
 class Item(Generic[T]):
-    label: Tuple[Label, ...]
-    tp: Type[T]
+    label: tuple[Label, ...]
+    tp: type[T]
 
 
-Key = Union[type, Item[Any]]
+Key = type | Item[Any]
 Graph = dict[Key, Provider]
 
 
-Json = Union[Dict[str, "Json"], List["Json"], str, int, float, bool, None]
+Json = dict[str, "Json"] | list["Json"] | str | int | float | bool | None
 
 
-def get_optional(tp: Key) -> Optional[Any]:
+def get_optional(tp: Key) -> Any | None:
     if get_origin(tp) != Union:
         return None
     args = get_args(tp)
@@ -49,7 +44,7 @@ def get_optional(tp: Key) -> Optional[Any]:
     return args[0] if args[1] == type(None) else args[1]
 
 
-def get_union(tp: Key) -> Optional[Tuple[Any, ...]]:
+def get_union(tp: Key) -> tuple[Any, ...] | None:
     if get_origin(tp) != Union:
         return None
     return get_args(tp)

@@ -2,8 +2,9 @@
 # Copyright (c) 2023 Scipp contributors (https://github.com/scipp)
 from __future__ import annotations
 
+from collections.abc import Generator, Sequence
 from html import escape
-from typing import Any, Generator, Optional, Sequence, Tuple, TypeVar, Union
+from typing import Any, TypeVar
 
 from ._utils import key_name
 from .scheduler import DaskScheduler, NaiveScheduler, Scheduler
@@ -17,7 +18,7 @@ def _list_items(items: Sequence[str]) -> str:
     return '\n'.join(
         (
             '<ul>',
-            ('\n'.join((f'<li>{escape(it)}</li>' for it in items))),
+            ('\n'.join(f'<li>{escape(it)}</li>' for it in items)),
             '</ul>',
         )
     )
@@ -71,8 +72,8 @@ class TaskGraph:
         self,
         *,
         graph: Graph,
-        targets: Union[type, Tuple[type, ...], Item[T], Tuple[Item[T], ...]],
-        scheduler: Optional[Scheduler] = None,
+        targets: type | tuple[type, ...] | Item[T] | tuple[Item[T], ...],
+        scheduler: Scheduler | None = None,
     ) -> None:
         self._graph = graph
         self._keys = targets
@@ -89,9 +90,7 @@ class TaskGraph:
 
     def compute(
         self,
-        targets: Optional[
-            Union[type, Tuple[type, ...], Item[T], Tuple[Item[T], ...]]
-        ] = None,
+        targets: type | tuple[type, ...] | Item[T] | tuple[Item[T], ...] | None = None,
     ) -> Any:
         """
         Compute the result of the graph.

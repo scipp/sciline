@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright (c) 2023 Scipp contributors (https://github.com/scipp)
-from typing import List, NewType, Optional, TypeVar
+from typing import NewType, TypeVar
 
 import pytest
 
@@ -505,7 +505,7 @@ def test_multi_level_groupby_with_params_from_different_table_can_reorder() -> N
 
 @pytest.mark.parametrize("index", [None, [4, 5, 7]])
 def test_multi_level_groupby_raises_on_index_mismatch(
-    index: Optional[List[int]],
+    index: list[int] | None,
 ) -> None:
     Row = NewType("Row", int)
     Param1 = NewType("Param1", int)
@@ -524,7 +524,7 @@ def test_multi_level_groupby_raises_on_index_mismatch(
 
 
 @pytest.mark.parametrize("index", [None, [4, 5, 6]])
-def test_groupby_over_param_table(index: Optional[List[int]]) -> None:
+def test_groupby_over_param_table(index: list[int] | None) -> None:
     Index = NewType("Index", int)
     Name = NewType("Name", str)
     Param = NewType("Param", int)

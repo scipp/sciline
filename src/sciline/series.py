@@ -2,7 +2,8 @@
 # Copyright (c) 2023 Scipp contributors (https://github.com/scipp)
 from __future__ import annotations
 
-from typing import Iterator, Mapping, Type, TypeVar
+from collections.abc import Iterator, Mapping
+from typing import TypeVar
 
 Key = TypeVar('Key')
 Value = TypeVar('Value')
@@ -11,7 +12,7 @@ Value = TypeVar('Value')
 class Series(Mapping[Key, Value]):
     """A series of values with labels (row index) and named row dimension."""
 
-    def __init__(self, row_dim: Type[Key], items: Mapping[Key, Value]) -> None:
+    def __init__(self, row_dim: type[Key], items: Mapping[Key, Value]) -> None:
         """
         Create a new series.
 

@@ -3,23 +3,13 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from collections.abc import Iterable
+from collections.abc import Callable, Collection, Iterable, Mapping
 from itertools import chain
 from types import UnionType
 from typing import (
     Any,
-    Callable,
-    Collection,
-    Dict,
     Generic,
-    List,
-    Mapping,
-    Optional,
-    Set,
-    Tuple,
-    Type,
     TypeVar,
-    Union,
     get_args,
     get_origin,
     get_type_hints,
@@ -53,7 +43,7 @@ class AmbiguousProvider(Exception):
     """Raised when multiple providers are found for a type."""
 
 
-def _extract_typevars_from_generic_type(t: type) -> Tuple[TypeVar, ...]:
+def _extract_typevars_from_generic_type(t: type) -> tuple[TypeVar, ...]:
     """Returns the typevars that were used in the definition of a Generic type."""
     if not hasattr(t, '__orig_bases__'):
         return ()
@@ -62,7 +52,7 @@ def _extract_typevars_from_generic_type(t: type) -> Tuple[TypeVar, ...]:
     )
 
 
-def _find_all_typevars(t: Union[type, TypeVar]) -> Set[TypeVar]:
+def _find_all_typevars(t: type | TypeVar) -> set[TypeVar]:
     """Returns the set of all TypeVars in a type expression."""
     if isinstance(t, TypeVar):
         return {t}
@@ -72,14 +62,14 @@ def _find_all_typevars(t: Union[type, TypeVar]) -> Set[TypeVar]:
 def _find_bounds_to_make_compatible_type(
     requested: Key,
     provided: Key | TypeVar,
-) -> Optional[Dict[TypeVar, Key]]:
+) -> dict[TypeVar, Key] | None:
     """
     Check if a type is compatible to a provided type.
     If the types are compatible, return a mapping from typevars to concrete types
     that makes the provided type equal to the requested type.
     """
     if provided == requested:
-        ret: Dict[TypeVar, Key] = {}
+        ret: dict[TypeVar, Key] = {}
         return ret
     if isinstance(provided, TypeVar):
         # If the type var has no constraints, accept anything
@@ -99,14 +89,14 @@ def _find_bounds_to_make_compatible_type(
 def _find_bounds_to_make_compatible_type_tuple(
     requested: tuple[Key, ...],
     provided: tuple[Key | TypeVar, ...],
-) -> Optional[Dict[TypeVar, Key]]:
+) -> dict[TypeVar, Key] | None:
     """
     Check if a tuple of requested types is compatible with a tuple of provided types
     and return a mapping from type vars to concrete types that makes all provided
     types equal to their corresponding requested type.
     If any of the types is not compatible, return None.
     """
-    union: Dict[TypeVar, Key] = {}
+    union: dict[TypeVar, Key] = {}
     for bound in map(_find_bounds_to_make_compatible_type, requested, provided):
         # If no mapping from the type-var to a concrete type was found,
         # or if the mapping is inconsistent,
@@ -119,7 +109,7 @@ def _find_bounds_to_make_compatible_type_tuple(
 
 def _find_all_paths(
     dependencies: Mapping[Key, Collection[Key]], start: Key, end: Key
-) -> List[List[Key]]:
+) -> list[list[Key]]:
     """Find all paths from start to end in a DAG."""
     if start == end:
         return [[start]]
@@ -135,7 +125,7 @@ def _find_all_paths(
     return paths
 
 
-def _find_nodes_in_paths(graph: Graph, end: Key) -> List[Key]:
+def _find_nodes_in_paths(graph: Graph, end: Key) -> list[Key]:
     """
     Helper for Pipeline. Finds all nodes that need to be duplicated since they depend
     on a value from a param table.
@@ -166,7 +156,7 @@ def _is_multiple_keys(
 
 
 class ReplicatorBase(Generic[IndexType]):
-    def __init__(self, index_name: type, index: Iterable[IndexType], path: List[Key]):
+    def __init__(self, index_name: type, index: Iterable[IndexType], path: list[Key]):
         if len(path) == 0:
             raise UnsatisfiedRequirement(
                 'Could not find path to param in param table. This is likely caused '
@@ -184,7 +174,7 @@ class ReplicatorBase(Generic[IndexType]):
         self,
         key: Key,
         provider: Provider,
-        get_provider: Callable[..., Tuple[Provider, Dict[TypeVar, Key]]],
+        get_provider: Callable[..., tuple[Provider, dict[TypeVar, Key]]],
     ) -> Graph:
         graph: Graph = {}
         for idx in self.index:
@@ -198,14 +188,14 @@ class ReplicatorBase(Generic[IndexType]):
     def _copy_node(
         self,
         key: Key,
-        provider: Union[Provider, SeriesProvider[IndexType]],
+        provider: Provider | SeriesProvider[IndexType],
         idx: IndexType,
     ) -> Provider:
         return provider.map_arg_keys(
             lambda arg: self.key(idx, arg) if arg in self else arg
         )
 
-    def key(self, i: IndexType, value_name: Union[Type[T], Item[T]]) -> Item[T]:
+    def key(self, i: IndexType, value_name: type[T] | Item[T]) -> Item[T]:
         label = Label(self._index_name, i)
         if isinstance(value_name, Item):
             return Item((*value_name.label, label), value_name.tp)
@@ -269,7 +259,7 @@ class GroupingReplicator(ReplicatorBase[LabelType], Generic[IndexType, LabelType
     ) -> None:
         self._label_name = label_name
         self._group_node = self._find_grouping_node(param_table.row_dim, graph_template)
-        self._groups: Dict[LabelType, List[IndexType]] = defaultdict(list)
+        self._groups: dict[LabelType, list[IndexType]] = defaultdict(list)
         for idx, label in zip(param_table.index, param_table[label_name], strict=True):
             self._groups[label].append(idx)
         super().__init__(
@@ -281,7 +271,7 @@ class GroupingReplicator(ReplicatorBase[LabelType], Generic[IndexType, LabelType
     def _copy_node(
         self,
         key: Key,
-        provider: Union[Provider, SeriesProvider[IndexType]],
+        provider: Provider | SeriesProvider[IndexType],
         idx: LabelType,
     ) -> Provider:
         if (not isinstance(provider, SeriesProvider)) or key != self._group_node:
@@ -302,7 +292,7 @@ class GroupingReplicator(ReplicatorBase[LabelType], Generic[IndexType, LabelType
         return SeriesProvider(selected.keys(), provider.row_dim, args=selected.values())
 
     def _find_grouping_node(self, index_name: Key, subgraph: Graph) -> type:
-        ends: List[type] = [
+        ends: list[type] = [
             key
             for key in subgraph
             # Because of the succeeded get_origin we know it is a type
@@ -322,9 +312,9 @@ class SeriesProvider(Generic[KeyType], Provider):
     def __init__(
         self,
         labels: Iterable[KeyType],
-        row_dim: Type[KeyType],
+        row_dim: type[KeyType],
         *,
-        args: Optional[Iterable[Key]] = None,
+        args: Iterable[Key] | None = None,
     ) -> None:
         super().__init__(
             func=self._call,
@@ -355,31 +345,31 @@ class Pipeline:
 
     def __init__(
         self,
-        providers: Optional[Iterable[Union[ToProvider, Provider]]] = None,
+        providers: Iterable[ToProvider | Provider] | None = None,
         *,
-        params: Optional[Dict[Type[Any], Any]] = None,
+        params: dict[type[Any], Any] | None = None,
     ):
         """
-        Setup a Pipeline from a list providers
+        setup a Pipeline from a list providers
 
         Parameters
         ----------
         providers:
-            List of callable providers. Each provides its return value.
+            list of callable providers. Each provides its return value.
             Their arguments and return value must be annotated with type hints.
         params:
-            Dictionary of concrete values to provide for types.
+            dictionary of concrete values to provide for types.
         """
-        self._providers: Dict[Key, Provider] = {}
-        self._subproviders: Dict[type, Dict[Tuple[Key | TypeVar, ...], Provider]] = {}
-        self._param_tables: Dict[Key, ParamTable] = {}
-        self._param_name_to_table_key: Dict[Key, Key] = {}
+        self._providers: dict[Key, Provider] = {}
+        self._subproviders: dict[type, dict[tuple[Key | TypeVar, ...], Provider]] = {}
+        self._param_tables: dict[Key, ParamTable] = {}
+        self._param_name_to_table_key: dict[Key, Key] = {}
         for provider in providers or []:
             self.insert(provider)
         for tp, param in (params or {}).items():
             self[tp] = param
 
-    def insert(self, provider: Union[ToProvider, Provider], /) -> None:
+    def insert(self, provider: ToProvider | Provider, /) -> None:
         """
         Add a callable that provides its return value to the pipeline.
 
@@ -394,7 +384,7 @@ class Pipeline:
             provider = Provider.from_function(provider)
         self._set_provider(provider.deduce_key(), provider)
 
-    def __setitem__(self, key: Type[T], param: T) -> None:
+    def __setitem__(self, key: type[T], param: T) -> None:
         """
         Provide a concrete value for a type.
 
@@ -409,7 +399,7 @@ class Pipeline:
 
     def set_param_table(self, params: ParamTable) -> None:
         """
-        Set a parameter table for a row dimension.
+        set a parameter table for a row dimension.
 
         Values in the parameter table provide concrete values for a type given by the
         respective column header.
@@ -473,7 +463,7 @@ class Pipeline:
 
     def set_param_series(self, row_dim: type, index: Collection[Any]) -> None:
         """
-        Set a series of parameters.
+        set a series of parameters.
 
         This is a convenience method for creating and setting a parameter table with
         no columns and an index given by `index`.
@@ -509,10 +499,10 @@ class Pipeline:
             self._providers[key] = provider
 
     def _get_provider(
-        self, tp: Union[Type[T], Item[T]], handler: Optional[ErrorHandler] = None
-    ) -> Tuple[Provider, Dict[TypeVar, Key]]:
+        self, tp: type[T] | Item[T], handler: ErrorHandler | None = None
+    ) -> tuple[Provider, dict[TypeVar, Key]]:
         handler = handler or HandleAsBuildTimeException()
-        explanation: List[str] = []
+        explanation: list[str] = []
         if (provider := self._providers.get(tp)) is not None:
             return provider, {}
         elif (origin := get_origin(tp)) is not None and (
@@ -571,7 +561,7 @@ class Pipeline:
 
     def build(
         self,
-        tp: Union[Type[T], Item[T]],
+        tp: type[T] | Item[T],
         /,
         *,
         handler: ErrorHandler,
@@ -594,7 +584,7 @@ class Pipeline:
             Whether to search parameter tables for concrete keys.
         """
         graph: Graph = {}
-        stack: List[Union[Type[T], Item[T]]] = [tp]
+        stack: list[type[T] | Item[T]] = [tp]
         while stack:
             tp = stack.pop()
             # First look in column labels of param tables
@@ -617,7 +607,7 @@ class Pipeline:
         return graph
 
     def _build_series(
-        self, tp: Type[Series[KeyType, ValueType]], handler: ErrorHandler
+        self, tp: type[Series[KeyType, ValueType]], handler: ErrorHandler
     ) -> Graph:
         """
         Build (sub)graph for a Series type implementing ParamTable-based functionality.
@@ -674,8 +664,8 @@ class Pipeline:
             })
         }.
         """
-        index_name: Type[KeyType]
-        value_type: Type[ValueType]
+        index_name: type[KeyType]
+        value_type: type[ValueType]
         index_name, value_type = get_args(tp)
 
         subgraph = self.build(value_type, search_param_tables=True, handler=handler)
@@ -713,10 +703,10 @@ class Pipeline:
         return graph
 
     @overload
-    def compute(self, tp: Type[T], **kwargs: Any) -> T: ...
+    def compute(self, tp: type[T], **kwargs: Any) -> T: ...
 
     @overload
-    def compute(self, tp: Iterable[Type[T]], **kwargs: Any) -> Dict[Type[T], T]: ...
+    def compute(self, tp: Iterable[type[T]], **kwargs: Any) -> dict[type[T], T]: ...
 
     @overload
     def compute(self, tp: Item[T], **kwargs: Any) -> T: ...
@@ -762,8 +752,8 @@ class Pipeline:
         self,
         keys: type | Iterable[type] | Item[T] | object,
         *,
-        scheduler: Optional[Scheduler] = None,
-        handler: Optional[ErrorHandler] = None,
+        scheduler: Scheduler | None = None,
+        handler: ErrorHandler | None = None,
     ) -> TaskGraph:
         """
         Return a TaskGraph for the given keys.
@@ -804,10 +794,10 @@ class Pipeline:
     @overload
     def bind_and_call(
         self, fns: Iterable[Callable[..., Any]], /
-    ) -> Tuple[Any, ...]: ...
+    ) -> tuple[Any, ...]: ...
 
     def bind_and_call(
-        self, fns: Union[Callable[..., Any], Iterable[Callable[..., Any]]], /
+        self, fns: Callable[..., Any] | Iterable[Callable[..., Any]], /
     ) -> Any:
         """
         Call the given functions with arguments provided by the pipeline.
