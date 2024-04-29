@@ -7,12 +7,12 @@ import pytest
 from sciline.scheduler import DaskScheduler, NaiveScheduler, Scheduler
 
 
-@pytest.fixture
+@pytest.fixture()
 def naive_scheduler() -> NaiveScheduler:
     return NaiveScheduler()
 
 
-@pytest.fixture
+@pytest.fixture()
 def dask_scheduler() -> Optional[DaskScheduler]:
     try:
         import dask  # noqa: F401

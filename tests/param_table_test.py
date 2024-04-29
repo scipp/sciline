@@ -6,22 +6,26 @@ import sciline as sl
 
 
 def test_raises_with_zero_columns() -> None:
-    with pytest.raises(ValueError):
+    with pytest.raises(
+        ValueError, match="Cannot create param table with zero columns and no index"
+    ):
         sl.ParamTable(row_dim=int, columns={})
 
 
 def test_raises_with_inconsistent_column_sizes() -> None:
-    with pytest.raises(ValueError):
+    with pytest.raises(
+        ValueError, match="Columns in param table must all have same size"
+    ):
         sl.ParamTable(row_dim=int, columns={int: [1, 2, 3], float: [1.0, 2.0]})
 
 
 def test_raises_with_inconsistent_index_length() -> None:
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="Index length not matching columns"):
         sl.ParamTable(row_dim=int, columns={float: [1.0, 2.0]}, index=[1, 2, 3])
 
 
 def test_raises_with_non_unique_index() -> None:
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="Index must be unique"):
         sl.ParamTable(int, {float: [1.0, 2.0, 3.0]}, index=[1, 1, 2])
 
 

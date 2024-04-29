@@ -11,10 +11,10 @@ from sciline.typing import Item, Label
 def test_set_param_table_raises_if_param_names_are_duplicate() -> None:
     pl = sl.Pipeline()
     pl.set_param_table(sl.ParamTable(int, {float: [1.0, 2.0, 3.0]}))
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="Parameter <class 'float'> already set"):
         pl.set_param_table(sl.ParamTable(str, {float: [4.0, 5.0, 6.0]}))
     assert pl.compute(Item((Label(int, 1),), float)) == 2.0
-    with pytest.raises(sl.UnsatisfiedRequirement):
+    with pytest.raises(sl.UnsatisfiedRequirement, match="No provider found for type"):
         pl.compute(Item((Label(str, 1),), float))
 
 
@@ -25,7 +25,7 @@ def test_set_param_table_removes_columns_of_replaced_table() -> None:
     # (here: automatic index as range(3)) is the same. For now we do not.
     pl.set_param_table(sl.ParamTable(int, {str: ['a', 'b', 'c']}))
     assert pl.compute(Item((Label(int, 1),), str)) == 'b'
-    with pytest.raises(sl.UnsatisfiedRequirement):
+    with pytest.raises(sl.UnsatisfiedRequirement, match="No provider found for type"):
         pl.compute(Item((Label(int, 1),), float))
 
 
@@ -60,7 +60,7 @@ def test_can_replace_param_table_with_table_of_different_length() -> None:
     pl.set_param_table(table2)
     assert pl.compute(Item((Label(int, 22),), float)) == 5.0
     # Make sure rows beyond the new table are not accessible
-    with pytest.raises(sl.UnsatisfiedRequirement):
+    with pytest.raises(sl.UnsatisfiedRequirement, match="No provider found for type"):
         pl.compute(Item((Label(int, 13),), float))
 
 
@@ -75,7 +75,7 @@ def test_failed_replace_due_to_column_clash_in_other_table() -> None:
     pl = sl.Pipeline()
     pl.set_param_table(table1)
     pl.set_param_table(table2)
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="Parameter <class 'str'> already set"):
         pl.set_param_table(table1_replacement)
     # Make sure the original table is still accessible
     assert pl.compute(Item((Label(Row1, 1),), float)) == 2.0
@@ -94,7 +94,8 @@ def test_can_depend_on_elements_of_param_table() -> None:
 def test_can_depend_on_elements_of_param_table_kwarg() -> None:
     # This is not a valid type annotation, not sure why it works with get_type_hints
     def use_elem(
-        *, x: Item((Label(int, 1),), float)  # type: ignore[valid-type]
+        *,
+        x: Item((Label(int, 1),), float),  # type: ignore[valid-type]
     ) -> str:
         return str(x)
 
@@ -118,7 +119,9 @@ def test_cannot_compute_series_of_non_table_param() -> None:
     #     sl.Series(int, {0: 'abc', 1: 'abc', 2: 'abc'})
     # For now, we are not supporting this since it is unclear if this would be
     # conceptually sound and risk free.
-    with pytest.raises(sl.UnsatisfiedRequirement):
+    with pytest.raises(
+        sl.UnsatisfiedRequirement, match="Could not find path to param in param table."
+    ):
         pl.compute(sl.Series[int, str])
 
 
@@ -150,14 +153,14 @@ def test_creating_pipeline_with_provider_of_series_raises() -> None:
     def make_series() -> sl.Series[int, float]:
         return series
 
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="returning a sciline.Series is not allowed."):
         sl.Pipeline([make_series])
 
 
 def test_creating_pipeline_with_series_param_raises() -> None:
     series = sl.Series(int, {0: 1.0, 1: 2.0, 2: 3.0})
 
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="returning a sciline.Series is not allowed."):
         sl.Pipeline([], params={sl.Series[int, float]: series})
 
 
@@ -193,7 +196,7 @@ def test_can_zip() -> None:
     Run = NewType("Run", int)
 
     def gather_zip(x: sl.Series[Run, Str], y: sl.Series[Run, int]) -> Sum:
-        z = [f'{x_}{y_}' for x_, y_ in zip(x.values(), y.values())]
+        z = [f'{x_}{y_}' for x_, y_ in zip(x.values(), y.values(), strict=True)]
         return Sum(str(z))
 
     def use_str(x: str) -> Str:
@@ -516,7 +519,7 @@ def test_multi_level_groupby_raises_on_index_mismatch(
     grouping2 = sl.ParamTable(Param2, {Param1: [1, 1, 3]}, index=index)
     pl.set_param_table(grouping1)
     pl.set_param_table(grouping2)
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="is not a subset of"):
         pl.compute(sl.Series[Param1, sl.Series[Param2, sl.Series[Row, Param3]]])
 
 
@@ -556,7 +559,7 @@ def test_requesting_series_index_that_is_not_in_param_table_raises() -> None:
     pl = sl.Pipeline()
     pl.set_param_table(sl.ParamTable(Row, {Param1: [1, 1, 3], Param2: [4, 5, 6]}))
 
-    with pytest.raises(KeyError):
+    with pytest.raises(KeyError, match="No parameter table found for label"):
         pl.compute(sl.Series[int, Param2])
 
 
@@ -575,8 +578,7 @@ def test_generic_providers_work_with_param_tables() -> None:
     Param = TypeVar('Param')
     Row = NewType("Row", int)
 
-    class Str(sl.Scope[Param, str], str):
-        ...
+    class Str(sl.Scope[Param, str], str): ...
 
     def parametrized(x: Param) -> Str[Param]:
         return Str(f'{x}')
@@ -588,7 +590,7 @@ def test_generic_providers_work_with_param_tables() -> None:
     pipeline.set_param_table(sl.ParamTable(Row, {int: [1, 2, 3]}))
 
     assert pipeline.compute(Str[float]) == Str[float]('1.5')
-    with pytest.raises(sl.UnsatisfiedRequirement):
+    with pytest.raises(sl.UnsatisfiedRequirement, match="No provider found for type"):
         pipeline.compute(Str[int])
     assert pipeline.compute(sl.Series[Row, Str[int]]) == sl.Series(
         Row,
@@ -604,8 +606,7 @@ def test_generic_provider_can_depend_on_param_series() -> None:
     Param = TypeVar('Param')
     Row = NewType("Row", int)
 
-    class Str(sl.Scope[Param, str], str):
-        ...
+    class Str(sl.Scope[Param, str], str): ...
 
     def parametrized_gather(x: sl.Series[Row, Param]) -> Str[Param]:
         return Str(f'{list(x.values())}')
@@ -623,8 +624,7 @@ def test_generic_provider_can_depend_on_derived_param_series() -> None:
     T = TypeVar('T')
     Row = NewType("Row", int)
 
-    class Str(sl.Scope[T, str], str):
-        ...
+    class Str(sl.Scope[T, str], str): ...
 
     def use_param(x: int) -> float:
         return x + 0.5
@@ -642,11 +642,9 @@ def test_params_in_table_can_be_generic() -> None:
     T = TypeVar('T')
     Row = NewType("Row", int)
 
-    class Str(sl.Scope[T, str], str):
-        ...
+    class Str(sl.Scope[T, str], str): ...
 
-    class Param(sl.Scope[T, str], str):
-        ...
+    class Param(sl.Scope[T, str], str): ...
 
     def parametrized_gather(x: sl.Series[Row, Param[T]]) -> Str[T]:
         return Str(','.join(x.values()))
@@ -691,7 +689,7 @@ def test_pipeline_set_param_table_on_original_does_not_affect_copy() -> None:
     b = a.copy()
     a.set_param_table(sl.ParamTable(int, {float: [1.0, 2.0, 3.0]}))
     assert a.compute(sl.Series[int, float]) == sl.Series(int, {0: 1.0, 1: 2.0, 2: 3.0})
-    with pytest.raises(sl.UnsatisfiedRequirement):
+    with pytest.raises(sl.UnsatisfiedRequirement, match="No provider found for type"):
         b.compute(sl.Series[int, float])
 
 
@@ -700,7 +698,7 @@ def test_pipeline_set_param_table_on_copy_does_not_affect_original() -> None:
     b = a.copy()
     b.set_param_table(sl.ParamTable(int, {float: [1.0, 2.0, 3.0]}))
     assert b.compute(sl.Series[int, float]) == sl.Series(int, {0: 1.0, 1: 2.0, 2: 3.0})
-    with pytest.raises(sl.UnsatisfiedRequirement):
+    with pytest.raises(sl.UnsatisfiedRequirement, match="No provider found for type"):
         a.compute(sl.Series[int, float])
 
 

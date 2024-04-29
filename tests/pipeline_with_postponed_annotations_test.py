@@ -8,6 +8,7 @@ But ``typing.get_type_hints`` cannot handle locally defined types
 There is nothing we can do about it, so these tests just check that
 everything behaves as expected.
 """
+
 from __future__ import annotations
 
 from typing import NewType, TypeVar
@@ -21,12 +22,10 @@ Str = NewType('Str', str)
 T = TypeVar('T')
 
 
-class Number(sl.Scope[T, int], int):
-    ...
+class Number(sl.Scope[T, int], int): ...
 
 
-class BigNumber(sl.Scope[T, int], int):
-    ...
+class BigNumber(sl.Scope[T, int], int): ...
 
 
 def test_postponed_annotation_builtin() -> None:
@@ -77,11 +76,9 @@ def test_postponed_annotation_generic_custom() -> None:
 def test_postponed_annotation_generic_local_custom() -> None:
     LT = TypeVar('LT')
 
-    class LNumber(sl.Scope[LT, int], int):
-        ...
+    class LNumber(sl.Scope[LT, int], int): ...
 
-    class LBigNumber(sl.Scope[LT, int], int):
-        ...
+    class LBigNumber(sl.Scope[LT, int], int): ...
 
     def double(n: LNumber[LT]) -> LBigNumber[LT]:
         return LBigNumber[LT](n * 2)

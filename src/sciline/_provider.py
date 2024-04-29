@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright (c) 2023 Scipp contributors (https://github.com/scipp)
 """Handling of providers and their arguments."""
+
 from __future__ import annotations
 
 import inspect

@@ -129,8 +129,9 @@ def _find_all_paths(
     for node in dependencies[start]:
         if start == node:
             continue
-        for path in _find_all_paths(dependencies, node, end):
-            paths.append([start] + path)
+        paths.extend(
+            [start, *path] for path in _find_all_paths(dependencies, node, end)
+        )
     return paths
 
 
@@ -207,7 +208,7 @@ class ReplicatorBase(Generic[IndexType]):
     def key(self, i: IndexType, value_name: Union[Type[T], Item[T]]) -> Item[T]:
         label = Label(self._index_name, i)
         if isinstance(value_name, Item):
-            return Item(value_name.label + (label,), value_name.tp)
+            return Item((*value_name.label, label), value_name.tp)
         else:
             return Item((label,), value_name)
 
@@ -269,7 +270,7 @@ class GroupingReplicator(ReplicatorBase[LabelType], Generic[IndexType, LabelType
         self._label_name = label_name
         self._group_node = self._find_grouping_node(param_table.row_dim, graph_template)
         self._groups: Dict[LabelType, List[IndexType]] = defaultdict(list)
-        for idx, label in zip(param_table.index, param_table[label_name]):
+        for idx, label in zip(param_table.index, param_table[label_name], strict=True):
             self._groups[label].append(idx)
         super().__init__(
             index_name=label_name,
@@ -295,17 +296,18 @@ class GroupingReplicator(ReplicatorBase[LabelType], Generic[IndexType, LabelType
             )
         selected = {
             label: arg
-            for label, arg in zip(provider.labels, provider.arg_spec.args)
+            for label, arg in zip(provider.labels, provider.arg_spec.args, strict=True)
             if label in labels
         }
         return SeriesProvider(selected.keys(), provider.row_dim, args=selected.values())
 
     def _find_grouping_node(self, index_name: Key, subgraph: Graph) -> type:
-        ends: List[type] = []
-        for key in subgraph:
-            if get_origin(key) == Series and get_args(key)[0] == index_name:
-                # Because of the succeeded get_origin we know it is a type
-                ends.append(key)  # type: ignore[arg-type]
+        ends: List[type] = [
+            key
+            for key in subgraph
+            # Because of the succeeded get_origin we know it is a type
+            if get_origin(key) == Series and get_args(key)[0] == index_name
+        ]
         if len(ends) == 1:
             return ends[0]
         raise ValueError(f"Could not find unique grouping node, found {ends}")
@@ -333,7 +335,7 @@ class SeriesProvider(Generic[KeyType], Provider):
         self.row_dim = row_dim
 
     def _call(self, *vals: ValueType) -> Series[KeyType, ValueType]:
-        return Series(self.row_dim, dict(zip(self.labels, vals)))
+        return Series(self.row_dim, dict(zip(self.labels, vals, strict=True)))
 
 
 class _ParamSentinel(Provider):
@@ -435,12 +437,12 @@ class Pipeline:
         for param_name in params:
             self._param_name_to_table_key[param_name] = params.row_dim
         for param_name, values in params.items():
-            for index, label in zip(params.index, values):
+            for index, label in zip(params.index, values, strict=True):
                 self._set_provider(
                     Item((Label(tp=params.row_dim, index=index),), param_name),
                     Provider.table_cell(label),
                 )
-        for index, label in zip(params.index, params.index):
+        for index, label in zip(params.index, params.index, strict=True):
             self._set_provider(
                 Item((Label(tp=params.row_dim, index=index),), params.row_dim),
                 Provider.table_cell(label),
@@ -491,7 +493,7 @@ class Pipeline:
         provider: Provider,
     ) -> None:
         # isinstance does not work here and types.NoneType available only in 3.10+
-        if key == type(None):  # noqa: E721
+        if key == type(None):
             raise ValueError(f'Provider {provider} returning `None` is not allowed')
         if get_origin(key) == Series:
             raise ValueError(
@@ -529,7 +531,7 @@ class Pipeline:
             min_typevar_count = min(typevar_counts, default=0)
             matches = [
                 m
-                for count, m in zip(typevar_counts, matches)
+                for count, m in zip(typevar_counts, matches, strict=True)
                 if count == min_typevar_count
             ]
 
@@ -711,20 +713,16 @@ class Pipeline:
         return graph
 
     @overload
-    def compute(self, tp: Type[T], **kwargs: Any) -> T:
-        ...
+    def compute(self, tp: Type[T], **kwargs: Any) -> T: ...
 
     @overload
-    def compute(self, tp: Iterable[Type[T]], **kwargs: Any) -> Dict[Type[T], T]:
-        ...
+    def compute(self, tp: Iterable[Type[T]], **kwargs: Any) -> Dict[Type[T], T]: ...
 
     @overload
-    def compute(self, tp: Item[T], **kwargs: Any) -> T:
-        ...
+    def compute(self, tp: Item[T], **kwargs: Any) -> T: ...
 
     @overload
-    def compute(self, tp: UnionType, **kwargs: Any) -> Any:
-        ...
+    def compute(self, tp: UnionType, **kwargs: Any) -> Any: ...
 
     def compute(
         self, tp: type | Iterable[type] | Item[T] | UnionType, **kwargs: Any
@@ -744,9 +742,7 @@ class Pipeline:
         """
         return self.get(tp, **kwargs).compute()
 
-    def visualize(
-        self, tp: type | Iterable[type], **kwargs: Any
-    ) -> graphviz.Digraph:  # type: ignore[name-defined] # noqa: F821
+    def visualize(self, tp: type | Iterable[type], **kwargs: Any) -> graphviz.Digraph:  # type: ignore[name-defined] # noqa: F821
         """
         Return a graphviz Digraph object representing the graph for the given keys.
 
@@ -797,16 +793,18 @@ class Pipeline:
         else:
             graph = self.build(keys, handler=handler)  # type: ignore[arg-type]
         return TaskGraph(
-            graph=graph, targets=keys, scheduler=scheduler  # type: ignore[arg-type]
+            graph=graph,
+            targets=keys,
+            scheduler=scheduler,  # type: ignore[arg-type]
         )
 
     @overload
-    def bind_and_call(self, fns: Callable[..., T], /) -> T:
-        ...
+    def bind_and_call(self, fns: Callable[..., T], /) -> T: ...
 
     @overload
-    def bind_and_call(self, fns: Iterable[Callable[..., Any]], /) -> Tuple[Any, ...]:
-        ...
+    def bind_and_call(
+        self, fns: Iterable[Callable[..., Any]], /
+    ) -> Tuple[Any, ...]: ...
 
     def bind_and_call(
         self, fns: Union[Callable[..., Any], Iterable[Callable[..., Any]]], /
@@ -870,7 +868,7 @@ class Pipeline:
 
     def _repr_html_(self) -> str:
         providers_without_parameters = (
-            (origin, tuple(), value) for origin, value in self._providers.items()
+            (origin, (), value) for origin, value in self._providers.items()
         )  # type: ignore[var-annotated]
         providers_with_parameters = (
             (origin, args, value)

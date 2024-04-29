@@ -32,7 +32,7 @@ def test_parameter_type_union_or_optional_allowed() -> None:
 
 
 def test_union_requirement_not_satisfied_by_any_of_its_arguments() -> None:
-    def require_union(x: Union[int, float]) -> str:
+    def require_union(x: Union[int, float]) -> str:  # noqa: PYI041
         return f'{x}'
 
     pipeline = sl.Pipeline([require_union])
@@ -65,7 +65,7 @@ def test_optional_dependency_cannot_be_filled_by_non_optional_param_kwarg() -> N
 
 
 def test_Union_argument_order_matters() -> None:
-    def use_union(x: int | float) -> str:
+    def use_union(x: int | float) -> str:  # noqa: PYI041
         return f'{x}'
 
     pipeline = sl.Pipeline([use_union])

@@ -52,7 +52,7 @@ def test_arg_spec_decorated_function_with_wraps() -> None:
         from functools import wraps
 
         @wraps(func)
-        def wrapper(*args: Union[int, float], **kwargs: Union[int, float]) -> str:
+        def wrapper(*args: Union[int, float], **kwargs: Union[int, float]) -> str:  # noqa: PYI041
             return "Wrapped: " + func(*args, **kwargs)
 
         return wrapper
@@ -70,7 +70,7 @@ def test_arg_spec_decorated_function_without_wraps() -> None:
     from typing import Callable, Union
 
     def decorator(func: Callable[..., str]) -> Callable[..., str]:
-        def wrapper(*args: Union[int, float], **kwargs: Union[int, float]) -> str:
+        def wrapper(*args: Union[int, float], **kwargs: Union[int, float]) -> str:  # noqa: PYI041
             return "Wrapped: " + func(*args, **kwargs)
 
         return wrapper

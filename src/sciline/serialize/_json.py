@@ -142,7 +142,7 @@ def _provider_name(provider: Provider) -> str:
         raise ValueError(
             f"Unsupported provider for serializing graph: '{provider}' "
             'Callable objects cannot be serialized.'
-        )
+        ) from None
 
 
 class _IdGenerator:

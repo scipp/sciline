@@ -113,7 +113,7 @@ class TaskGraph:
             targets = self._keys
         if isinstance(targets, tuple):
             results = self._scheduler.get(self._graph, list(targets))
-            return dict(zip(targets, results))
+            return dict(zip(targets, results, strict=True))
         else:
             return self._scheduler.get(self._graph, [targets])[0]
 
@@ -131,9 +131,7 @@ class TaskGraph:
         """
         yield from self._graph.keys()
 
-    def visualize(
-        self, **kwargs: Any
-    ) -> graphviz.Digraph:  # type: ignore[name-defined] # noqa: F821
+    def visualize(self, **kwargs: Any) -> graphviz.Digraph:  # type: ignore[name-defined] # noqa: F821
         """
         Return a graphviz Digraph object representing the graph.
 

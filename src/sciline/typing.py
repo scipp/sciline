@@ -46,7 +46,7 @@ def get_optional(tp: Key) -> Optional[Any]:
     args = get_args(tp)
     if len(args) != 2 or type(None) not in args:
         return None
-    return args[0] if args[1] == type(None) else args[1]  # noqa: E721
+    return args[0] if args[1] == type(None) else args[1]
 
 
 def get_union(tp: Key) -> Optional[Tuple[Any, ...]]:

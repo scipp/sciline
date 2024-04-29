@@ -18,7 +18,7 @@ def _details(summary: str, body: str) -> str:
 
 
 def _provider_name(
-    p: Tuple[Key, Tuple[Union[Key, TypeVar], ...], List[Provider]]
+    p: Tuple[Key, Tuple[Union[Key, TypeVar], ...], List[Provider]],
 ) -> str:
     key, args, _ = p
     if args:
@@ -29,7 +29,7 @@ def _provider_name(
 
 
 def _provider_source(
-    p: Tuple[Key, Tuple[Union[Key, TypeVar], ...], List[Provider]]
+    p: Tuple[Key, Tuple[Union[Key, TypeVar], ...], List[Provider]],
 ) -> str:
     key, _, (v, *rest) = p
     if v.kind == 'table_cell':
@@ -47,7 +47,7 @@ def _provider_source(
 
 
 def _provider_value(
-    p: Tuple[Key, Tuple[Union[Key, TypeVar], ...], List[Provider]]
+    p: Tuple[Key, Tuple[Union[Key, TypeVar], ...], List[Provider]],
 ) -> str:
     _, _, (v, *_) = p
     if v.kind == 'parameter':
@@ -57,10 +57,10 @@ def _provider_value(
 
 
 def pipeline_html_repr(
-    providers: Iterable[Tuple[Key, Tuple[Union[Key, TypeVar], ...], Provider]]
+    providers: Iterable[Tuple[Key, Tuple[Union[Key, TypeVar], ...], Provider]],
 ) -> str:
     def associate_table_values(
-        p: Tuple[Key, Tuple[Union[Key, TypeVar], ...], Provider]
+        p: Tuple[Key, Tuple[Union[Key, TypeVar], ...], Provider],
     ) -> Tuple[Key, Union[type, Tuple[Union[Key, TypeVar], ...]]]:
         key, args, v = p
         if isinstance(key, Item):

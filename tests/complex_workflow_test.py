@@ -26,28 +26,22 @@ Run = TypeVar('Run')
 
 
 # TODO Giving the base twice works with mypy, how can we avoid typing it twice?
-class Raw(sl.Scope[Run, RawData], RawData):
-    ...
+class Raw(sl.Scope[Run, RawData], RawData): ...
 
 
-class Masked(sl.Scope[Run, npt.NDArray[np.float64]], npt.NDArray[np.float64]):
-    ...
+class Masked(sl.Scope[Run, npt.NDArray[np.float64]], npt.NDArray[np.float64]): ...
 
 
-class IncidentMonitor(sl.Scope[Run, float], float):
-    ...
+class IncidentMonitor(sl.Scope[Run, float], float): ...
 
 
-class TransmissionMonitor(sl.Scope[Run, float], float):
-    ...
+class TransmissionMonitor(sl.Scope[Run, float], float): ...
 
 
-class TransmissionFraction(sl.Scope[Run, float], float):
-    ...
+class TransmissionFraction(sl.Scope[Run, float], float): ...
 
 
-class IofQ(sl.Scope[Run, npt.NDArray[np.float64]], npt.NDArray[np.float64]):
-    ...
+class IofQ(sl.Scope[Run, npt.NDArray[np.float64]], npt.NDArray[np.float64]): ...
 
 
 BackgroundSubtractedIofQ = NewType('BackgroundSubtractedIofQ', npt.NDArray[np.float64])
@@ -99,7 +93,7 @@ def subtract_background(
 def test_reduction_workflow() -> None:
     # See https://github.com/python/mypy/issues/14661
     pipeline = sl.Pipeline(
-        [subtract_background] + reduction,  # type: ignore[operator]
+        [subtract_background, *reduction],  # type: ignore[operator]
         params=params,
     )
 

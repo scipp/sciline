@@ -31,7 +31,7 @@ class ParamTable(Mapping[type, Collection[Any]]):
             The row index of the table. If not given, a default index will be
             generated, as the integer range of the column length.
         """
-        sizes = set(len(v) for v in columns.values())
+        sizes = {len(v) for v in columns.values()}
         if len(sizes) > 1:
             raise ValueError(
                 f"Columns in param table must all have same size, got {sizes}"
@@ -88,7 +88,9 @@ class ParamTable(Mapping[type, Collection[Any]]):
             + "</tr>"
             + "".join(
                 f"<tr><td>{idx}</td>" + "".join(f"<td>{v}</td>" for v in row) + "</tr>"
-                for idx, row in zip(self.index, zip(*self._columns.values()))
+                for idx, row in zip(
+                    self.index, zip(*self._columns.values(), strict=True), strict=True
+                )
             )
             + "</table>"
         )
