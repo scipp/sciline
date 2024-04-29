@@ -32,11 +32,11 @@ packaging==24.0
     #   -r ci.in
     #   pyproject-api
     #   tox
-platformdirs==4.2.0
+platformdirs==4.2.1
     # via
     #   tox
     #   virtualenv
-pluggy==1.4.0
+pluggy==1.5.0
     # via tox
 pyproject-api==1.6.1
     # via tox
@@ -44,13 +44,9 @@ requests==2.31.0
     # via -r ci.in
 smmap==5.0.1
     # via gitdb
-tomli==2.0.1
-    # via
-    #   pyproject-api
-    #   tox
-tox==4.14.2
+tox==4.15.0
     # via -r ci.in
 urllib3==2.2.1
     # via requests
-virtualenv==20.25.1
+virtualenv==20.26.0
     # via tox
