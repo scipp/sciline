@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from html import escape
-from typing import Any, Generator, Optional, Sequence, Tuple, TypeVar, Union
+from typing import Any, Generator, Hashable, Sequence, TypeVar
 
 from ._utils import key_name
 from .scheduler import DaskScheduler, NaiveScheduler, Scheduler
@@ -59,6 +59,9 @@ def _list_max_n_then_hide(items: Sequence[str], n: int = 5, header: str = '') ->
     )
 
 
+Targets = Hashable | tuple[Hashable, ...]
+
+
 class TaskGraph:
     """
     Holds a concrete task graph and keys to compute.
@@ -68,11 +71,7 @@ class TaskGraph:
     """
 
     def __init__(
-        self,
-        *,
-        graph: Graph,
-        targets: Union[type, Tuple[type, ...]],
-        scheduler: Optional[Scheduler] = None,
+        self, *, graph: Graph, targets: Targets, scheduler: Scheduler | None = None
     ) -> None:
         self._graph = graph
         self._keys = targets
@@ -83,10 +82,7 @@ class TaskGraph:
                 scheduler = NaiveScheduler()
         self._scheduler = scheduler
 
-    def compute(
-        self,
-        targets: Optional[Union[type, Tuple[type, ...]]] = None,
-    ) -> Any:
+    def compute(self, targets: Targets | None = None) -> Any:
         """
         Compute the result of the graph.
 
@@ -156,7 +152,7 @@ class TaskGraph:
     def _repr_html_(self) -> str:
         leafs = sorted(
             [
-                escape(key_name(key))
+                escape(key_name(key))  # type: ignore[arg-type]
                 for key in (
                     self._keys if isinstance(self._keys, tuple) else [self._keys]
                 )

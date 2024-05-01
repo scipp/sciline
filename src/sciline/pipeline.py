@@ -31,7 +31,7 @@ T = TypeVar('T')
 KeyType = TypeVar('KeyType', bound=Key)
 
 
-def _is_multiple_keys(keys: type | Iterable[type]) -> bool:
+def _is_multiple_keys(keys: type | Iterable[type] | UnionType) -> bool:
     # Cannot simply use isinstance(keys, Iterable) because that is True for
     # generic aliases of iterable types, e.g.,
     #
@@ -117,7 +117,7 @@ class Pipeline(DataGraph):
 
     def get(
         self,
-        keys: type | Iterable[type] | object,
+        keys: type | Iterable[type] | UnionType,
         *,
         scheduler: Optional[Scheduler] = None,
         handler: Optional[ErrorHandler] = None,
@@ -144,11 +144,11 @@ class Pipeline(DataGraph):
         if multi := _is_multiple_keys(keys):
             targets = tuple(keys)  # type: ignore[arg-type]
         else:
-            targets = (keys,)
+            targets = (keys,)  # type: ignore[assignment]
         graph = self.build(targets=targets, handler=handler)
         return TaskGraph(
             graph=graph,
-            targets=targets if multi else keys,
+            targets=targets if multi else keys,  # type: ignore[arg-type]
             scheduler=scheduler,
         )
 
@@ -210,7 +210,5 @@ class Pipeline(DataGraph):
         return self.copy()
 
     def _repr_html_(self) -> str:
-        nodes = (
-            (key, data) for key, data in self._graph.nodes.items()
-        )  # type: ignore[var-annotated]
+        nodes = ((key, data) for key, data in self._graph.nodes.items())
         return pipeline_html_repr(nodes)

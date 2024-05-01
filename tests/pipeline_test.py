@@ -272,7 +272,7 @@ def test_inserting_provider_returning_None_raises() -> None:
 def test_setting_None_param_raises() -> None:
     pipeline = sl.Pipeline()
     with pytest.raises(ValueError):
-        pipeline[None] = 3
+        pipeline[None] = 3  # type: ignore[index]
 
 
 def test_inserting_provider_with_no_return_type_raises() -> None:

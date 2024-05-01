@@ -11,6 +11,7 @@ from typing import (
     Any,
     Callable,
     Generator,
+    Hashable,
     Literal,
     Optional,
     TypeVar,
@@ -155,7 +156,7 @@ class Provider:
             f"func={self._func})"
         )
 
-    def call(self, values: dict[Key, Any]) -> Any:
+    def call(self, values: dict[Hashable, Any]) -> Any:
         """Call the provider with arguments extracted from ``values``."""
         return self._func(
             *(values[arg] for arg in self._arg_spec.args),

@@ -1,9 +1,9 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright (c) 2023 Scipp contributors (https://github.com/scipp)
 import inspect
-from typing import Any, Callable, Dict, List, Optional, Protocol, Tuple
+from typing import Any, Callable, Dict, Hashable, Optional, Protocol, Tuple
 
-from sciline.typing import Graph, Key
+from sciline.typing import Graph
 
 
 class CycleError(Exception):
@@ -15,7 +15,7 @@ class Scheduler(Protocol):
     Scheduler interface compatible with :py:class:`sciline.Pipeline`.
     """
 
-    def get(self, graph: Graph, keys: List[Key]) -> Tuple[Any, ...]:
+    def get(self, graph: Graph, keys: list[Hashable]) -> Tuple[Any, ...]:
         """
         Compute the result for given keys from the graph.
 
@@ -34,7 +34,7 @@ class NaiveScheduler:
     :py:class:`DaskScheduler` instead.
     """
 
-    def get(self, graph: Graph, keys: List[Key]) -> Tuple[Any, ...]:
+    def get(self, graph: Graph, keys: list[Hashable]) -> Tuple[Any, ...]:
         import graphlib
 
         dependencies = {
@@ -46,7 +46,7 @@ class NaiveScheduler:
             tasks = list(ts.static_order())
         except graphlib.CycleError as e:
             raise CycleError from e
-        results: Dict[Key, Any] = {}
+        results: Dict[Hashable, Any] = {}
         for t in tasks:
             results[t] = graph[t].call(results)
         return tuple(results[key] for key in keys)
@@ -77,7 +77,7 @@ class DaskScheduler:
         else:
             self._dask_get = scheduler
 
-    def get(self, graph: Graph, keys: List[Key]) -> Any:
+    def get(self, graph: Graph, keys: list[Hashable]) -> Any:
         from dask.utils import apply
 
         # Use `apply` to allow passing keyword arguments.
