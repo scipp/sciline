@@ -32,7 +32,10 @@ def _provider_source(data: dict[str, Any]) -> str:
 
 
 def _provider_value(data: dict[str, Any]) -> str:
-    return data.get('value', '')
+    if (value := data.get('value', None)) is None:
+        return ''
+    html = escape(str(value)).strip()
+    return _details(f'{html[:30]}...', html) if len(html) > 30 else html
 
 
 def pipeline_html_repr(nodes: Iterable[Tuple[Key, dict[str, Any]]]) -> str:

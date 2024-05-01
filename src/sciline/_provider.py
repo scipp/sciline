@@ -221,7 +221,8 @@ class ArgSpec:
     def bind_type_vars(self, bound: dict[TypeVar, Key]) -> ArgSpec:
         """Bind concrete types to TypeVars."""
         out = self.map_keys(lambda arg: _bind_free_typevars(arg, bound=bound))
-        out._return = _bind_free_typevars(self._return, bound=bound)
+        if self._return is not None:
+            out._return = _bind_free_typevars(self._return, bound=bound)
         return out
 
     def map_keys(self, transform: Callable[[Key], Key]) -> ArgSpec:
