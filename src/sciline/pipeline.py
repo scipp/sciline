@@ -69,19 +69,6 @@ class Pipeline(DataGraph):
         for tp, param in (params or {}).items():
             self[tp] = param
 
-    def insert(self, provider: Union[ToProvider, Provider], /) -> None:
-        """
-        Add a callable that provides its return value to the pipeline.
-
-        Parameters
-        ----------
-        provider:
-            Either a callable that provides its return value. Its arguments
-            and return value must be annotated with type hints.
-            Or a ``Provider`` object that has been constructed from such a callable.
-        """
-        self.add(provider)
-
     @overload
     def compute(self, tp: Type[T], **kwargs: Any) -> T:
         ...

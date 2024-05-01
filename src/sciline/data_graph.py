@@ -5,7 +5,7 @@ from __future__ import annotations
 import itertools
 from collections.abc import Iterable
 from types import NoneType
-from typing import Any, Generator, Optional, TypeVar, get_args
+from typing import Any, Generator, Optional, TypeVar, Union, get_args
 
 import cyclebane as cb
 import networkx as nx
@@ -48,7 +48,7 @@ class DataGraph:
     def __init__(self, providers: None | Iterable[ToProvider | Provider]) -> None:
         self._cbgraph = cb.Graph(nx.DiGraph())
         for provider in providers or []:
-            self.add(provider)
+            self.insert(provider)
 
     @classmethod
     def from_cyclebane(cls, graph: cb.Graph) -> DataGraph:
@@ -73,13 +73,23 @@ class DataGraph:
             self._graph.add_node(key)
         return self._graph.nodes[key]
 
-    def add(self, provider):
+    def insert(self, provider: Union[ToProvider, Provider], /) -> None:
+        """
+        Insert a callable into the graph that provides its return value.
+
+        Parameters
+        ----------
+        provider:
+            Either a callable that provides its return value. Its arguments
+            and return value must be annotated with type hints.
+            Or a ``Provider`` object that has been constructed from such a callable.
+        """
         if not isinstance(provider, Provider):
             provider = Provider.from_function(provider)
         return_type = provider.deduce_key()
         if typevars := find_all_typevars(return_type):
             for bound in _mapping_to_constrained(typevars):
-                self.add(provider.bind_type_vars(bound))
+                self.insert(provider.bind_type_vars(bound))
             return
         # Trigger UnboundTypeVar error if any input typevars are not bound
         provider = provider.bind_type_vars({})
@@ -127,19 +137,11 @@ class DataGraph:
     def copy(self) -> DataGraph:
         return self.from_cyclebane(self._cbgraph.copy())
 
-    def bind(self, params: dict[Key, Any]) -> DataGraph:
-        out = self.copy()
-        for key, value in params.items():
-            out[key] = value
-        return out
-
     def build(
         self, targets: tuple[Key, ...], handler: Optional[ErrorHandler] = None
     ) -> Graph:
         return to_task_graph(
-            self._cbgraph.to_networkx(),
-            targets=targets,
-            handler=handler,
+            self._cbgraph.to_networkx(), targets=targets, handler=handler
         )
 
     def visualize_data_graph(
