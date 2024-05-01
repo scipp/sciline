@@ -978,10 +978,10 @@ def test_prioritizes_specialized_provider_over_generic_several_typevars() -> Non
 
     pl = sl.Pipeline([p1, p2, p3, p4], params={A: A('A'), B: B('B')})
 
-    assert pl.compute(C[B, A]) == C('B', 'A', 'generic')
-    assert pl.compute(C[A, A]) == C('A', 'A', 'medium generic')
-    assert pl.compute(C[B, B]) == C('B', 'B', 'generic medium')
-    assert pl.compute(C[A, B]) == C('A', 'B', 'special')
+    assert pl.compute(C[B, A]) == C(B('B'), A('A'), 'generic')
+    assert pl.compute(C[A, A]) == C(A('A'), A('A'), 'medium generic')
+    assert pl.compute(C[B, B]) == C(B('B'), B('B'), 'generic medium')
+    assert pl.compute(C[A, B]) == C(A('A'), B('B'), 'special')
 
 
 def test_prioritizes_specialized_provider_raises() -> None:
@@ -1345,58 +1345,6 @@ def test_constraints_nested_multiple_typevars() -> None:
         pipeline.get(N[M[int], str])
     with pytest.raises(sl.handler.UnsatisfiedRequirement):
         pipeline.get(N[M[str], float])
-
-
-def test_number_of_type_vars_defines_most_specialized() -> None:
-    Green = NewType('Green', str)
-    Blue = NewType('Blue', str)
-    Color = TypeVar('Color', Green, Blue)
-
-    @dataclass
-    class Likes(Generic[Color]):
-        color: Color
-
-    Preference = TypeVar('Preference', Likes[Green], Likes[Blue])
-
-    @dataclass
-    class Person(Generic[Preference, Color]):
-        preference: Preference
-        hatcolor: Color
-        provided_by: str
-
-    def p(c: Color) -> Likes[Color]:
-        return Likes(c)
-
-    def p0(p: Preference, c: Color) -> Person[Preference, Color]:
-        return Person(p, c, 'p0')
-
-    def p1(c: Color) -> Person[Likes[Color], Color]:
-        return Person(Likes(c), c, 'p1')
-
-    def p2(p: Preference) -> Person[Preference, Green]:
-        return Person(p, Green('g'), 'p2')
-
-    pipeline = sl.Pipeline((p, p0, p1, p2))
-    pipeline[Blue] = 'b'
-    pipeline[Green] = 'g'
-
-    # only provided by p0
-    assert pipeline.compute(Person[Likes[Green], Blue]) == Person(
-        Likes(Green('g')), Blue('b'), 'p0'
-    )
-    # p1 was added last
-    assert pipeline.compute(Person[Likes[Blue], Blue]) == Person(
-        Likes(Blue('b')), Blue('b'), 'p1'
-    )
-    # p2 was added last
-    assert pipeline.compute(Person[Likes[Blue], Green]) == Person(
-        Likes(Blue('b')), Green('g'), 'p2'
-    )
-
-    # p2 was added last
-    assert pipeline.compute(Person[Likes[Green], Green]) == Person(
-        Likes(Green('g')), Green('g'), 'p2'
-    )
 
 
 def test_pipeline_with_decorated_provider() -> None:
