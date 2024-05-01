@@ -428,8 +428,8 @@ def test_distinct_fully_bound_instances_yield_distinct_results() -> None:
 
 
 def test_distinct_partially_bound_instances_yield_distinct_results() -> None:
-    T1 = TypeVar('T1', int, str)
-    T2 = TypeVar('T2', int, float)
+    T1 = TypeVar('T1', int, float)
+    T2 = TypeVar('T2', int, str)
 
     @dataclass
     class A(Generic[T1, T2]):
@@ -439,11 +439,11 @@ def test_distinct_partially_bound_instances_yield_distinct_results() -> None:
     def str_source() -> str:
         return 'a'
 
-    def int_source(x: T1) -> A[int, T1]:
-        return A[int, T1](1, x)
+    def int_source(x: T2) -> A[int, T2]:
+        return A[int, T2](1, x)
 
-    def float_source(x: T1) -> A[float, T1]:
-        return A[float, T1](2.0, x)
+    def float_source(x: T2) -> A[float, T2]:
+        return A[float, T2](2.0, x)
 
     pipeline = sl.Pipeline([str_source, int_source, float_source])
     assert pipeline.compute(A[int, str]) == A[int, str](1, 'a')
@@ -994,16 +994,17 @@ def test_prioritizes_specialized_provider_raises() -> None:
     class C(Generic[T1, T2]):
         first: T1
         second: T2
+        which: str
 
     def p1(x: A, y: T1) -> C[A, T1]:
-        return C(x, y), 'p1'
+        return C(x, y, which='p1')
 
     def p2(x: T1, y: B) -> C[T1, B]:
-        return C(x, y), 'p2'
+        return C(x, y, which='p2')
 
     pl = sl.Pipeline([p1, p2], params={A: A('A'), B: B('B')})
     # p2 added last, replaced nodes added by p1
-    assert pl.compute(C[A, B]) == (C(A('A'), B('B')), 'p2')
+    assert pl.compute(C[A, B]) == C(A('A'), B('B'), which='p2')
 
     with pytest.raises(sl.UnsatisfiedRequirement):
         pl.compute(C[B, A])

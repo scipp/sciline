@@ -5,7 +5,7 @@ from __future__ import annotations
 import itertools
 from collections.abc import Iterable
 from types import NoneType
-from typing import Any, Generator, Optional, TypeVar, Union, get_args
+from typing import Any, Callable, Generator, Optional, TypeVar, Union, get_args
 
 import cyclebane as cb
 import networkx as nx
@@ -129,11 +129,11 @@ class DataGraph:
         graph = self._cbgraph[key]
         return self.from_cyclebane(graph)
 
-    def map(self, *args, **kwargs) -> DataGraph:
-        graph = self._cbgraph.map(*args, **kwargs)
+    def map(self, node_values: dict[Key, Any]) -> DataGraph:
+        graph = self._cbgraph.map(node_values)
         return self.from_cyclebane(graph)
 
-    def reduce(self, *, func, **kwargs) -> DataGraph:
+    def reduce(self, *, func: Callable[..., Any], **kwargs: Any) -> DataGraph:
         # Note that the type hints of `func` are not checked here. As we are explicit
         # about the modification, this is in line with __setitem__ which does not
         # perform such checks and allows for using generic reduction functions.
@@ -173,10 +173,10 @@ def to_task_graph(
 ) -> Graph:
     handler = handler or HandleAsBuildTimeException()
     ancestors = list(targets)
-    for node in targets:
-        if node not in graph:
-            handler.handle_unsatisfied_requirement(node)
-        ancestors.extend(nx.ancestors(graph, node))
+    for target in targets:
+        if target not in graph:
+            handler.handle_unsatisfied_requirement(target)
+        ancestors.extend(nx.ancestors(graph, target))
     graph = graph.subgraph(set(ancestors))
     out = {}
 
