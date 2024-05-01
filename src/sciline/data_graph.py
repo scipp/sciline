@@ -44,6 +44,9 @@ def _mapping_to_constrained(
         yield dict(zip(type_vars, combination))
 
 
+T = TypeVar('T', bound='DataGraph')
+
+
 class DataGraph:
     def __init__(self, providers: None | Iterable[ToProvider | Provider]) -> None:
         self._cbgraph = cb.Graph(nx.DiGraph())
@@ -51,10 +54,13 @@ class DataGraph:
             self.insert(provider)
 
     @classmethod
-    def from_cyclebane(cls, graph: cb.Graph) -> DataGraph:
+    def from_cyclebane(cls: type[T], graph: cb.Graph) -> T:
         out = cls([])
         out._cbgraph = graph
         return out
+
+    def copy(self: T) -> T:
+        return self.from_cyclebane(self._cbgraph.copy())
 
     @property
     def _graph(self) -> nx.DiGraph:
@@ -133,9 +139,6 @@ class DataGraph:
         # perform such checks and allows for using generic reduction functions.
         graph = self._cbgraph.reduce(attrs={'reduce': func}, **kwargs)
         return self.from_cyclebane(graph)
-
-    def copy(self) -> DataGraph:
-        return self.from_cyclebane(self._cbgraph.copy())
 
     def build(
         self, targets: tuple[Key, ...], handler: Optional[ErrorHandler] = None
