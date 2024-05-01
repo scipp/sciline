@@ -1,14 +1,11 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright (c) 2023 Scipp contributors (https://github.com/scipp)
-from dataclasses import dataclass
 from typing import (
     Any,
     Dict,
-    Generic,
     List,
     Optional,
     Tuple,
-    Type,
     TypeVar,
     Union,
     get_args,
@@ -17,23 +14,10 @@ from typing import (
 
 from ._provider import Provider
 
-
-@dataclass(frozen=True)
-class Label:
-    tp: type
-    index: Any
-
-
 T = TypeVar('T')
 
 
-@dataclass(frozen=True)
-class Item(Generic[T]):
-    label: Tuple[Label, ...]
-    tp: Type[T]
-
-
-Key = Union[type, Item[Any]]
+Key = type
 Graph = dict[Key, Provider]
 
 

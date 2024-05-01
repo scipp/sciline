@@ -5,7 +5,7 @@ from collections import defaultdict
 from typing import Any, Callable, DefaultDict, Iterable, TypeVar, Union, get_args
 
 from ._provider import Provider
-from .typing import Item, Key
+from .typing import Key
 
 T = TypeVar('T')
 G = TypeVar('G')
@@ -31,11 +31,6 @@ def full_qualname(obj: Any) -> str:
 
 
 def key_name(key: Union[Key, TypeVar]) -> str:
-    if isinstance(key, Item):
-        parameters = ", ".join(
-            f'{key_name(label.tp)}:{label.index}' for label in key.label
-        )
-        return f'{key_name(key.tp)}({parameters})'
     args = get_args(key)
     if len(args):
         parameters = ', '.join(map(key_name, args))
@@ -47,11 +42,6 @@ def key_name(key: Union[Key, TypeVar]) -> str:
 
 
 def key_full_qualname(key: Union[Key, TypeVar]) -> str:
-    if isinstance(key, Item):
-        parameters = ", ".join(
-            f'{key_full_qualname(label.tp)}:{label.index}' for label in key.label
-        )
-        return f'{key_full_qualname(key.tp)}({parameters})'
     args = get_args(key)
     if len(args):
         origin = key.__origin__  # type: ignore[union-attr] # key is a TypeVar

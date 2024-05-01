@@ -25,7 +25,7 @@ from .display import pipeline_html_repr
 from .handler import ErrorHandler, HandleAsComputeTimeException
 from .scheduler import Scheduler
 from .task_graph import TaskGraph
-from .typing import Item, Key
+from .typing import Key
 
 T = TypeVar('T')
 KeyType = TypeVar('KeyType', bound=Key)
@@ -78,16 +78,10 @@ class Pipeline(DataGraph):
         ...
 
     @overload
-    def compute(self, tp: Item[T], **kwargs: Any) -> T:
-        ...
-
-    @overload
     def compute(self, tp: UnionType, **kwargs: Any) -> Any:
         ...
 
-    def compute(
-        self, tp: type | Iterable[type] | Item[T] | UnionType, **kwargs: Any
-    ) -> Any:
+    def compute(self, tp: type | Iterable[type] | UnionType, **kwargs: Any) -> Any:
         """
         Compute result for the given keys.
 
@@ -123,7 +117,7 @@ class Pipeline(DataGraph):
 
     def get(
         self,
-        keys: type | Iterable[type] | Item[T] | object,
+        keys: type | Iterable[type] | object,
         *,
         scheduler: Optional[Scheduler] = None,
         handler: Optional[ErrorHandler] = None,
@@ -216,14 +210,7 @@ class Pipeline(DataGraph):
         return self.copy()
 
     def _repr_html_(self) -> str:
-        providers_without_parameters = (
-            (origin, tuple(), value) for origin, value in self._providers.items()
+        nodes = (
+            (key, data) for key, data in self._graph.nodes.items()
         )  # type: ignore[var-annotated]
-        providers_with_parameters = (
-            (origin, args, value)
-            for origin in self._subproviders
-            for args, value in self._subproviders[origin].items()
-        )
-        return pipeline_html_repr(
-            chain(providers_without_parameters, providers_with_parameters)
-        )
+        return pipeline_html_repr(nodes)

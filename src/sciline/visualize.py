@@ -17,7 +17,7 @@ from typing import (
 from graphviz import Digraph
 
 from ._provider import Provider, ProviderKind
-from .typing import Graph, Item, Key, get_optional
+from .typing import Graph, Key, get_optional
 
 
 @dataclass
@@ -153,7 +153,7 @@ T = TypeVar('T')
 
 
 def _extract_type_and_labels(
-    key: Union[Item[T], Type[T]], compact: bool
+    key: Type[T], compact: bool
 ) -> Tuple[Type[T], List[Union[type, Tuple[type, Any]]]]:
     import cyclebane
 

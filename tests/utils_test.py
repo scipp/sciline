@@ -8,7 +8,6 @@ import pytest
 import sciline
 from sciline import _utils
 from sciline._provider import Provider
-from sciline.typing import Item, Label
 
 
 def module_foo(x: list[str]) -> str:
@@ -48,11 +47,6 @@ assert _utils.key_name(MyType[int]) == 'MyType[int]'
 def test_key_name_type_var() -> None:
     MyType = TypeVar('MyType')
     assert _utils.key_name(MyType) == '~MyType'  # type: ignore[arg-type]
-
-
-def test_key_name_item() -> None:
-    item = Item(tp=int, label=(Label(tp=float, index=0), Label(tp=str, index=1)))
-    assert _utils.key_name(item) == 'int(float:0, str:1)'
 
 
 def test_key_name_builtin_generic() -> None:
@@ -131,14 +125,6 @@ def test_key_full_qualname_type_var() -> None:
     MyType = TypeVar('MyType')
     res = _utils.key_full_qualname(MyType)  # type: ignore[arg-type]
     assert res == 'tests.utils_test.~MyType'
-
-
-def test_key_full_qualname_item() -> None:
-    item = Item(tp=int, label=(Label(tp=float, index=0), Label(tp=str, index=1)))
-    assert (
-        _utils.key_full_qualname(item)
-        == 'builtins.int(builtins.float:0, builtins.str:1)'
-    )
 
 
 @pytest.mark.skipif(sys.version_info < (3, 10), reason="requires python3.10 or higher")

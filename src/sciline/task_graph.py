@@ -8,7 +8,7 @@ from typing import Any, Generator, Optional, Sequence, Tuple, TypeVar, Union
 from ._utils import key_name
 from .scheduler import DaskScheduler, NaiveScheduler, Scheduler
 from .serialize import json_serialize_task_graph
-from .typing import Graph, Item, Json, Key
+from .typing import Graph, Json, Key
 
 T = TypeVar("T")
 
@@ -71,7 +71,7 @@ class TaskGraph:
         self,
         *,
         graph: Graph,
-        targets: Union[type, Tuple[type, ...], Item[T], Tuple[Item[T], ...]],
+        targets: Union[type, Tuple[type, ...]],
         scheduler: Optional[Scheduler] = None,
     ) -> None:
         self._graph = graph
@@ -85,9 +85,7 @@ class TaskGraph:
 
     def compute(
         self,
-        targets: Optional[
-            Union[type, Tuple[type, ...], Item[T], Tuple[Item[T], ...]]
-        ] = None,
+        targets: Optional[Union[type, Tuple[type, ...]]] = None,
     ) -> Any:
         """
         Compute the result of the graph.
