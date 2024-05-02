@@ -128,13 +128,13 @@ class DataGraph:
             value._cbgraph if isinstance(value, DataGraph) else _as_graph(key, value)
         )
 
-    def __getitem__(self, key: Key) -> DataGraph:
+    def __getitem__(self: T, key: Key) -> T:
         return self.from_cyclebane(self._cbgraph[key])
 
-    def map(self, node_values: dict[Key, Any]) -> DataGraph:
+    def map(self: T, node_values: dict[Key, Any]) -> T:
         return self.from_cyclebane(self._cbgraph.map(node_values))
 
-    def reduce(self, *, func: Callable[..., Any], **kwargs: Any) -> DataGraph:
+    def reduce(self: T, *, func: Callable[..., Any], **kwargs: Any) -> T:
         # Note that the type hints of `func` are not checked here. As we are explicit
         # about the modification, this is in line with __setitem__ which does not
         # perform such checks and allows for using generic reduction functions.
