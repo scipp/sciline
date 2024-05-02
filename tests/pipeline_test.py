@@ -387,25 +387,25 @@ def test_multi_Generic_with_partially_bound_arguments() -> None:
 
 def test_multi_Generic_with_multiple_unbound() -> None:
     T1 = TypeVar('T1', int, float)
-    T2 = TypeVar('T2', int, float)
+    T2 = TypeVar('T2', bool, str)
 
     @dataclass
     class A(Generic[T1, T2]):
         first: T1
         second: T2
 
-    def int_source() -> int:
-        return 1
-
-    def float_source() -> float:
-        return 2.0
-
     def unbound(x: T1, y: T2) -> A[T1, T2]:
         return A[T1, T2](x, y)
 
-    pipeline = sl.Pipeline([int_source, float_source, unbound])
-    assert pipeline.compute(A[int, float]) == A[int, float](1, 2.0)
-    assert pipeline.compute(A[float, int]) == A[float, int](2.0, 1)
+    pipeline = sl.Pipeline([unbound])
+    pipeline[int] = 1
+    pipeline[float] = 2.0
+    pipeline[bool] = True
+    pipeline[str] = 'a'
+    assert pipeline.compute(A[int, bool]) == A[int, bool](1, True)
+    assert pipeline.compute(A[int, str]) == A[int, str](1, 'a')
+    assert pipeline.compute(A[float, bool]) == A[float, bool](2.0, True)
+    assert pipeline.compute(A[float, str]) == A[float, str](2.0, 'a')
 
 
 def test_distinct_fully_bound_instances_yield_distinct_results() -> None:
@@ -1426,3 +1426,12 @@ def test_pipeline_class_new_provider() -> None:
 
     with pytest.raises(TypeError):
         sl.Pipeline([C], params={int: 3})
+
+
+def test_inserting_provider_with_duplicate_arguments_raises() -> None:
+    def bad(x: int, y: int) -> float:
+        return float(x + y)
+
+    pipeline = sl.Pipeline()
+    with pytest.raises(ValueError, match="Duplicate type hints"):
+        pipeline.insert(bad)

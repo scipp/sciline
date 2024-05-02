@@ -171,6 +171,11 @@ class ArgSpec:
         self, *, args: dict[str, Key], kwargs: dict[str, Key], return_: Optional[Key]
     ) -> None:
         """Build from components, use dedicated creation functions instead."""
+        # Duplicate type hints could be allowed in principle, but it makes structure
+        # analysis and checks more difficult and error prone. As there is likely
+        # little utility in supporting this, we disallow it.
+        if len(set(args.values()) | set(kwargs.values())) != len(args) + len(kwargs):
+            raise ValueError("Duplicate type hints found in args and/or kwargs")
         self._args = args
         self._kwargs = kwargs
         self._return = return_
