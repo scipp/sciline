@@ -40,6 +40,8 @@ def _is_multiple_keys(keys: type | Iterable[type] | UnionType) -> bool:
     #
     # And isinstance(keys, type) does not work on its own because
     # it is False for the above type.
+    if isinstance(keys, str):
+        return False
     return (
         not isinstance(keys, type) and not get_args(keys) and isinstance(keys, Iterable)
     )
