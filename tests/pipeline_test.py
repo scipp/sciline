@@ -932,7 +932,7 @@ def test_bind_and_call_function_runs_at_end() -> None:
     assert calls.index('d') in (2, 3)
 
 
-def test_prioritizes_specialized_provider_over_generic() -> None:
+def test_inserting_generic_provider_replaces_specialized_provider() -> None:
     A = NewType('A', str)
     B = NewType('B', str)
     V = TypeVar('V', A, B)
@@ -946,68 +946,11 @@ def test_prioritizes_specialized_provider_over_generic() -> None:
     def p2(x: B) -> H[B]:
         return H[B]("Special")
 
-    pl = sl.Pipeline([p1, p2], params={A: 'A', B: 'B'})
+    # p2 will be replaced immediately by p1.
+    pl = sl.Pipeline([p2, p1], params={A: 'A', B: 'B'})
 
     assert str(pl.compute(H[A])) == "Generic"
-    assert str(pl.compute(H[B])) == "Special"
-
-
-def test_prioritizes_specialized_provider_over_generic_several_typevars() -> None:
-    A = NewType('A', str)
-    B = NewType('B', str)
-    T1 = TypeVar('T1', A, B)
-    T2 = TypeVar('T2', A, B)
-
-    @dataclass
-    class C(Generic[T1, T2]):
-        first: T1
-        second: T2
-        third: str
-
-    def p1(x: T1, y: T2) -> C[T1, T2]:
-        return C(x, y, 'generic')
-
-    def p2(x: A, y: T2) -> C[A, T2]:
-        return C(x, y, 'medium generic')
-
-    def p3(x: T2, y: B) -> C[T2, B]:
-        return C(x, y, 'generic medium')
-
-    def p4(x: A, y: B) -> C[A, B]:
-        return C(x, y, 'special')
-
-    pl = sl.Pipeline([p1, p2, p3, p4], params={A: A('A'), B: B('B')})
-
-    assert pl.compute(C[B, A]) == C(B('B'), A('A'), 'generic')
-    assert pl.compute(C[A, A]) == C(A('A'), A('A'), 'medium generic')
-    assert pl.compute(C[B, B]) == C(B('B'), B('B'), 'generic medium')
-    assert pl.compute(C[A, B]) == C(A('A'), B('B'), 'special')
-
-
-def test_prioritizes_specialized_provider_raises() -> None:
-    A = NewType('A', str)
-    B = NewType('B', str)
-    T1 = TypeVar('T1', A, B)
-    T2 = TypeVar('T2', A, B)
-
-    @dataclass
-    class C(Generic[T1, T2]):
-        first: T1
-        second: T2
-        which: str
-
-    def p1(x: A, y: T1) -> C[A, T1]:
-        return C(x, y, which='p1')
-
-    def p2(x: T1, y: B) -> C[T1, B]:
-        return C(x, y, which='p2')
-
-    pl = sl.Pipeline([p1, p2], params={A: A('A'), B: B('B')})
-    # p2 added last, replaced nodes added by p1
-    assert pl.compute(C[A, B]) == C(A('A'), B('B'), which='p2')
-
-    with pytest.raises(sl.UnsatisfiedRequirement):
-        pl.compute(C[B, A])
+    assert str(pl.compute(H[B])) == "Generic"
 
 
 def test_compute_time_handler_allows_for_building_but_not_computing() -> None:

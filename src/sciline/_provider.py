@@ -175,6 +175,9 @@ class ArgSpec:
         self._kwargs = kwargs
         self._return = return_
 
+    def __len__(self) -> int:
+        return len(self._args) + len(self._kwargs)
+
     @classmethod
     def from_function(cls, provider: ToProvider) -> ArgSpec:
         """Parse the argument spec of a provider."""

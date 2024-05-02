@@ -114,6 +114,9 @@ class DataGraph:
         param:
             Concrete value to provide.
         """
+        # This is a questionable approach: Using MyGeneric[T] as a key will actually
+        # not pass mypy [valid-type] checks. What we do on our side is ok, but the
+        # calling code is not.
         if typevars := find_all_typevars(key):
             for bound in _mapping_to_constrained(typevars):
                 self[_bind_free_typevars(key, bound)] = value
@@ -190,6 +193,9 @@ def to_task_graph(
         elif (provider := node.get('provider')) is not None:
             new_key = dict(zip(orig_keys, input_nodes))
             spec = provider.arg_spec.map_keys(new_key.get)
+            if len(spec) != len(input_nodes):
+                # This should be caught by __setitem__, but we check here to be safe.
+                raise ValueError("Corrupted graph")
             # TODO also kwargs
             out[key] = Provider(func=provider.func, arg_spec=spec, kind='function')
         elif (func := node.get('reduce')) is not None:
