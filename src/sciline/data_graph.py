@@ -129,19 +129,18 @@ class DataGraph:
         )
 
     def __getitem__(self, key: Key) -> DataGraph:
-        graph = self._cbgraph[key]
-        return self.from_cyclebane(graph)
+        return self.from_cyclebane(self._cbgraph[key])
 
     def map(self, node_values: dict[Key, Any]) -> DataGraph:
-        graph = self._cbgraph.map(node_values)
-        return self.from_cyclebane(graph)
+        return self.from_cyclebane(self._cbgraph.map(node_values))
 
     def reduce(self, *, func: Callable[..., Any], **kwargs: Any) -> DataGraph:
         # Note that the type hints of `func` are not checked here. As we are explicit
         # about the modification, this is in line with __setitem__ which does not
         # perform such checks and allows for using generic reduction functions.
-        graph = self._cbgraph.reduce(attrs={'reduce': func}, **kwargs)
-        return self.from_cyclebane(graph)
+        return self.from_cyclebane(
+            self._cbgraph.reduce(attrs={'reduce': func}, **kwargs)
+        )
 
     def build(
         self, targets: tuple[Key, ...], handler: Optional[ErrorHandler] = None
