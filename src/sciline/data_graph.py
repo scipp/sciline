@@ -22,14 +22,14 @@ def _as_graph(key: Key, value: Any) -> cb.Graph:
     return cb.Graph(graph)
 
 
-def find_all_typevars(t: type | TypeVar) -> set[TypeVar]:
+def _find_all_typevars(t: type | TypeVar) -> set[TypeVar]:
     """Returns the set of all TypeVars in a type expression."""
     if isinstance(t, TypeVar):
         return {t}
-    return set(itertools.chain(*map(find_all_typevars, get_args(t))))
+    return set(itertools.chain(*map(_find_all_typevars, get_args(t))))
 
 
-def get_typevar_constraints(t: TypeVar) -> set[type]:
+def _get_typevar_constraints(t: TypeVar) -> set[type]:
     """Returns the set of constraints of a TypeVar."""
     return set(t.__constraints__)
 
@@ -37,7 +37,7 @@ def get_typevar_constraints(t: TypeVar) -> set[type]:
 def _mapping_to_constrained(
     type_vars: set[TypeVar],
 ) -> Generator[dict[TypeVar, type], None, None]:
-    constraints = [get_typevar_constraints(t) for t in type_vars]
+    constraints = [_get_typevar_constraints(t) for t in type_vars]
     if any(len(c) == 0 for c in constraints):
         raise ValueError('Typevars must have constraints')
     for combination in itertools.product(*constraints):
@@ -93,7 +93,7 @@ class DataGraph:
         if not isinstance(provider, Provider):
             provider = Provider.from_function(provider)
         return_type = provider.deduce_key()
-        if typevars := find_all_typevars(return_type):
+        if typevars := _find_all_typevars(return_type):
             for bound in _mapping_to_constrained(typevars):
                 self.insert(provider.bind_type_vars(bound))
             return
@@ -117,7 +117,7 @@ class DataGraph:
         # This is a questionable approach: Using MyGeneric[T] as a key will actually
         # not pass mypy [valid-type] checks. What we do on our side is ok, but the
         # calling code is not.
-        if typevars := find_all_typevars(key):
+        if typevars := _find_all_typevars(key):
             for bound in _mapping_to_constrained(typevars):
                 self[_bind_free_typevars(key, bound)] = value
             return
@@ -145,7 +145,7 @@ class DataGraph:
     def build(
         self, targets: tuple[Key, ...], handler: Optional[ErrorHandler] = None
     ) -> Graph:
-        return to_task_graph(
+        return _to_task_graph(
             self._cbgraph.to_networkx(), targets=targets, handler=handler
         )
 
@@ -170,7 +170,7 @@ class DataGraph:
 _no_value = object()
 
 
-def to_task_graph(
+def _to_task_graph(
     graph: nx.DiGraph, targets: tuple[Key, ...], handler: Optional[ErrorHandler] = None
 ) -> Graph:
     handler = handler or HandleAsBuildTimeException()
