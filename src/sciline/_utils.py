@@ -38,7 +38,9 @@ def key_name(key: Union[Key, TypeVar]) -> str:
         return f'{getattr(key, "__name__", "<Generic>")}[{parameters}]'
     if isinstance(key, TypeVar):
         return str(key)
-    return key.__name__
+    if hasattr(key, '__name__'):
+        return key.__name__
+    return str(key)
 
 
 def key_full_qualname(key: Union[Key, TypeVar]) -> str:
