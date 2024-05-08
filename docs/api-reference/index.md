@@ -10,14 +10,15 @@
    :template: class-template.rst
    :recursive:
 
-   ParamTable
    Pipeline
    Scope
-   Series
+   ScopeTwoParams
    scheduler.Scheduler
    scheduler.DaskScheduler
    scheduler.NaiveScheduler
    TaskGraph
+   HandleAsBuildTimeException
+   HandleAsComputeTimeException
 ```
 
 ## Exceptions
@@ -28,7 +29,6 @@
    :template: class-template.rst
    :recursive:
 
-   AmbiguousProvider
    UnboundTypeVar
    UnsatisfiedRequirement
 ```

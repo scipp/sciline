@@ -34,7 +34,7 @@ click==8.1.7
     #   pip-tools
 copier==9.2.0
     # via -r dev.in
-dunamai==1.20.0
+dunamai==1.21.1
     # via copier
 fqdn==1.5.1
     # via jsonschema
@@ -54,7 +54,7 @@ json5==0.9.25
     # via jupyterlab-server
 jsonpointer==2.4
     # via jsonschema
-jsonschema[format-nongpl]==4.21.1
+jsonschema[format-nongpl]==4.22.0
     # via
     #   -r basetest.in
     #   jupyter-events
@@ -72,9 +72,9 @@ jupyter-server==2.14.0
     #   notebook-shim
 jupyter-server-terminals==0.5.3
     # via jupyter-server
-jupyterlab==4.1.6
+jupyterlab==4.2.0
     # via -r dev.in
-jupyterlab-server==2.26.0
+jupyterlab-server==2.27.1
     # via jupyterlab
 notebook-shim==0.2.4
     # via jupyterlab
@@ -86,15 +86,15 @@ pip-compile-multi==2.6.3
     # via -r dev.in
 pip-tools==7.4.1
     # via pip-compile-multi
-plumbum==1.8.2
+plumbum==1.8.3
     # via copier
 prometheus-client==0.20.0
     # via jupyter-server
 pycparser==2.22
     # via cffi
-pydantic==2.7.0
+pydantic==2.7.1
     # via copier
-pydantic-core==2.18.1
+pydantic-core==2.18.2
     # via pydantic
 python-json-logger==2.0.7
     # via jupyter-events
@@ -128,7 +128,7 @@ uri-template==1.3.0
     # via jsonschema
 webcolors==1.13
     # via jsonschema
-websocket-client==1.7.0
+websocket-client==1.8.0
     # via jupyter-server
 wheel==0.43.0
     # via pip-tools
