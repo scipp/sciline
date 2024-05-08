@@ -158,7 +158,7 @@ def _extract_type_and_labels(
     import cyclebane
 
     if isinstance(key, cyclebane.graph.NodeName):
-        return key.name, list(key.index.axes)
+        return key.name, list(key.index.axes if compact else key.index.to_tuple())
     return key, []
 
 
