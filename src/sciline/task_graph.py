@@ -80,6 +80,10 @@ class TaskGraph:
                 scheduler = DaskScheduler()
             except ImportError:
                 scheduler = NaiveScheduler()
+        elif not isinstance(scheduler, Scheduler):
+            raise ValueError(
+                "Scheduler interface must be compatible with sciline.Scheduler"
+            )
         self._scheduler = scheduler
 
     def compute(self, targets: Targets | None = None) -> Any:

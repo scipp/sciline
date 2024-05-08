@@ -57,7 +57,6 @@ def test_key_name_builtin_generic() -> None:
     assert _utils.key_name(dict[str, MyType]) == 'dict[str, MyType]'
 
 
-@pytest.mark.skipif(sys.version_info < (3, 10), reason="requires python3.10 or higher")
 def test_key_name_custom_generic() -> None:
     MyType = NewType('MyType', float)
     Var = TypeVar('Var')
@@ -70,7 +69,6 @@ def test_key_name_custom_generic() -> None:
     assert _utils.key_name(G[MyType]) == 'G[MyType]'
 
 
-@pytest.mark.skipif(sys.version_info < (3, 10), reason="requires python3.10 or higher")
 def test_key_name_custom_generic_two_params() -> None:
     MyType = NewType('MyType', float)
     Var1 = TypeVar('Var1')
@@ -89,9 +87,6 @@ def test_key_full_qualname_builtin() -> None:
     assert _utils.key_full_qualname(object) == 'builtins.object'
 
 
-# NewType returns a class since python 3.10,
-# before that, we cannot get a proper name for it.
-@pytest.mark.skipif(sys.version_info < (3, 10), reason="requires python3.10 or higher")
 def test_key_full_qualname_new_type() -> None:
     # The __qualname__ of NewTypes is the same as __name__, the result is therefore
     # missing test_key_full_qualname_new_type.<locals>
@@ -142,7 +137,6 @@ def test_key_full_qualname_builtin_generic() -> None:
     )
 
 
-@pytest.mark.skipif(sys.version_info < (3, 10), reason="requires python3.10 or higher")
 def test_key_full_qualname_custom_generic() -> None:
     MyType = NewType('MyType', float)
     Var = TypeVar('Var')
@@ -165,7 +159,6 @@ def test_key_full_qualname_custom_generic() -> None:
     )
 
 
-@pytest.mark.skipif(sys.version_info < (3, 10), reason="requires python3.10 or higher")
 def test_key_full_qualname_custom_generic_two_params() -> None:
     MyType = NewType('MyType', float)
     Var1 = TypeVar('Var1')

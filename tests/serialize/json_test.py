@@ -2,7 +2,6 @@
 # Copyright (c) 2023 Scipp contributors (https://github.com/scipp)
 # type: ignore
 
-import sys
 from copy import deepcopy
 from typing import Any, NewType, TypeVar
 
@@ -169,7 +168,6 @@ expected_serialized_graph = {
 }
 
 
-@pytest.mark.skipif(sys.version_info < (3, 10), reason="requires python3.10 or higher")
 def test_serialize() -> None:
     pl = sl.Pipeline([make_int_b, zeros, to_string], params={Int[A]: 3})
     graph = pl.get(str)
@@ -217,7 +215,6 @@ expected_serialized_kwonlyargs_graph = {
 }
 
 
-@pytest.mark.skipif(sys.version_info < (3, 10), reason="requires python3.10 or higher")
 def test_serialize_kwonlyargs() -> None:
     pl = sl.Pipeline([fn_w_kwonlyargs], params={int: 3})
     graph = pl.get(float)
@@ -261,7 +258,6 @@ expected_serialized_lambda_graph = {
 }
 
 
-@pytest.mark.skipif(sys.version_info < (3, 10), reason="requires python3.10 or higher")
 def test_serialize_lambda() -> None:
     lam = lambda x: float(x)  # noqa: E731
     lam.__annotations__['x'] = int
