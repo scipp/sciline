@@ -20,7 +20,7 @@ from typing import (
 )
 
 from ._provider import Provider, ToProvider
-from .data_graph import DataGraph
+from .data_graph import DataGraph, to_task_graph
 from .display import pipeline_html_repr
 from .handler import ErrorHandler, HandleAsComputeTimeException
 from .scheduler import Scheduler
@@ -147,7 +147,7 @@ class Pipeline(DataGraph):
             targets = tuple(keys)  # type: ignore[arg-type]
         else:
             targets = (keys,)  # type: ignore[assignment]
-        graph = self.build(targets=targets, handler=handler)
+        graph = to_task_graph(self, targets=targets, handler=handler)
         return TaskGraph(
             graph=graph,
             targets=targets if multi else keys,  # type: ignore[arg-type]

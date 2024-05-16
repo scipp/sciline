@@ -5,7 +5,7 @@ from __future__ import annotations
 import itertools
 from collections.abc import Iterable
 from types import NoneType
-from typing import Any, Callable, Generator, Optional, TypeVar, Union, get_args
+from typing import Any, Callable, Generator, TypeVar, Union, get_args
 
 import cyclebane as cb
 import networkx as nx
@@ -145,12 +145,8 @@ class DataGraph:
             self._cbgraph.reduce(attrs={'reduce': func}, **kwargs)
         )
 
-    def build(
-        self, targets: tuple[Key, ...], handler: Optional[ErrorHandler] = None
-    ) -> Graph:
-        return _to_task_graph(
-            self._cbgraph.to_networkx(), targets=targets, handler=handler
-        )
+    def to_networkx(self) -> Graph:
+        return self._cbgraph.to_networkx()
 
     def visualize_data_graph(
         self, **kwargs: Any
@@ -173,9 +169,10 @@ class DataGraph:
 _no_value = object()
 
 
-def _to_task_graph(
-    graph: nx.DiGraph, targets: tuple[Key, ...], handler: Optional[ErrorHandler] = None
+def to_task_graph(
+    data_graph: DataGraph, targets: tuple[Key, ...], handler: ErrorHandler | None = None
 ) -> Graph:
+    graph = data_graph.to_networkx()
     handler = handler or HandleAsBuildTimeException()
     ancestors = list(targets)
     for target in targets:
