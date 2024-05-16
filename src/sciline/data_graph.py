@@ -54,13 +54,13 @@ class DataGraph:
             self.insert(provider)
 
     @classmethod
-    def from_cyclebane(cls: type[T], graph: cb.Graph) -> T:
+    def _from_cyclebane(cls: type[T], graph: cb.Graph) -> T:
         out = cls([])
         out._cbgraph = graph
         return out
 
     def copy(self: T) -> T:
-        return self.from_cyclebane(self._cbgraph.copy())
+        return self._from_cyclebane(self._cbgraph.copy())
 
     @property
     def _graph(self) -> nx.DiGraph:
@@ -129,16 +129,16 @@ class DataGraph:
         )
 
     def __getitem__(self: T, key: Key) -> T:
-        return self.from_cyclebane(self._cbgraph[key])
+        return self._from_cyclebane(self._cbgraph[key])
 
     def map(self: T, node_values: dict[Key, Any]) -> T:
-        return self.from_cyclebane(self._cbgraph.map(node_values))
+        return self._from_cyclebane(self._cbgraph.map(node_values))
 
     def reduce(self: T, *, func: Callable[..., Any], **kwargs: Any) -> T:
         # Note that the type hints of `func` are not checked here. As we are explicit
         # about the modification, this is in line with __setitem__ which does not
         # perform such checks and allows for using generic reduction functions.
-        return self.from_cyclebane(
+        return self._from_cyclebane(
             self._cbgraph.reduce(attrs={'reduce': func}, **kwargs)
         )
 
