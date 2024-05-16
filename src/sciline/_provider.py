@@ -173,6 +173,7 @@ class ArgSpec:
         self._return = return_
 
     def __len__(self) -> int:
+        """Number of args and kwargs, not counting return value."""
         return len(self._args) + len(self._kwargs)
 
     @classmethod
