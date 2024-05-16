@@ -208,9 +208,6 @@ class Pipeline(DataGraph):
             return results[0]
         return results
 
-    def __copy__(self) -> Pipeline:
-        return self.copy()
-
     def _repr_html_(self) -> str:
         nodes = ((key, data) for key, data in self._graph.nodes.items())
         return pipeline_html_repr(nodes)

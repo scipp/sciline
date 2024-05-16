@@ -62,6 +62,9 @@ class DataGraph:
     def copy(self: T) -> T:
         return self._from_cyclebane(self._cbgraph.copy())
 
+    def __copy__(self: T) -> T:
+        return self.copy()
+
     @property
     def _graph(self) -> nx.DiGraph:
         return self._cbgraph.graph
