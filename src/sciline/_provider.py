@@ -139,14 +139,6 @@ class Provider:
             kind=self._kind,
         )
 
-    def map_arg_keys(self, transform: Callable[[Key], Key]) -> Provider:
-        """Return a new provider with transformed argument keys."""
-        return Provider(
-            func=self._func,
-            arg_spec=self._arg_spec.map_keys(transform),
-            kind=self._kind,
-        )
-
     def __str__(self) -> str:
         return f"Provider('{self.location.name}')"
 
@@ -229,17 +221,14 @@ class ArgSpec:
 
     def bind_type_vars(self, bound: dict[TypeVar, Key]) -> ArgSpec:
         """Bind concrete types to TypeVars."""
-        out = self.map_keys(lambda arg: _bind_free_typevars(arg, bound=bound))
-        if self._return is not None:
-            out._return = _bind_free_typevars(self._return, bound=bound)
-        return out
+        return self.map_keys(lambda arg: _bind_free_typevars(arg, bound=bound))
 
     def map_keys(self, transform: Callable[[Key], Key]) -> ArgSpec:
         """Return a new ArgSpec with the keys mapped by ``callback``."""
         return ArgSpec(
             args={name: transform(arg) for name, arg in self._args.items()},
             kwargs={name: transform(arg) for name, arg in self._kwargs.items()},
-            return_=self._return,
+            return_=self._return if self._return is None else transform(self._return),
         )
 
 
