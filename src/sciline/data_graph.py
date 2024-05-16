@@ -145,7 +145,7 @@ class DataGraph:
             self._cbgraph.reduce(attrs={'reduce': func}, **kwargs)
         )
 
-    def to_networkx(self) -> Graph:
+    def to_networkx(self) -> nx.DiGraph:
         return self._cbgraph.to_networkx()
 
     def visualize_data_graph(
