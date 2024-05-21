@@ -41,7 +41,7 @@ def _mapping_to_constrained(
     if any(len(c) == 0 for c in constraints):
         raise ValueError('Typevars must have constraints')
     for combination in itertools.product(*constraints):
-        yield dict(zip(type_vars, combination))
+        yield dict(zip(type_vars, combination, strict=True))
 
 
 T = TypeVar('T', bound='DataGraph')
