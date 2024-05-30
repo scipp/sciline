@@ -12,9 +12,9 @@
 -r static.txt
 -r test.txt
 -r wheels.txt
-annotated-types==0.6.0
+annotated-types==0.7.0
     # via pydantic
-anyio==4.3.0
+anyio==4.4.0
     # via
     #   httpx
     #   jupyter-server
@@ -72,9 +72,9 @@ jupyter-server==2.14.0
     #   notebook-shim
 jupyter-server-terminals==0.5.3
     # via jupyter-server
-jupyterlab==4.2.0
+jupyterlab==4.2.1
     # via -r dev.in
-jupyterlab-server==2.27.1
+jupyterlab-server==2.27.2
     # via jupyterlab
 notebook-shim==0.2.4
     # via jupyterlab
@@ -92,9 +92,9 @@ prometheus-client==0.20.0
     # via jupyter-server
 pycparser==2.22
     # via cffi
-pydantic==2.7.1
+pydantic==2.7.2
     # via copier
-pydantic-core==2.18.2
+pydantic-core==2.18.3
     # via pydantic
 python-json-logger==2.0.7
     # via jupyter-events

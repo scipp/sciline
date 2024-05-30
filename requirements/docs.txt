@@ -74,7 +74,7 @@ jsonschema==4.22.0
     # via nbformat
 jsonschema-specifications==2023.12.1
     # via jsonschema
-jupyter-client==8.6.1
+jupyter-client==8.6.2
     # via
     #   ipykernel
     #   nbclient
@@ -138,7 +138,7 @@ pexpect==4.9.0
     # via ipython
 platformdirs==4.2.2
     # via jupyter-core
-prompt-toolkit==3.0.43
+prompt-toolkit==3.0.45
     # via ipython
 psutil==5.9.8
     # via ipykernel
@@ -146,7 +146,7 @@ ptyprocess==0.7.0
     # via pexpect
 pure-eval==0.2.2
     # via stack-data
-pydata-sphinx-theme==0.15.2
+pydata-sphinx-theme==0.15.3
     # via -r docs.in
 pygments==2.18.0
     # via
@@ -171,7 +171,7 @@ referencing==0.35.1
     # via
     #   jsonschema
     #   jsonschema-specifications
-requests==2.31.0
+requests==2.32.3
     # via sphinx
 rpds-py==0.18.1
     # via
@@ -199,7 +199,7 @@ sphinx-autodoc-typehints==2.1.0
     # via -r docs.in
 sphinx-copybutton==0.5.2
     # via -r docs.in
-sphinx-design==0.5.0
+sphinx-design==0.6.0
     # via -r docs.in
 sphinxcontrib-applehelp==1.0.8
     # via sphinx
@@ -235,7 +235,7 @@ traitlets==5.14.3
     #   nbconvert
     #   nbformat
     #   nbsphinx
-typing-extensions==4.11.0
+typing-extensions==4.12.0
     # via
     #   ipython
     #   pydata-sphinx-theme

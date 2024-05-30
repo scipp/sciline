@@ -10,7 +10,7 @@ click==8.1.7
     # via dask
 cloudpickle==3.0.0
     # via dask
-dask==2024.5.0
+dask==2024.5.1
     # via -r test-dask.in
 fsspec==2024.5.0
     # via dask
@@ -26,5 +26,5 @@ toolz==0.12.1
     # via
     #   dask
     #   partd
-zipp==3.18.2
+zipp==3.19.0
     # via importlib-metadata
