@@ -11,6 +11,7 @@ from typing import (
     Any,
     Callable,
     Generator,
+    Hashable,
     Literal,
     Optional,
     TypeVar,
@@ -138,14 +139,6 @@ class Provider:
             kind=self._kind,
         )
 
-    def map_arg_keys(self, transform: Callable[[Key], Key]) -> Provider:
-        """Return a new provider with transformed argument keys."""
-        return Provider(
-            func=self._func,
-            arg_spec=self._arg_spec.map_keys(transform),
-            kind=self._kind,
-        )
-
     def __str__(self) -> str:
         return f"Provider('{self.location.name}')"
 
@@ -155,7 +148,7 @@ class Provider:
             f"func={self._func})"
         )
 
-    def call(self, values: dict[Key, Any]) -> Any:
+    def call(self, values: dict[Hashable, Any]) -> Any:
         """Call the provider with arguments extracted from ``values``."""
         return self._func(
             *(values[arg] for arg in self._arg_spec.args),
@@ -170,9 +163,18 @@ class ArgSpec:
         self, *, args: dict[str, Key], kwargs: dict[str, Key], return_: Optional[Key]
     ) -> None:
         """Build from components, use dedicated creation functions instead."""
+        # Duplicate type hints could be allowed in principle, but it makes structure
+        # analysis and checks more difficult and error prone. As there is likely
+        # little utility in supporting this, we disallow it.
+        if len(set(args.values()) | set(kwargs.values())) != len(args) + len(kwargs):
+            raise ValueError("Duplicate type hints found in args and/or kwargs")
         self._args = args
         self._kwargs = kwargs
         self._return = return_
+
+    def __len__(self) -> int:
+        """Number of args and kwargs, not counting return value."""
+        return len(self._args) + len(self._kwargs)
 
     @classmethod
     def from_function(cls, provider: ToProvider) -> ArgSpec:
@@ -227,7 +229,7 @@ class ArgSpec:
         return ArgSpec(
             args={name: transform(arg) for name, arg in self._args.items()},
             kwargs={name: transform(arg) for name, arg in self._kwargs.items()},
-            return_=self._return,
+            return_=self._return if self._return is None else transform(self._return),
         )
 
 

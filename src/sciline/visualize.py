@@ -1,23 +1,13 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright (c) 2023 Scipp contributors (https://github.com/scipp)
 from dataclasses import dataclass
-from typing import (
-    Any,
-    Dict,
-    List,
-    Optional,
-    Tuple,
-    Type,
-    TypeVar,
-    Union,
-    get_args,
-    get_origin,
-)
+from typing import Any, Dict, Hashable, get_args, get_origin
 
+import cyclebane
 from graphviz import Digraph
 
 from ._provider import Provider, ProviderKind
-from .typing import Graph, Item, Key, get_optional
+from .typing import Graph, Key, get_optional
 
 
 @dataclass
@@ -41,7 +31,7 @@ def to_graphviz(
     graph: Graph,
     compact: bool = False,
     cluster_generics: bool = True,
-    cluster_color: Optional[str] = '#f0f0ff',
+    cluster_color: str | None = '#f0f0ff',
     **kwargs: Any,
 ) -> Digraph:
     """
@@ -149,19 +139,15 @@ def _format_provider(provider: Provider, ret: Key, compact: bool) -> str:
     return f'{provider.location.qualname}_{_format_type(ret, compact=compact).name}'
 
 
-T = TypeVar('T')
-
-
 def _extract_type_and_labels(
-    key: Union[Item[T], Type[T]], compact: bool
-) -> Tuple[Type[T], List[Union[type, Tuple[type, Any]]]]:
-    if isinstance(key, Item):
-        label = key.label
-        return key.tp, [lb.tp if compact else (lb.tp, lb.index) for lb in label]
+    key: Hashable | cyclebane.graph.NodeName, compact: bool
+) -> tuple[Hashable, list[Hashable | tuple[Hashable, Hashable]]]:
+    if isinstance(key, cyclebane.graph.NodeName):
+        return key.name, list(key.index.axes if compact else key.index.to_tuple())
     return key, []
 
 
-def _format_type(tp: Key, compact: bool = False) -> Node:
+def _format_type(tp: Hashable, compact: bool = False) -> Node:
     """
     Helper for _format_graph.
 
@@ -169,16 +155,15 @@ def _format_type(tp: Key, compact: bool = False) -> Node:
     but strip all module prefixes from the type name as well as the params.
     We may make this configurable in the future.
     """
-
     tp, labels = _extract_type_and_labels(tp, compact=compact)
 
-    if (tp_ := get_optional(tp)) is not None:
+    if (tp_ := get_optional(tp)) is not None:  # type: ignore[arg-type]
         tp = tp_
 
-    def get_base(tp: Key) -> str:
-        return tp.__name__ if hasattr(tp, '__name__') else str(tp).split('.')[-1]
+    def get_base(tp: Hashable) -> str:
+        return str(tp.__name__) if hasattr(tp, '__name__') else str(tp).split('.')[-1]
 
-    def format_label(label: Union[type, Tuple[type, Any]]) -> str:
+    def format_label(label: Hashable | tuple[Hashable, Any]) -> str:
         if isinstance(label, tuple):
             tp, index = label
             return f'{get_base(tp)}={index}'

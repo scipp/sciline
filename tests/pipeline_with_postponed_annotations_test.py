@@ -18,7 +18,7 @@ import sciline as sl
 
 Int = NewType('Int', int)
 Str = NewType('Str', str)
-T = TypeVar('T')
+T = TypeVar('T', Int, Str)
 
 
 class Number(sl.Scope[T, int], int):

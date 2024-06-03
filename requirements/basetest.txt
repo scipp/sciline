@@ -9,13 +9,13 @@ attrs==23.2.0
     # via
     #   jsonschema
     #   referencing
-exceptiongroup==1.2.0
+exceptiongroup==1.2.1
     # via pytest
 graphviz==0.20.3
     # via -r basetest.in
 iniconfig==2.0.0
     # via pytest
-jsonschema==4.21.1
+jsonschema==4.22.0
     # via -r basetest.in
 jsonschema-specifications==2023.12.1
     # via jsonschema
@@ -23,15 +23,15 @@ numpy==1.26.4
     # via -r basetest.in
 packaging==24.0
     # via pytest
-pluggy==1.4.0
+pluggy==1.5.0
     # via pytest
-pytest==8.1.1
+pytest==8.2.1
     # via -r basetest.in
-referencing==0.34.0
+referencing==0.35.1
     # via
     #   jsonschema
     #   jsonschema-specifications
-rpds-py==0.18.0
+rpds-py==0.18.1
     # via
     #   jsonschema
     #   referencing

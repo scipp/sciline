@@ -223,124 +223,6 @@ def test_serialize_kwonlyargs() -> None:
     assert res == expected_serialized_kwonlyargs_graph
 
 
-def repeated_arg(a: str, b: str) -> list[str]:
-    return [a, b]
-
-
-# Ids correspond to the result of assign_predictable_ids
-expected_serialized_repeated_arg_nodes = [
-    {
-        'id': '0',
-        'label': 'list[str]',
-        'kind': 'data',
-        'type': 'builtins.list[builtins.str]',
-    },
-    {
-        'id': '1',
-        'label': 'repeated_arg',
-        'kind': 'function',
-        'function': 'tests.serialize.json_test.repeated_arg',
-        'args': ['101', '102'],
-        'kwargs': {},
-    },
-    {
-        'id': '2',
-        'label': 'str',
-        'kind': 'data',
-        'type': 'builtins.str',
-    },
-]
-expected_serialized_repeated_arg_edges = [
-    {'id': '100', 'source': '1', 'target': '0'},
-    # The edge is repeated and disambiguated by the `args` of the function node.
-    {'id': '101', 'source': '2', 'target': '1'},
-    {'id': '102', 'source': '2', 'target': '1'},
-]
-expected_serialized_repeated_arg_graph = {
-    'directed': True,
-    'multigraph': False,
-    'nodes': expected_serialized_repeated_arg_nodes,
-    'edges': expected_serialized_repeated_arg_edges,
-}
-
-
-def test_serialize_repeated_arg() -> None:
-    pl = sl.Pipeline([repeated_arg], params={str: 'abc'})
-    graph = pl.get(list[str])
-    res = graph.serialize()
-    res = make_graph_predictable(res)
-    assert res == expected_serialized_repeated_arg_graph
-
-
-def repeated_arg_kwonlyarg(a: str, *, b: str) -> list[str]:
-    return [a, b]
-
-
-def repeated_kwonlyargs(*, x: int, b: int) -> str:
-    return str(x + b)
-
-
-# Ids correspond to the result of assign_predictable_ids
-expected_serialized_repeated_kwonlyarg_nodes = [
-    {
-        'id': '0',
-        'label': 'int',
-        'kind': 'data',
-        'type': 'builtins.int',
-    },
-    {
-        'id': '1',
-        'label': 'list[str]',
-        'kind': 'data',
-        'type': 'builtins.list[builtins.str]',
-    },
-    {
-        'id': '2',
-        'label': 'repeated_arg_kwonlyarg',
-        'kind': 'function',
-        'function': 'tests.serialize.json_test.repeated_arg_kwonlyarg',
-        'args': ['103'],
-        'kwargs': {'b': '104'},
-    },
-    {
-        'id': '3',
-        'label': 'str',
-        'kind': 'data',
-        'type': 'builtins.str',
-    },
-    {
-        'id': '4',
-        'label': 'repeated_kwonlyargs',
-        'kind': 'function',
-        'function': 'tests.serialize.json_test.repeated_kwonlyargs',
-        'args': [],
-        'kwargs': {'x': '100', 'b': '101'},
-    },
-]
-expected_serialized_repeated_kwonlyarg_edges = [
-    {'id': '100', 'source': '0', 'target': '4'},
-    {'id': '101', 'source': '0', 'target': '4'},
-    {'id': '102', 'source': '2', 'target': '1'},
-    {'id': '103', 'source': '3', 'target': '2'},
-    {'id': '104', 'source': '3', 'target': '2'},
-    {'id': '105', 'source': '4', 'target': '3'},
-]
-expected_serialized_repeated_kwonlyarg_graph = {
-    'directed': True,
-    'multigraph': False,
-    'nodes': expected_serialized_repeated_kwonlyarg_nodes,
-    'edges': expected_serialized_repeated_kwonlyarg_edges,
-}
-
-
-def test_serialize_repeated_konlywarg() -> None:
-    pl = sl.Pipeline([repeated_arg_kwonlyarg, repeated_kwonlyargs], params={int: 4})
-    graph = pl.get(list[str])
-    res = graph.serialize()
-    res = make_graph_predictable(res)
-    assert res == expected_serialized_repeated_kwonlyarg_graph
-
-
 # Ids correspond to the result of assign_predictable_ids
 expected_serialized_lambda_nodes = [
     {
@@ -394,14 +276,6 @@ def test_serialize_does_not_support_callable_objects() -> None:
 
     pl = sl.Pipeline((C(),), params={int: 4})
     graph = pl.get(float)
-    with pytest.raises(ValueError):
-        graph.serialize()
-
-
-def test_serialize_param_table() -> None:
-    pl = sl.Pipeline([as_float])
-    pl.set_param_table(sl.ParamTable(str, {int: [3, -5]}))
-    graph = pl.get(sl.Series[str, float])
     with pytest.raises(ValueError):
         graph.serialize()
 

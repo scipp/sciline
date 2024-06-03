@@ -43,5 +43,5 @@ def test_generic_types_formatted_without_prefixes() -> None:
 
 
 def test_optional_types_formatted_as_their_content() -> None:
-    formatted = sl.visualize._format_type(Optional[float])  # type: ignore[arg-type]
+    formatted = sl.visualize._format_type(Optional[float])
     assert formatted.name == 'float'
