@@ -5,7 +5,7 @@ from __future__ import annotations
 import itertools
 from collections.abc import Callable, Generator, Iterable
 from types import NoneType
-from typing import Any, TypeVar, Union, get_args
+from typing import Any, TypeVar, get_args
 
 import cyclebane as cb
 import networkx as nx
@@ -188,7 +188,7 @@ def to_task_graph(
         if (value := node.get('value', _no_value)) is not _no_value:
             out[key] = Provider.parameter(value)
         elif (provider := node.get('provider')) is not None:
-            new_key = dict(zip(orig_keys, input_nodes))
+            new_key = dict(zip(orig_keys, input_nodes, strict=True))
             spec = provider.arg_spec.map_keys(new_key.get)
             if len(spec) != len(input_nodes):
                 # This should be caught by __setitem__, but we check here to be safe.

@@ -46,7 +46,7 @@ Options
   the fully qualified name.
 """
 
-from typing import Any, Optional
+from typing import Any
 
 from sphinx.application import Sphinx
 from sphinx.config import Config
@@ -79,7 +79,7 @@ def _retrieve_name(obj: Any) -> str:
         return str(obj)
 
 
-def _typehints_formatter(annotation: Any, config: Config) -> Optional[str]:
+def _typehints_formatter(annotation: Any, config: Config) -> str | None:
     """Format typehints with improved NewType handling."""
     prefix = config.sciline_domain_types_prefix
     aliases = config.sciline_domain_types_aliases
@@ -133,7 +133,7 @@ def _internal_link(
     annotation: Any,
     kind: str,
     prefix: str,
-    type_params: Optional[tuple[type, ...]] = None,
+    type_params: tuple[type, ...] | None = None,
 ) -> str:
     annotation_name = _retrieve_name(annotation)
     target = f'{annotation.__module__}.{annotation_name}'
@@ -147,7 +147,7 @@ def _link(
     ty: type,
     kind: str,
     aliases: dict[str, str],
-    type_params: Optional[tuple[type, ...]] = None,
+    type_params: tuple[type, ...] | None = None,
 ) -> str:
     ty_name = _retrieve_name(ty)
     if ty.__module__ == 'builtins':

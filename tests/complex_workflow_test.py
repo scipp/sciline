@@ -93,7 +93,7 @@ def subtract_background(
 def test_reduction_workflow() -> None:
     # See https://github.com/python/mypy/issues/14661
     pipeline = sl.Pipeline(
-        [subtract_background] + reduction,  # type: ignore[operator]
+        [subtract_background, *reduction],  # type: ignore[list-item]
         params=params,
     )
 

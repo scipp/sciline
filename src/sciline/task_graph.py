@@ -108,7 +108,7 @@ class TaskGraph:
             targets = self._keys
         if isinstance(targets, tuple):
             results = self._scheduler.get(self._graph, list(targets))
-            return dict(zip(targets, results))
+            return dict(zip(targets, results, strict=True))
         else:
             return self._scheduler.get(self._graph, [targets])[0]
 
