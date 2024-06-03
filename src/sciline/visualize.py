@@ -8,7 +8,7 @@ import cyclebane
 from graphviz import Digraph
 
 from ._provider import Provider, ProviderKind
-from .typing import Graph, Key, get_optional
+from .typing import Graph, Key
 
 
 @dataclass
@@ -157,9 +157,6 @@ def _format_type(tp: Hashable, compact: bool = False) -> Node:
     We may make this configurable in the future.
     """
     tp, labels = _extract_type_and_labels(tp, compact=compact)
-
-    if (tp_ := get_optional(tp)) is not None:  # type: ignore[arg-type]
-        tp = tp_
 
     def get_base(tp: Hashable) -> str:
         return str(tp.__name__) if hasattr(tp, '__name__') else str(tp).split('.')[-1]

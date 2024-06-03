@@ -274,7 +274,7 @@ def test_serialize_does_not_support_callable_objects() -> None:
 
     pl = sl.Pipeline((C(),), params={int: 4})
     graph = pl.get(float)
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match='Callable objects cannot be serialized'):
         graph.serialize()
 
 
