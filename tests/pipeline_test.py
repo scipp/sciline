@@ -1,8 +1,9 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright (c) 2023 Scipp contributors (https://github.com/scipp)
 import functools
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Callable, Generic, List, NewType, TypeVar
+from typing import Any, Generic, NewType, TypeVar
 
 import numpy as np
 import numpy.typing as npt
@@ -247,16 +248,16 @@ def test_inserting_provider_returning_None_raises() -> None:
     def provide_none() -> None:
         return None
 
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match='Key must not be None'):
         sl.Pipeline([provide_none])
     pipeline = sl.Pipeline([])
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match='Key must not be None'):
         pipeline.insert(provide_none)
 
 
 def test_setting_None_param_raises() -> None:
     pipeline = sl.Pipeline()
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match='None cannot be a node'):
         pipeline[None] = 3  # type: ignore[index]
 
 
@@ -264,10 +265,10 @@ def test_inserting_provider_with_no_return_type_raises() -> None:
     def provide_none():  # type: ignore[no-untyped-def]
         return None
 
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match='lacks type-hint for return value'):
         sl.Pipeline([provide_none])
     pipeline = sl.Pipeline([])
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match='lacks type-hint for return value'):
         pipeline.insert(provide_none)
 
 
@@ -300,12 +301,12 @@ def test_unsatisfiable_TypeVar_requirement_of_provider_raises() -> None:
     def provider_int() -> int:
         return 3
 
-    def provider(x: T) -> List[T]:
+    def provider(x: T) -> list[T]:
         return [x, x]
 
     pipeline = sl.Pipeline([provider_int, provider])
     with pytest.raises(sl.UnsatisfiedRequirement):
-        pipeline.compute(List[float])
+        pipeline.compute(list[float])
 
 
 def test_TypeVar_params_are_not_associated_unless_they_match() -> None:
@@ -1313,7 +1314,7 @@ def null_decorator(f: Callable[..., R]) -> Callable[..., R]:
     return f
 
 
-@pytest.mark.parametrize('deco', (null_decorator, wrapping_decorator))
+@pytest.mark.parametrize('deco', [null_decorator, wrapping_decorator])
 def test_pipeline_lambda_provider(deco: Callable[..., Any]) -> None:
     lam = lambda x: str(x)  # noqa: E731
     lam.__annotations__['x'] = int
@@ -1324,7 +1325,7 @@ def test_pipeline_lambda_provider(deco: Callable[..., Any]) -> None:
     assert pipeline.compute(str) == '3'
 
 
-@pytest.mark.parametrize('deco', (null_decorator, wrapping_decorator))
+@pytest.mark.parametrize('deco', [null_decorator, wrapping_decorator])
 def test_pipeline_instance_method_provider(deco: Callable[..., Any]) -> None:
     class C:
         @deco
@@ -1348,7 +1349,7 @@ def test_pipeline_instance_method_with_self_annotation_provider() -> None:
     assert pipeline.compute(str) == '3'
 
 
-@pytest.mark.parametrize('deco', (null_decorator, wrapping_decorator))
+@pytest.mark.parametrize('deco', [null_decorator, wrapping_decorator])
 def test_pipeline_class_method_provider(deco: Callable[..., Any]) -> None:
     class C:
         @classmethod
@@ -1360,7 +1361,7 @@ def test_pipeline_class_method_provider(deco: Callable[..., Any]) -> None:
     assert pipeline.compute(str) == '3'
 
 
-@pytest.mark.parametrize('deco', (null_decorator, wrapping_decorator))
+@pytest.mark.parametrize('deco', [null_decorator, wrapping_decorator])
 def test_pipeline_static_method_provider(deco: Callable[..., Any]) -> None:
     class C:
         @staticmethod

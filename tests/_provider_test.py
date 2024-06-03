@@ -2,7 +2,7 @@
 # Copyright (c) 2024 Scipp contributors (https://github.com/scipp)
 # Tests on the hidden provider module
 
-from typing import List, Tuple, TypeVar
+from typing import TypeVar
 
 from sciline._provider import ArgSpec
 
@@ -21,7 +21,7 @@ def combine_numbers(a: int, *, b: float) -> str:
 T = TypeVar('T', int, float)
 
 
-def complicated_append(a: T, *, b: List[T]) -> Tuple[T, ...]:
+def complicated_append(a: T, *, b: list[T]) -> tuple[T, ...]:
     b.append(a)
 
     return tuple(b)
@@ -37,7 +37,7 @@ def test_arg_spec_from_function_typevar() -> None:
     arg_spec = ArgSpec.from_function(complicated_append)
 
     assert list(arg_spec.args) == [T]
-    assert dict(arg_spec.kwargs) == {'b': List[T]}  # type: ignore[valid-type]
+    assert dict(arg_spec.kwargs) == {'b': list[T]}  # type: ignore[valid-type]
     specific_arg_spec = arg_spec.bind_type_vars(
         bound={T: int}  # type: ignore[dict-item]
     )
@@ -46,13 +46,13 @@ def test_arg_spec_from_function_typevar() -> None:
 
 
 def test_arg_spec_decorated_function_with_wraps() -> None:
-    from typing import Callable, Union
+    from collections.abc import Callable
 
     def decorator(func: Callable[..., str]) -> Callable[..., str]:
         from functools import wraps
 
         @wraps(func)
-        def wrapper(*args: Union[int, float], **kwargs: Union[int, float]) -> str:
+        def wrapper(*args: float, **kwargs: float) -> str:
             return "Wrapped: " + func(*args, **kwargs)
 
         return wrapper
@@ -67,10 +67,10 @@ def test_arg_spec_decorated_function_with_wraps() -> None:
 
 
 def test_arg_spec_decorated_function_without_wraps() -> None:
-    from typing import Callable, Union
+    from collections.abc import Callable
 
     def decorator(func: Callable[..., str]) -> Callable[..., str]:
-        def wrapper(*args: Union[int, float], **kwargs: Union[int, float]) -> str:
+        def wrapper(*args: float, **kwargs: float) -> str:
             return "Wrapped: " + func(*args, **kwargs)
 
         return wrapper
