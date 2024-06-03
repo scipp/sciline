@@ -1,7 +1,8 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright (c) 2023 Scipp contributors (https://github.com/scipp)
+from collections.abc import Hashable
 from dataclasses import dataclass
-from typing import Any, Dict, Hashable, get_args, get_origin
+from typing import Any, get_args, get_origin
 
 import cyclebane
 from graphviz import Digraph
@@ -24,7 +25,7 @@ class FormattedProvider:
     kind: ProviderKind
 
 
-FormattedGraph = Dict[str, FormattedProvider]
+FormattedGraph = dict[str, FormattedProvider]
 
 
 def to_graphviz(
@@ -72,14 +73,14 @@ def to_graphviz(
     return dot
 
 
-def _to_subgraphs(graph: FormattedGraph) -> Dict[str, FormattedGraph]:
+def _to_subgraphs(graph: FormattedGraph) -> dict[str, FormattedGraph]:
     def get_subgraph_name(name: str, kind: str) -> str:
         if kind == 'series':
             # Example: Series[RowId, Material[Country]] -> RowId, Material[Country]
             return name.partition('[')[-1].rpartition(']')[0]
         return name.split('[')[0]
 
-    subgraphs: Dict[str, FormattedGraph] = {}
+    subgraphs: dict[str, FormattedGraph] = {}
     for p, formatted_p in graph.items():
         subgraph_name = get_subgraph_name(formatted_p.ret.name, formatted_p.kind)
         subgraphs.setdefault(subgraph_name, {})

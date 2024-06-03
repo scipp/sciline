@@ -2,22 +2,10 @@
 # Copyright (c) 2023 Scipp contributors (https://github.com/scipp)
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from itertools import chain
 from types import UnionType
-from typing import (
-    Any,
-    Callable,
-    Dict,
-    Optional,
-    Tuple,
-    Type,
-    TypeVar,
-    Union,
-    get_args,
-    get_type_hints,
-    overload,
-)
+from typing import Any, TypeVar, get_args, get_type_hints, overload
 
 from ._provider import Provider, ToProvider
 from .data_graph import DataGraph, to_task_graph
@@ -52,9 +40,9 @@ class Pipeline(DataGraph):
 
     def __init__(
         self,
-        providers: Optional[Iterable[Union[ToProvider, Provider]]] = None,
+        providers: Iterable[ToProvider | Provider] | None = None,
         *,
-        params: Optional[Dict[Type[Any], Any]] = None,
+        params: dict[type[Any], Any] | None = None,
     ):
         """
         Setup a Pipeline from a list providers
@@ -72,10 +60,10 @@ class Pipeline(DataGraph):
             self[tp] = param
 
     @overload
-    def compute(self, tp: Type[T], **kwargs: Any) -> T: ...
+    def compute(self, tp: type[T], **kwargs: Any) -> T: ...
 
     @overload
-    def compute(self, tp: Iterable[Type[T]], **kwargs: Any) -> Dict[Type[T], T]: ...
+    def compute(self, tp: Iterable[type[T]], **kwargs: Any) -> dict[type[T], T]: ...
 
     @overload
     def compute(self, tp: UnionType, **kwargs: Any) -> Any: ...
@@ -116,8 +104,8 @@ class Pipeline(DataGraph):
         self,
         keys: type | Iterable[type] | UnionType,
         *,
-        scheduler: Optional[Scheduler] = None,
-        handler: Optional[ErrorHandler] = None,
+        scheduler: Scheduler | None = None,
+        handler: ErrorHandler | None = None,
     ) -> TaskGraph:
         """
         Return a TaskGraph for the given keys.
@@ -155,10 +143,10 @@ class Pipeline(DataGraph):
     @overload
     def bind_and_call(
         self, fns: Iterable[Callable[..., Any]], /
-    ) -> Tuple[Any, ...]: ...
+    ) -> tuple[Any, ...]: ...
 
     def bind_and_call(
-        self, fns: Union[Callable[..., Any], Iterable[Callable[..., Any]]], /
+        self, fns: Callable[..., Any] | Iterable[Callable[..., Any]], /
     ) -> Any:
         """
         Call the given functions with arguments provided by the pipeline.

@@ -2,8 +2,9 @@
 # Copyright (c) 2023 Scipp contributors (https://github.com/scipp)
 from __future__ import annotations
 
+from collections.abc import Generator, Hashable, Sequence
 from html import escape
-from typing import Any, Generator, Hashable, Sequence, TypeVar
+from typing import Any, TypeVar
 
 from ._utils import key_name
 from .scheduler import DaskScheduler, NaiveScheduler, Scheduler
@@ -17,7 +18,7 @@ def _list_items(items: Sequence[str]) -> str:
     return '\n'.join(
         (
             '<ul>',
-            ('\n'.join((f'<li>{escape(it)}</li>' for it in items))),
+            ('\n'.join(f'<li>{escape(it)}</li>' for it in items)),
             '</ul>',
         )
     )

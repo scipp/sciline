@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import itertools
-from collections.abc import Iterable
+from collections.abc import Callable, Generator, Iterable
 from types import NoneType
-from typing import Any, Callable, Generator, TypeVar, Union, get_args
+from typing import Any, TypeVar, Union, get_args
 
 import cyclebane as cb
 import networkx as nx
@@ -82,7 +82,7 @@ class DataGraph:
             self._graph.add_node(key)
         return self._graph.nodes[key]
 
-    def insert(self, provider: Union[ToProvider, Provider], /) -> None:
+    def insert(self, provider: ToProvider | Provider, /) -> None:
         """
         Insert a callable into the graph that provides its return value.
 
