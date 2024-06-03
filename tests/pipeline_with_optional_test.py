@@ -32,7 +32,7 @@ def test_parameter_type_union_or_optional_allowed() -> None:
 
 
 def test_union_requirement_not_satisfied_by_any_of_its_arguments() -> None:
-    def require_union(x: Union[int, float]) -> str:
+    def require_union(x: int | float) -> str:  # noqa: PYI041
         return f'{x}'
 
     pipeline = sl.Pipeline([require_union])
@@ -47,7 +47,7 @@ def test_union_requirement_not_satisfied_by_any_of_its_arguments() -> None:
 
 
 def test_optional_dependency_cannot_be_filled_by_non_optional_param() -> None:
-    def use_optional(x: Optional[int]) -> str:
+    def use_optional(x: int | None) -> str:
         return f'{x or 123}'
 
     pipeline = sl.Pipeline([use_optional], params={int: 1})
@@ -56,7 +56,7 @@ def test_optional_dependency_cannot_be_filled_by_non_optional_param() -> None:
 
 
 def test_optional_dependency_cannot_be_filled_by_non_optional_param_kwarg() -> None:
-    def use_optional(*, x: Optional[int]) -> str:
+    def use_optional(*, x: int | None) -> str:
         return f'{x or 123}'
 
     pipeline = sl.Pipeline([use_optional], params={int: 1})
@@ -65,7 +65,7 @@ def test_optional_dependency_cannot_be_filled_by_non_optional_param_kwarg() -> N
 
 
 def test_Union_argument_order_does_not_matter() -> None:
-    def use_union(x: int | float) -> str:
+    def use_union(x: int | float) -> str:  # noqa: PYI041
         return f'{x}'
 
     pipeline = sl.Pipeline([use_union])
@@ -76,11 +76,11 @@ def test_Union_argument_order_does_not_matter() -> None:
     assert pipeline.compute(str) == '1'
     # Note that the above works because the hashes are the same:
     assert hash(int | float) == hash(float | int)
-    assert hash(Union[int, float]) == hash(Union[float, int])
+    assert hash(Union[int, float]) == hash(Union[float, int])  # noqa: UP007
 
 
 def test_optional_dependency_cannot_be_filled_transitively() -> None:
-    def use_optional(x: Optional[int]) -> str:
+    def use_optional(x: int | None) -> str:
         return f'{x or 123}'
 
     def make_int(x: float) -> int:
@@ -92,9 +92,9 @@ def test_optional_dependency_cannot_be_filled_transitively() -> None:
 
 
 def test_optional_dependency_can_be_set_to_None() -> None:
-    def use_optional(x: Optional[int]) -> str:
+    def use_optional(x: int | None) -> str:
         return f'{x or 123}'
 
     pipeline = sl.Pipeline([use_optional])
-    pipeline[Optional[int]] = None  # type: ignore[index]
+    pipeline[Optional[int]] = None  # type: ignore[index] # noqa: UP007
     assert pipeline.compute(str) == '123'
