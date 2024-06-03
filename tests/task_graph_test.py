@@ -13,8 +13,7 @@ B = NewType('B', int)
 T = TypeVar('T', A, B)
 
 
-class Str(sl.Scope[T, str], str):
-    ...
+class Str(sl.Scope[T, str], str): ...
 
 
 def to_string(x: T) -> Str[T]:
@@ -91,5 +90,7 @@ def test_scheduler_not_supported() -> None:
         match="Scheduler interface must be compatible with sciline.Scheduler",
     ):
         TaskGraph(
-            graph={}, targets=(), scheduler="not a scheduler"  # type: ignore[arg-type]
+            graph={},
+            targets=(),
+            scheduler="not a scheduler",  # type: ignore[arg-type]
         )

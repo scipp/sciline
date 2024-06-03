@@ -85,8 +85,7 @@ def test_multiple_keys_not_in_same_path_use_same_intermediate() -> None:
 def test_Scope_subclass_can_be_set_as_param() -> None:
     Param = TypeVar('Param', int, float)
 
-    class Str(sl.Scope[Param, str], str):
-        ...
+    class Str(sl.Scope[Param, str], str): ...
 
     pipeline = sl.Pipeline(params={Str[int]: Str[int]('1')})
     pipeline[Str[float]] = Str[float]('2.0')
@@ -97,8 +96,7 @@ def test_Scope_subclass_can_be_set_as_param() -> None:
 def test_Scope_subclass_can_be_set_as_param_with_unbound_typevar() -> None:
     Param = TypeVar('Param', int, float)
 
-    class Str(sl.Scope[Param, str], str):
-        ...
+    class Str(sl.Scope[Param, str], str): ...
 
     pipeline = sl.Pipeline()
     pipeline[Str[Param]] = Str[Param]('1')  # type: ignore[valid-type]
@@ -110,8 +108,7 @@ def test_ScopeTwoParam_subclass_can_be_set_as_param() -> None:
     Param1 = TypeVar('Param1', int, float)
     Param2 = TypeVar('Param2', int, float)
 
-    class Str(sl.ScopeTwoParams[Param1, Param2, str], str):
-        ...
+    class Str(sl.ScopeTwoParams[Param1, Param2, str], str): ...
 
     pipeline = sl.Pipeline(params={Str[int, float]: Str[int, float]('1')})
     pipeline[Str[float, int]] = Str[float, int]('2.0')
@@ -123,8 +120,7 @@ def test_ScopeTwoParam_subclass_can_be_set_as_param_with_unbound_typevar() -> No
     Param1 = TypeVar('Param1', int, float)
     Param2 = TypeVar('Param2', int, float)
 
-    class Str(sl.ScopeTwoParams[Param1, Param2, str], str):
-        ...
+    class Str(sl.ScopeTwoParams[Param1, Param2, str], str): ...
 
     pipeline = sl.Pipeline()
     pipeline[Str[Param1, Param2]] = Str[Param1, Param2]('1')  # type: ignore[valid-type]
@@ -135,8 +131,7 @@ def test_ScopeTwoParam_subclass_can_be_set_as_param_with_unbound_typevar() -> No
 def test_generic_providers_produce_use_dependencies_based_on_bound_typevar() -> None:
     Param = TypeVar('Param', int, float)
 
-    class Str(sl.Scope[Param, str], str):
-        ...
+    class Str(sl.Scope[Param, str], str): ...
 
     def parametrized(x: Param) -> Str[Param]:
         return Str(f'{x}')
@@ -167,11 +162,9 @@ def test_can_compute_result_depending_on_two_instances_of_generic_provider() -> 
 
     Param = TypeVar('Param', Run1, Run2, Result)
 
-    class Float(sl.Scope[Param, float], float):
-        ...
+    class Float(sl.Scope[Param, float], float): ...
 
-    class Str(sl.Scope[Param, str], str):
-        ...
+    class Str(sl.Scope[Param, str], str): ...
 
     def int_float_to_str(x: int, y: Float[Param]) -> Str[Param]:
         return Str(f"{x};{y}")
@@ -195,20 +188,15 @@ def test_can_compute_result_depending_on_two_instances_of_generic_provider() -> 
 def test_subclasses_of_generic_provider_defined_with_Scope_work() -> None:
     Param = TypeVar('Param', int, float)
 
-    class StrT(sl.Scope[Param, str], str):
-        ...
+    class StrT(sl.Scope[Param, str], str): ...
 
-    class Str1(StrT[Param]):
-        ...
+    class Str1(StrT[Param]): ...
 
-    class Str2(StrT[Param]):
-        ...
+    class Str2(StrT[Param]): ...
 
-    class Str3(StrT[Param]):
-        ...
+    class Str3(StrT[Param]): ...
 
-    class Str4(Str3[Param]):
-        ...
+    class Str4(Str3[Param]): ...
 
     def make_str1() -> Str1[Param]:
         return Str1('1')
@@ -237,14 +225,11 @@ def test_subclasses_of_generic_array_provider_defined_with_Scope_work() -> None:
     # int is unused, but a single constraint is not allowed by Python
     Param = TypeVar('Param', str, int)
 
-    class ArrayT(sl.Scope[Param, npt.NDArray[np.int64]], npt.NDArray[np.int64]):
-        ...
+    class ArrayT(sl.Scope[Param, npt.NDArray[np.int64]], npt.NDArray[np.int64]): ...
 
-    class Array1(ArrayT[Param]):
-        ...
+    class Array1(ArrayT[Param]): ...
 
-    class Array2(ArrayT[Param]):
-        ...
+    class Array2(ArrayT[Param]): ...
 
     def make_array1() -> Array1[Param]:
         return Array1(np.array([1, 2, 3]))
@@ -327,11 +312,9 @@ def test_TypeVar_params_are_not_associated_unless_they_match() -> None:
     T1 = TypeVar('T1', int, float)
     T2 = TypeVar('T2', int, float)
 
-    class A(Generic[T1]):
-        ...
+    class A(Generic[T1]): ...
 
-    class B(Generic[T2]):
-        ...
+    class B(Generic[T2]): ...
 
     def source() -> A[int]:
         return A[int]()
@@ -696,8 +679,7 @@ def test_init_with_providers_and_params() -> None:
 def test_init_with_sciline_Scope_subclass_param_works() -> None:
     T = TypeVar('T')
 
-    class A(sl.Scope[T, int], int):
-        ...
+    class A(sl.Scope[T, int], int): ...
 
     pl = sl.Pipeline(params={A[float]: A(1), A[str]: A(2)})
     assert pl.compute(A[float]) == A(1)
@@ -822,8 +804,7 @@ def test_bind_and_call_function_in_iterator() -> None:
 
 def test_bind_and_call_dataclass_without_args() -> None:
     @dataclass
-    class C:
-        ...
+    class C: ...
 
     pipeline = sl.Pipeline([make_int])
     assert pipeline.bind_and_call(C) == C()
@@ -896,8 +877,7 @@ def test_bind_and_call_generic_function() -> None:
     A = NewType('A', int)
     B = NewType('B', int)
 
-    class G(sl.Scope[T, int], int):
-        ...
+    class G(sl.Scope[T, int], int): ...
 
     def func(a: G[A]) -> int:
         return -4 * a
@@ -1005,8 +985,7 @@ def test_pipeline_copy_after_setitem() -> None:
 def test_copy_with_generic_providers() -> None:
     Param = TypeVar('Param', int, float)
 
-    class Str(sl.Scope[Param, str], str):
-        ...
+    class Str(sl.Scope[Param, str], str): ...
 
     def parametrized(x: Param) -> Str[Param]:
         return Str(f'{x}')
@@ -1075,11 +1054,9 @@ def test_pipeline_with_generics_setitem_on_original_does_not_affect_copy() -> No
 
     RunType = TypeVar('RunType', Sample, Background)
 
-    class RawData(sl.Scope[RunType, int], int):
-        ...
+    class RawData(sl.Scope[RunType, int], int): ...
 
-    class SquaredData(sl.Scope[RunType, int], int):
-        ...
+    class SquaredData(sl.Scope[RunType, int], int): ...
 
     def square(x: RawData[RunType]) -> SquaredData[RunType]:
         return SquaredData[RunType](x * x)
@@ -1111,11 +1088,9 @@ def test_pipeline_with_generics_setitem_on_copy_does_not_affect_original() -> No
 
     RunType = TypeVar('RunType', Sample, Background)
 
-    class RawData(sl.Scope[RunType, int], int):
-        ...
+    class RawData(sl.Scope[RunType, int], int): ...
 
-    class SquaredData(sl.Scope[RunType, int], int):
-        ...
+    class SquaredData(sl.Scope[RunType, int], int): ...
 
     def square(x: RawData[RunType]) -> SquaredData[RunType]:
         return SquaredData[RunType](x * x)
@@ -1177,8 +1152,7 @@ def test_pipeline_generic_keyword_only(scheduler: sl.scheduler.Scheduler) -> Non
     A = NewType('A', int)
     B = NewType('B', int)
 
-    class G(sl.Scope[T, int], int):
-        ...
+    class G(sl.Scope[T, int], int): ...
 
     def func(*, a: G[A]) -> int:
         return -4 * a

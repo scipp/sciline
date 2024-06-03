@@ -17,8 +17,9 @@ class UnsatisfiedRequirement(Exception):
 class ErrorHandler(Protocol):
     """Error handling protocol for pipelines."""
 
-    def handle_unsatisfied_requirement(self, tp: Key, *explanation: str) -> Provider:
-        ...
+    def handle_unsatisfied_requirement(
+        self, tp: Key, *explanation: str
+    ) -> Provider: ...
 
 
 class HandleAsBuildTimeException(ErrorHandler):

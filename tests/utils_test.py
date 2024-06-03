@@ -61,8 +61,7 @@ def test_key_name_custom_generic() -> None:
     MyType = NewType('MyType', float)
     Var = TypeVar('Var')
 
-    class G(sciline.Scope[Var, str], str):
-        ...
+    class G(sciline.Scope[Var, str], str): ...
 
     assert _utils.key_name(G) == 'G'
     assert _utils.key_name(G[int]) == 'G[int]'
@@ -74,8 +73,7 @@ def test_key_name_custom_generic_two_params() -> None:
     Var1 = TypeVar('Var1')
     Var2 = TypeVar('Var2')
 
-    class G(sciline.ScopeTwoParams[Var1, Var2, str], str):
-        ...
+    class G(sciline.ScopeTwoParams[Var1, Var2, str], str): ...
 
     assert _utils.key_name(G) == 'G'
     assert _utils.key_name(G[int, tuple[float]]) == 'G[int, tuple[float]]'
@@ -141,8 +139,7 @@ def test_key_full_qualname_custom_generic() -> None:
     MyType = NewType('MyType', float)
     Var = TypeVar('Var')
 
-    class G(sciline.Scope[Var, str], str):
-        ...
+    class G(sciline.Scope[Var, str], str): ...
 
     assert (
         _utils.key_full_qualname(G)
@@ -164,8 +161,7 @@ def test_key_full_qualname_custom_generic_two_params() -> None:
     Var1 = TypeVar('Var1')
     Var2 = TypeVar('Var2')
 
-    class G(sciline.ScopeTwoParams[Var1, Var2, str], str):
-        ...
+    class G(sciline.ScopeTwoParams[Var1, Var2, str], str): ...
 
     assert (
         _utils.key_full_qualname(G)

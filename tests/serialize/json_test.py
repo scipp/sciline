@@ -17,12 +17,10 @@ B = NewType('B', int)
 T = TypeVar('T', A, B)
 
 
-class Int(sl.Scope[T, int], int):
-    ...
+class Int(sl.Scope[T, int], int): ...
 
 
-class List(sl.Scope[T, list[int]], list[int]):
-    ...
+class List(sl.Scope[T, list[int]], list[int]): ...
 
 
 def make_int_b() -> Int[B]:

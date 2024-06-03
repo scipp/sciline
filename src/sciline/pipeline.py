@@ -72,16 +72,13 @@ class Pipeline(DataGraph):
             self[tp] = param
 
     @overload
-    def compute(self, tp: Type[T], **kwargs: Any) -> T:
-        ...
+    def compute(self, tp: Type[T], **kwargs: Any) -> T: ...
 
     @overload
-    def compute(self, tp: Iterable[Type[T]], **kwargs: Any) -> Dict[Type[T], T]:
-        ...
+    def compute(self, tp: Iterable[Type[T]], **kwargs: Any) -> Dict[Type[T], T]: ...
 
     @overload
-    def compute(self, tp: UnionType, **kwargs: Any) -> Any:
-        ...
+    def compute(self, tp: UnionType, **kwargs: Any) -> Any: ...
 
     def compute(self, tp: type | Iterable[type] | UnionType, **kwargs: Any) -> Any:
         """
@@ -99,9 +96,7 @@ class Pipeline(DataGraph):
         """
         return self.get(tp, **kwargs).compute()
 
-    def visualize(
-        self, tp: type | Iterable[type], **kwargs: Any
-    ) -> graphviz.Digraph:  # type: ignore[name-defined] # noqa: F821
+    def visualize(self, tp: type | Iterable[type], **kwargs: Any) -> graphviz.Digraph:  # type: ignore[name-defined] # noqa: F821
         """
         Return a graphviz Digraph object representing the graph for the given keys.
 
@@ -155,12 +150,12 @@ class Pipeline(DataGraph):
         )
 
     @overload
-    def bind_and_call(self, fns: Callable[..., T], /) -> T:
-        ...
+    def bind_and_call(self, fns: Callable[..., T], /) -> T: ...
 
     @overload
-    def bind_and_call(self, fns: Iterable[Callable[..., Any]], /) -> Tuple[Any, ...]:
-        ...
+    def bind_and_call(
+        self, fns: Iterable[Callable[..., Any]], /
+    ) -> Tuple[Any, ...]: ...
 
     def bind_and_call(
         self, fns: Union[Callable[..., Any], Iterable[Callable[..., Any]]], /

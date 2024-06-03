@@ -125,9 +125,7 @@ class TaskGraph:
         """
         yield from self._graph.keys()
 
-    def visualize(
-        self, **kwargs: Any
-    ) -> graphviz.Digraph:  # type: ignore[name-defined] # noqa: F821
+    def visualize(self, **kwargs: Any) -> graphviz.Digraph:  # type: ignore[name-defined] # noqa: F821
         """
         Return a graphviz Digraph object representing the graph.
 

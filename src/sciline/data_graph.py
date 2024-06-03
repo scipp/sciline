@@ -148,9 +148,7 @@ class DataGraph:
     def to_networkx(self) -> nx.DiGraph:
         return self._cbgraph.to_networkx()
 
-    def visualize_data_graph(
-        self, **kwargs: Any
-    ) -> graphviz.Digraph:  # type: ignore[name-defined] # noqa: F821
+    def visualize_data_graph(self, **kwargs: Any) -> graphviz.Digraph:  # type: ignore[name-defined] # noqa: F821
         import graphviz
 
         dot = graphviz.Digraph(strict=True, **kwargs)
