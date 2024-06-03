@@ -7,7 +7,7 @@
 #
 cachetools==5.3.3
     # via tox
-certifi==2024.2.2
+certifi==2024.6.2
     # via requests
 chardet==5.2.0
     # via tox

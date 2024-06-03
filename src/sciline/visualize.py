@@ -1,13 +1,14 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright (c) 2023 Scipp contributors (https://github.com/scipp)
+from collections.abc import Hashable
 from dataclasses import dataclass
-from typing import Any, Dict, Hashable, get_args, get_origin
+from typing import Any, get_args, get_origin
 
 import cyclebane
 from graphviz import Digraph
 
 from ._provider import Provider, ProviderKind
-from .typing import Graph, Key, get_optional
+from .typing import Graph, Key
 
 
 @dataclass
@@ -24,7 +25,7 @@ class FormattedProvider:
     kind: ProviderKind
 
 
-FormattedGraph = Dict[str, FormattedProvider]
+FormattedGraph = dict[str, FormattedProvider]
 
 
 def to_graphviz(
@@ -72,14 +73,14 @@ def to_graphviz(
     return dot
 
 
-def _to_subgraphs(graph: FormattedGraph) -> Dict[str, FormattedGraph]:
+def _to_subgraphs(graph: FormattedGraph) -> dict[str, FormattedGraph]:
     def get_subgraph_name(name: str, kind: str) -> str:
         if kind == 'series':
             # Example: Series[RowId, Material[Country]] -> RowId, Material[Country]
             return name.partition('[')[-1].rpartition(']')[0]
         return name.split('[')[0]
 
-    subgraphs: Dict[str, FormattedGraph] = {}
+    subgraphs: dict[str, FormattedGraph] = {}
     for p, formatted_p in graph.items():
         subgraph_name = get_subgraph_name(formatted_p.ret.name, formatted_p.kind)
         subgraphs.setdefault(subgraph_name, {})
@@ -157,9 +158,6 @@ def _format_type(tp: Hashable, compact: bool = False) -> Node:
     """
     tp, labels = _extract_type_and_labels(tp, compact=compact)
 
-    if (tp_ := get_optional(tp)) is not None:  # type: ignore[arg-type]
-        tp = tp_
-
     def get_base(tp: Hashable) -> str:
         return str(tp.__name__) if hasattr(tp, '__name__') else str(tp).split('.')[-1]
 
@@ -172,7 +170,7 @@ def _format_type(tp: Hashable, compact: bool = False) -> Node:
     def with_labels(base: str) -> Node:
         if labels:
             return Node(
-                name=f'{base}({", ".join([format_label(l) for l in labels])})',
+                name=f'{base}({", ".join([format_label(label) for label in labels])})',
                 collapsed=compact,
             )
         return Node(name=base)

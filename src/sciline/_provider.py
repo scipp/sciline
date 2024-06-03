@@ -1,21 +1,18 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright (c) 2023 Scipp contributors (https://github.com/scipp)
 """Handling of providers and their arguments."""
+
 from __future__ import annotations
 
 import inspect
+from collections.abc import Callable, Generator, Hashable
 from dataclasses import dataclass
 from types import UnionType
 from typing import (
     TYPE_CHECKING,
     Any,
-    Callable,
-    Generator,
-    Hashable,
     Literal,
-    Optional,
     TypeVar,
-    Union,
     get_args,
     get_origin,
     get_type_hints,
@@ -55,7 +52,7 @@ class Provider:
         func: ToProvider,
         arg_spec: ArgSpec,
         kind: ProviderKind,
-        location: Optional[ProviderLocation] = None,
+        location: ProviderLocation | None = None,
     ) -> None:
         self._func = func
         self._arg_spec = arg_spec
@@ -160,7 +157,7 @@ class ArgSpec:
     """Argument specification for a provider."""
 
     def __init__(
-        self, *, args: dict[str, Key], kwargs: dict[str, Key], return_: Optional[Key]
+        self, *, args: dict[str, Key], kwargs: dict[str, Key], return_: Key | None
     ) -> None:
         """Build from components, use dedicated creation functions instead."""
         # Duplicate type hints could be allowed in principle, but it makes structure
@@ -212,7 +209,7 @@ class ArgSpec:
         yield from self._kwargs.items()
 
     @property
-    def return_(self) -> Optional[Key]:
+    def return_(self) -> Key | None:
         return self._return
 
     def keys(self) -> Generator[Key, None, None]:
@@ -258,7 +255,7 @@ class ProviderLocation:
         return self.name
 
 
-def _bind_free_typevars(tp: Union[TypeVar, Key], bound: dict[TypeVar, Key]) -> Key:
+def _bind_free_typevars(tp: TypeVar | Key, bound: dict[TypeVar, Key]) -> Key:
     if isinstance(tp, TypeVar):
         if (result := bound.get(tp)) is None:
             raise UnboundTypeVar(f'Unbound type variable {tp}')

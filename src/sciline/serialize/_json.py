@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import importlib.resources
 import json
-from typing import Any, Union
+from typing import Any
 
 from .._provider import Provider
 from .._utils import key_full_qualname, key_name, provider_full_qualname, provider_name
@@ -114,7 +114,7 @@ def _serialize_function(
 
 
 def _serialize_edge_data_to_fn(
-    source: Key, target: Key, arg: Union[int, str], id_gen: _IdGenerator
+    source: Key, target: Key, arg: int | str, id_gen: _IdGenerator
 ) -> dict[str, str]:
     return {
         'id': id_gen.edge_id(source, target, arg),
@@ -142,7 +142,7 @@ def _provider_name(provider: Provider) -> str:
         raise ValueError(
             f"Unsupported provider for serializing graph: '{provider}' "
             'Callable objects cannot be serialized.'
-        )
+        ) from None
 
 
 class _IdGenerator:
@@ -160,7 +160,7 @@ class _IdGenerator:
         # Use tuple with 'fn' to disambiguate from data nodes.
         return self._get_or_insert(('fn', key))
 
-    def edge_id(self, source: Key, target: Key, arg: Union[int, str]) -> str:
+    def edge_id(self, source: Key, target: Key, arg: int | str) -> str:
         # Uses the arg number or kwarg name
         # to disambiguate arguments with the same type.
         return self._get_or_insert((source, target, arg))

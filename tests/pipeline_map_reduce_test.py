@@ -35,8 +35,8 @@ def test_map_returns_pipeline_that_can_compute_for_each_value() -> None:
 
     for i in range(3):
         index = IndexValues(('dim_0',), (i,))
-        assert mapped.compute(NodeName(A, index)) == A(10 * i)  # type: ignore[call-overload] # noqa: E501
-        assert mapped.compute(NodeName(B, index)) == B(10 * i + 1)  # type: ignore[call-overload] # noqa: E501
+        assert mapped.compute(NodeName(A, index)) == A(10 * i)  # type: ignore[call-overload]
+        assert mapped.compute(NodeName(B, index)) == B(10 * i + 1)  # type: ignore[call-overload]
 
 
 def test_reduce_returns_pipeline_passing_mapped_branches_to_reducing_func() -> None:

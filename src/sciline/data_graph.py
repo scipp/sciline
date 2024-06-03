@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import itertools
-from collections.abc import Iterable
+from collections.abc import Callable, Generator, Iterable
 from types import NoneType
-from typing import Any, Callable, Generator, TypeVar, Union, get_args
+from typing import Any, TypeVar, get_args
 
 import cyclebane as cb
 import networkx as nx
@@ -82,7 +82,7 @@ class DataGraph:
             self._graph.add_node(key)
         return self._graph.nodes[key]
 
-    def insert(self, provider: Union[ToProvider, Provider], /) -> None:
+    def insert(self, provider: ToProvider | Provider, /) -> None:
         """
         Insert a callable into the graph that provides its return value.
 
@@ -148,9 +148,7 @@ class DataGraph:
     def to_networkx(self) -> nx.DiGraph:
         return self._cbgraph.to_networkx()
 
-    def visualize_data_graph(
-        self, **kwargs: Any
-    ) -> graphviz.Digraph:  # type: ignore[name-defined] # noqa: F821
+    def visualize_data_graph(self, **kwargs: Any) -> graphviz.Digraph:  # type: ignore[name-defined] # noqa: F821
         import graphviz
 
         dot = graphviz.Digraph(strict=True, **kwargs)
@@ -190,7 +188,7 @@ def to_task_graph(
         if (value := node.get('value', _no_value)) is not _no_value:
             out[key] = Provider.parameter(value)
         elif (provider := node.get('provider')) is not None:
-            new_key = dict(zip(orig_keys, input_nodes))
+            new_key = dict(zip(orig_keys, input_nodes, strict=True))
             spec = provider.arg_spec.map_keys(new_key.get)
             if len(spec) != len(input_nodes):
                 # This should be caught by __setitem__, but we check here to be safe.

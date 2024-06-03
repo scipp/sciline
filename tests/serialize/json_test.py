@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright (c) 2023 Scipp contributors (https://github.com/scipp)
-# type: ignore
+# type: ignore #noqa: PGH003
 
 from copy import deepcopy
 from typing import Any, NewType, TypeVar
@@ -17,12 +17,10 @@ B = NewType('B', int)
 T = TypeVar('T', A, B)
 
 
-class Int(sl.Scope[T, int], int):
-    ...
+class Int(sl.Scope[T, int], int): ...
 
 
-class List(sl.Scope[T, list[int]], list[int]):
-    ...
+class List(sl.Scope[T, list[int]], list[int]): ...
 
 
 def make_int_b() -> Int[B]:
@@ -276,7 +274,7 @@ def test_serialize_does_not_support_callable_objects() -> None:
 
     pl = sl.Pipeline((C(),), params={int: 4})
     graph = pl.get(float)
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match='Callable objects cannot be serialized'):
         graph.serialize()
 
 

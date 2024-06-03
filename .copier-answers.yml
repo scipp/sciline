@@ -1,13 +1,13 @@
 # Changes here will be overwritten by Copier; NEVER EDIT MANUALLY
-_commit: e3856ac
+_commit: 9bb9876
 _src_path: gh:scipp/copier_template
 description: Build scientific pipelines for your data
 max_python: '3.12'
 min_python: '3.10'
 namespace_package: ''
-nightly_deps: ''
+nightly_deps: cyclebane
 orgname: scipp
 prettyname: Sciline
 projectname: sciline
-related_projects: Scipp
+related_projects: Scipp,Cyclebane
 year: 2024

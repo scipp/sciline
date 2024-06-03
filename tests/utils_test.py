@@ -31,7 +31,7 @@ def test_key_name_type_alias_type() -> None:
 type MyType = float
 assert _utils.key_name(MyType) == 'MyType'
     """
-    exec(code)
+    exec(code)  # noqa: S102
 
 
 @pytest.mark.skipif(sys.version_info < (3, 12), reason="requires python3.12 or higher")
@@ -41,7 +41,7 @@ def test_key_name_generic_type_alias_type() -> None:
 type MyType[T] = dict[str, T]
 assert _utils.key_name(MyType[int]) == 'MyType[int]'
     """
-    exec(code)
+    exec(code)  # noqa: S102
 
 
 def test_key_name_type_var() -> None:
@@ -61,8 +61,7 @@ def test_key_name_custom_generic() -> None:
     MyType = NewType('MyType', float)
     Var = TypeVar('Var')
 
-    class G(sciline.Scope[Var, str], str):
-        ...
+    class G(sciline.Scope[Var, str], str): ...
 
     assert _utils.key_name(G) == 'G'
     assert _utils.key_name(G[int]) == 'G[int]'
@@ -74,8 +73,7 @@ def test_key_name_custom_generic_two_params() -> None:
     Var1 = TypeVar('Var1')
     Var2 = TypeVar('Var2')
 
-    class G(sciline.ScopeTwoParams[Var1, Var2, str], str):
-        ...
+    class G(sciline.ScopeTwoParams[Var1, Var2, str], str): ...
 
     assert _utils.key_name(G) == 'G'
     assert _utils.key_name(G[int, tuple[float]]) == 'G[int, tuple[float]]'
@@ -101,7 +99,7 @@ def test_key_full_qualname_type_alias_type() -> None:
 type MyType = float
 assert _utils.key_full_qualname(MyType) == 'tests.utils_test.MyType'
     """
-    exec(code)
+    exec(code)  # noqa: S102
 
 
 @pytest.mark.skipif(sys.version_info < (3, 12), reason="requires python3.12 or higher")
@@ -111,7 +109,7 @@ def test_key_full_qualname_generic_type_alias_type() -> None:
 type MyType[T] = dict[str, T]
 assert _utils.key_full_qualname(MyType[int]) == 'tests.utils_test.MyType[builtins.int]'
     """
-    exec(code)
+    exec(code)  # noqa: S102
 
 
 def test_key_full_qualname_type_var() -> None:
@@ -141,8 +139,7 @@ def test_key_full_qualname_custom_generic() -> None:
     MyType = NewType('MyType', float)
     Var = TypeVar('Var')
 
-    class G(sciline.Scope[Var, str], str):
-        ...
+    class G(sciline.Scope[Var, str], str): ...
 
     assert (
         _utils.key_full_qualname(G)
@@ -150,7 +147,7 @@ def test_key_full_qualname_custom_generic() -> None:
     )
     assert (
         _utils.key_full_qualname(G[int])
-        == 'tests.utils_test.test_key_full_qualname_custom_generic.<locals>.G[builtins.int]'  # noqa E501
+        == 'tests.utils_test.test_key_full_qualname_custom_generic.<locals>.G[builtins.int]'  # noqa: E501
     )
     assert (
         _utils.key_full_qualname(G[MyType])
@@ -164,12 +161,11 @@ def test_key_full_qualname_custom_generic_two_params() -> None:
     Var1 = TypeVar('Var1')
     Var2 = TypeVar('Var2')
 
-    class G(sciline.ScopeTwoParams[Var1, Var2, str], str):
-        ...
+    class G(sciline.ScopeTwoParams[Var1, Var2, str], str): ...
 
     assert (
         _utils.key_full_qualname(G)
-        == 'tests.utils_test.test_key_full_qualname_custom_generic_two_params.<locals>.G'  # noqa E501
+        == 'tests.utils_test.test_key_full_qualname_custom_generic_two_params.<locals>.G'  # noqa: E501
     )
     assert (
         _utils.key_full_qualname(G[int, tuple[float]])
