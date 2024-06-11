@@ -10,5 +10,5 @@ mypy==1.10.0
     # via -r mypy.in
 mypy-extensions==1.0.0
     # via mypy
-typing-extensions==4.12.1
+typing-extensions==4.12.2
     # via mypy
