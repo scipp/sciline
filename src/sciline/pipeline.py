@@ -2,7 +2,7 @@
 # Copyright (c) 2023 Scipp contributors (https://github.com/scipp)
 from __future__ import annotations
 
-from collections.abc import Callable, Hashable, Iterable
+from collections.abc import Callable, Iterable
 from itertools import chain
 from types import UnionType
 from typing import TYPE_CHECKING, Any, TypeVar, get_args, get_type_hints, overload
@@ -16,6 +16,7 @@ from .task_graph import TaskGraph
 from .typing import Key
 
 if TYPE_CHECKING:
+    import graphviz
     import pandas
 
 
@@ -88,7 +89,7 @@ class Pipeline(DataGraph):
         """
         return self.get(tp, **kwargs).compute()
 
-    def visualize(self, tp: type | Iterable[type], **kwargs: Any) -> graphviz.Digraph:  # type: ignore[name-defined] # noqa: F821
+    def visualize(self, tp: type | Iterable[type], **kwargs: Any) -> graphviz.Digraph:
         """
         Return a graphviz Digraph object representing the graph for the given keys.
 
@@ -200,7 +201,7 @@ class Pipeline(DataGraph):
         return pipeline_html_repr(nodes)
 
 
-def get_mapped_node_names(graph: Pipeline, key: Hashable) -> pandas.Series:
+def get_mapped_node_names(graph: Pipeline, key: type) -> pandas.Series:
     """
     Given a graph with key depending on mapped nodes, return a series corresponding
     mapped keys.
@@ -235,7 +236,7 @@ def get_mapped_node_names(graph: Pipeline, key: Hashable) -> pandas.Series:
     return pd.Series(keys, index=index, name=key)
 
 
-def compute_series(graph: Pipeline, key: Hashable) -> pandas.Series:
+def compute_series(graph: Pipeline, key: type) -> pandas.Series:
     """
     Given a graph with key depending on mapped nodes, compute a series for the key.
 
