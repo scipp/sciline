@@ -2,10 +2,10 @@
 # Copyright (c) 2023 Scipp contributors (https://github.com/scipp)
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Hashable, Iterable
 from itertools import chain
 from types import UnionType
-from typing import Any, TypeVar, get_args, get_type_hints, overload
+from typing import TYPE_CHECKING, Any, TypeVar, get_args, get_type_hints, overload
 
 from ._provider import Provider, ToProvider
 from .data_graph import DataGraph, to_task_graph
@@ -14,6 +14,10 @@ from .handler import ErrorHandler, HandleAsComputeTimeException
 from .scheduler import Scheduler
 from .task_graph import TaskGraph
 from .typing import Key
+
+if TYPE_CHECKING:
+    import pandas
+
 
 T = TypeVar('T')
 KeyType = TypeVar('KeyType', bound=Key)
@@ -194,3 +198,38 @@ class Pipeline(DataGraph):
     def _repr_html_(self) -> str:
         nodes = ((key, data) for key, data in self._graph.nodes.items())
         return pipeline_html_repr(nodes)
+
+
+def compute_series(graph: Pipeline, key: Hashable) -> pandas.Series:
+    """
+    Given a graph with key depending on mapped nodes, compute a series for the key.
+
+    If the key depends on multiple indices, the series will be a multi-index series.
+
+    Note that Pandas is not a dependency of Sciline and must be installed separately.
+
+    Parameters
+    ----------
+    graph:
+        The pipeline to compute the series from.
+    key:
+        The key to compute the series for. This key must depend on mapped nodes.
+
+    Returns
+    -------
+    :
+        The computed series.
+    """
+    import pandas as pd
+    from cyclebane.graph import IndexValues, NodeName
+
+    graph = graph[key]  # Drops unrelated indices
+    indices = graph._cbgraph.indices
+    index_names = tuple(indices)
+    index = pd.MultiIndex.from_product(indices.values(), names=index_names)
+    keys = tuple(NodeName(key, IndexValues(index_names, idx)) for idx in index)
+    if index.nlevels == 1:  # Avoid more complicate MultiIndex if unnecessary
+        index = index.get_level_values(0)
+    key_series = pd.Series(keys, index=index, name=key)
+    results = graph.compute(key_series)
+    return key_series.apply(lambda x: results[x])

@@ -1,8 +1,12 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright (c) 2023 Scipp contributors (https://github.com/scipp)
+from __future__ import annotations
+
 from typing import NewType
 
+import pandas as pd
 import pytest
+from cyclebane.graph import IndexValues, NodeName
 
 import sciline as sl
 
@@ -31,7 +35,6 @@ def test_map_returns_pipeline_that_can_compute_for_each_value() -> None:
     with pytest.raises(sl.UnsatisfiedRequirement):
         # B is not in the graph any more, since it has been duplicated
         mapped.compute(B)
-    from cyclebane.graph import IndexValues, NodeName
 
     for i in range(3):
         index = IndexValues(('dim_0',), (i,))
@@ -47,3 +50,75 @@ def test_reduce_returns_pipeline_passing_mapped_branches_to_reducing_func() -> N
     Result = NewType('Result', int)
     assert mapped.reduce(func=min, name=Result).compute(Result) == Result(1)
     assert mapped.reduce(func=max, name=Result).compute(Result) == Result(21)
+
+
+def test_compute_series_single_index() -> None:
+    def ab_to_c(a: A, b: B) -> C:
+        return C(a + b)
+
+    pl = sl.Pipeline((ab_to_c,))
+    pl[B] = B(7)
+    paramsA = pd.DataFrame(
+        {A: [A(10 * i) for i in range(3)]}, index=['a', 'b', 'c']
+    ).rename_axis('x')
+    mapped = pl.map(paramsA)
+    result = sl.compute_series(mapped, C)
+    assert result['a'] == C(7)
+    assert result['b'] == C(17)
+    assert result['c'] == C(27)
+    assert result.index.name == 'x'
+    assert result.name == C
+
+
+def test_compute_series_single_index_with_no_name() -> None:
+    def ab_to_c(a: A, b: B) -> C:
+        return C(a + b)
+
+    pl = sl.Pipeline((ab_to_c,))
+    pl[B] = B(7)
+    paramsA = pd.DataFrame({A: [A(10 * i) for i in range(3)]}, index=['a', 'b', 'c'])
+    mapped = pl.map(paramsA)
+    result = sl.compute_series(mapped, C)
+    assert result['a'] == C(7)
+    assert result['b'] == C(17)
+    assert result['c'] == C(27)
+    assert result.index.name == 'dim_0'
+    assert result.name == C
+
+
+def test_compute_series_from_mapped_with_implicit_index() -> None:
+    def ab_to_c(a: A, b: B) -> C:
+        return C(a + b)
+
+    pl = sl.Pipeline((ab_to_c,))
+    pl[B] = B(7)
+    mapped = pl.map({A: [A(10 * i) for i in range(3)]})
+    result = sl.compute_series(mapped, C)
+    assert result[0] == C(7)
+    assert result[1] == C(17)
+    assert result[2] == C(27)
+    assert result.index.name == 'dim_0'
+    assert result.name == C
+
+
+def test_compute_series_multiple_indices_creates_multiindex() -> None:
+    def ab_to_c(a: A, b: B) -> C:
+        return C(a + b)
+
+    pl = sl.Pipeline((ab_to_c,))
+    paramsA = pd.DataFrame(
+        {A: [A(10 * i) for i in range(3)]}, index=['a', 'b', 'c']
+    ).rename_axis('x')
+    paramsB = pd.DataFrame(
+        {B: [B(i) for i in range(2)]}, index=['aa', 'bb']
+    ).rename_axis('y')
+    mapped = pl.map(paramsA).map(paramsB)
+    result = sl.compute_series(mapped, C)
+    assert result['a', 'aa'] == C(0)
+    assert result['a', 'bb'] == C(1)
+    assert result['b', 'aa'] == C(10)
+    assert result['b', 'bb'] == C(11)
+    assert result['c', 'aa'] == C(20)
+    assert result['c', 'bb'] == C(21)
+    assert result.index.names == ['x', 'y']
+    assert result.name == C

@@ -21,6 +21,16 @@
    HandleAsComputeTimeException
 ```
 
+## Top-level functions
+
+```{eval-rst}
+.. autosummary::
+   :toctree: ../generated/functions
+   :recursive:
+
+   compute_series
+```
+
 ## Exceptions
 
 ```{eval-rst}
