@@ -29,6 +29,7 @@
    :recursive:
 
    compute_series
+   get_mapped_node_names
 ```
 
 ## Exceptions

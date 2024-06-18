@@ -200,10 +200,46 @@ class Pipeline(DataGraph):
         return pipeline_html_repr(nodes)
 
 
+def get_mapped_node_names(graph: Pipeline, key: Hashable) -> pandas.Series:
+    """
+    Given a graph with key depending on mapped nodes, return a series corresponding
+    mapped keys.
+
+    This is meant to be used in combination with :py:func:`Pipeline.map`.
+    If the key depends on multiple indices, the series will be a multi-index series.
+
+    Note that Pandas is not a dependency of Sciline and must be installed separately.
+
+    Parameters
+    ----------
+    graph:
+        The pipeline to get the mapped key names from.
+    key:
+        The key to get the mapped key names for. This key must depend on mapped nodes.
+
+    Returns
+    -------
+    :
+        The series of mapped key names.
+    """
+    import pandas as pd
+    from cyclebane.graph import IndexValues, NodeName
+
+    graph = graph[key]  # Drops unrelated indices
+    indices = graph._cbgraph.indices
+    index_names = tuple(indices)
+    index = pd.MultiIndex.from_product(indices.values(), names=index_names)
+    keys = tuple(NodeName(key, IndexValues(index_names, idx)) for idx in index)
+    if index.nlevels == 1:  # Avoid more complicate MultiIndex if unnecessary
+        index = index.get_level_values(0)
+    return pd.Series(keys, index=index, name=key)
+
+
 def compute_series(graph: Pipeline, key: Hashable) -> pandas.Series:
     """
     Given a graph with key depending on mapped nodes, compute a series for the key.
 
+    This is meant to be used in combination with :py:func:`Pipeline.map`.
     If the key depends on multiple indices, the series will be a multi-index series.
 
     Note that Pandas is not a dependency of Sciline and must be installed separately.
@@ -220,16 +256,6 @@ def compute_series(graph: Pipeline, key: Hashable) -> pandas.Series:
     :
         The computed series.
     """
-    import pandas as pd
-    from cyclebane.graph import IndexValues, NodeName
-
-    graph = graph[key]  # Drops unrelated indices
-    indices = graph._cbgraph.indices
-    index_names = tuple(indices)
-    index = pd.MultiIndex.from_product(indices.values(), names=index_names)
-    keys = tuple(NodeName(key, IndexValues(index_names, idx)) for idx in index)
-    if index.nlevels == 1:  # Avoid more complicate MultiIndex if unnecessary
-        index = index.get_level_values(0)
-    key_series = pd.Series(keys, index=index, name=key)
+    key_series = get_mapped_node_names(graph, key)
     results = graph.compute(key_series)
     return key_series.apply(lambda x: results[x])

@@ -17,7 +17,7 @@ from .handler import (
     HandleAsComputeTimeException,
     UnsatisfiedRequirement,
 )
-from .pipeline import Pipeline, compute_series
+from .pipeline import Pipeline, compute_series, get_mapped_node_names
 from .task_graph import TaskGraph
 
 __all__ = [
@@ -31,6 +31,7 @@ __all__ = [
     "HandleAsBuildTimeException",
     "HandleAsComputeTimeException",
     "compute_series",
+    "get_mapped_node_names",
 ]
 
 del importlib
