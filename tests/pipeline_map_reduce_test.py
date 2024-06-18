@@ -168,5 +168,5 @@ def test_can_compute_subset_of_get_mapped_node_names() -> None:
     result = sl.get_mapped_node_names(mapped, C)
     # We lose the convenience of compute_series which returns a nicely setup series
     # but this is perfectly fine and possible.
-    assert mapped.compute(result[1]) == A(17)
+    assert mapped.compute(result.iloc[1]) == A(17)
     assert mapped.compute(result.loc['b']) == A(17)
