@@ -153,3 +153,20 @@ def test_compute_series_raises_if_node_is_not_mapped() -> None:
     mapped = pl.map({A: [A(10 * i) for i in range(3)]})
     with pytest.raises(ValueError, match='does not depend on any mapped nodes'):
         sl.compute_series(mapped, B)
+
+
+def test_can_compute_subset_of_get_mapped_node_names() -> None:
+    def ab_to_c(a: A, b: B) -> C:
+        return C(a + b)
+
+    pl = sl.Pipeline((ab_to_c,))
+    pl[B] = B(7)
+    paramsA = pd.DataFrame(
+        {A: [A(10 * i) for i in range(3)]}, index=['a', 'b', 'c']
+    ).rename_axis('x')
+    mapped = pl.map(paramsA)
+    result = sl.get_mapped_node_names(mapped, C)
+    # We lose the convenience of compute_series which returns a nicely setup series
+    # but this is perfectly fine and possible.
+    assert mapped.compute(result[1]) == A(17)
+    assert mapped.compute(result.loc['b']) == A(17)
