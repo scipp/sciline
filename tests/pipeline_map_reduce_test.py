@@ -120,5 +120,25 @@ def test_compute_series_multiple_indices_creates_multiindex() -> None:
     assert result['b', 'bb'] == C(11)
     assert result['c', 'aa'] == C(20)
     assert result['c', 'bb'] == C(21)
-    assert result.index.names == ['x', 'y']
+    assert result.index.names == list(mapped._cbgraph.index_names)
     assert result.name == C
+
+
+def test_compute_series_ignores_unrelated_index() -> None:
+    def ab_to_c(a: A, b: B) -> C:
+        return C(a + b)
+
+    pl = sl.Pipeline((ab_to_c,))
+    paramsA = pd.DataFrame(
+        {A: [A(10 * i) for i in range(3)]}, index=['a', 'b', 'c']
+    ).rename_axis('x')
+    paramsB = pd.DataFrame(
+        {B: [B(i) for i in range(2)]}, index=['aa', 'bb']
+    ).rename_axis('y')
+    mapped = pl.map(paramsA).map(paramsB)
+    result = sl.compute_series(mapped, A)
+    assert result.index.name == 'x'
+    assert result['a'] == A(0)
+    assert result['b'] == A(10)
+    assert result['c'] == A(20)
+    assert result.name == A
