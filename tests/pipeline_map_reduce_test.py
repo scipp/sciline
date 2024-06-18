@@ -142,3 +142,14 @@ def test_compute_series_ignores_unrelated_index() -> None:
     assert result['b'] == A(10)
     assert result['c'] == A(20)
     assert result.name == A
+
+
+def test_compute_series_raises_if_node_is_not_mapped() -> None:
+    def ab_to_c(a: A, b: B) -> C:
+        return C(a + b)
+
+    pl = sl.Pipeline((ab_to_c,))
+    pl[B] = B(7)
+    mapped = pl.map({A: [A(10 * i) for i in range(3)]})
+    with pytest.raises(ValueError, match='does not depend on any mapped nodes'):
+        sl.compute_series(mapped, B)

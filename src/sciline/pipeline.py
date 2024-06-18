@@ -228,6 +228,8 @@ def get_mapped_node_names(graph: Pipeline, key: type) -> pandas.Series:
 
     graph = graph[key]  # Drops unrelated indices
     indices = graph._cbgraph.indices
+    if len(indices) == 0:
+        raise ValueError(f"'{key}' does not depend on any mapped nodes.")
     index_names = tuple(indices)
     index = pd.MultiIndex.from_product(indices.values(), names=index_names)
     keys = tuple(NodeName(key, IndexValues(index_names, idx)) for idx in index)
