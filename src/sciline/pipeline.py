@@ -224,16 +224,24 @@ def get_mapped_node_names(graph: Pipeline, key: type) -> pandas.Series:
         The series of mapped key names.
     """
     import pandas as pd
-    from cyclebane.graph import IndexValues, NodeName
+    from cyclebane.graph import IndexValues, MappedNode, NodeName
 
-    graph = graph[key]  # Drops unrelated indices
+    underlying = graph._cbgraph.graph
+    candidates = [
+        node
+        for node in underlying.nodes
+        if isinstance(node, MappedNode) and node.name == key
+    ]
+    if len(candidates) == 0:
+        raise ValueError(f"'{key}' is not a mapped node.")
+    if len(candidates) > 1:
+        raise ValueError(f"Multiple mapped nodes with name '{key}' found: {candidates}")
+    graph = graph[candidates[0]]  # Drops unrelated indices
     indices = graph._cbgraph.indices
-    if len(indices) == 0:
-        raise ValueError(f"'{key}' does not depend on any mapped nodes.")
     index_names = tuple(indices)
     index = pd.MultiIndex.from_product(indices.values(), names=index_names)
     keys = tuple(NodeName(key, IndexValues(index_names, idx)) for idx in index)
-    if index.nlevels == 1:  # Avoid more complicate MultiIndex if unnecessary
+    if index.nlevels == 1:  # Avoid more complicated MultiIndex if unnecessary
         index = index.get_level_values(0)
     return pd.Series(keys, index=index, name=key)
 

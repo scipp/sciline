@@ -52,7 +52,7 @@ def test_reduce_returns_pipeline_passing_mapped_branches_to_reducing_func() -> N
     assert mapped.reduce(func=max, name=Result).compute(Result) == Result(21)
 
 
-def test_compute_series_single_index() -> None:
+def test_compute_mapped_single_index() -> None:
     def ab_to_c(a: A, b: B) -> C:
         return C(a + b)
 
@@ -70,7 +70,7 @@ def test_compute_series_single_index() -> None:
     assert result.name == C
 
 
-def test_compute_series_single_index_with_no_name() -> None:
+def test_compute_mapped_single_index_with_no_name() -> None:
     def ab_to_c(a: A, b: B) -> C:
         return C(a + b)
 
@@ -86,7 +86,7 @@ def test_compute_series_single_index_with_no_name() -> None:
     assert result.name == C
 
 
-def test_compute_series_from_mapped_with_implicit_index() -> None:
+def test_compute_mapped_from_mapped_with_implicit_index() -> None:
     def ab_to_c(a: A, b: B) -> C:
         return C(a + b)
 
@@ -101,7 +101,7 @@ def test_compute_series_from_mapped_with_implicit_index() -> None:
     assert result.name == C
 
 
-def test_compute_series_multiple_indices_creates_multiindex() -> None:
+def test_compute_mapped_multiple_indices_creates_multiindex() -> None:
     def ab_to_c(a: A, b: B) -> C:
         return C(a + b)
 
@@ -124,7 +124,7 @@ def test_compute_series_multiple_indices_creates_multiindex() -> None:
     assert result.name == C
 
 
-def test_compute_series_ignores_unrelated_index() -> None:
+def test_compute_mapped_ignores_unrelated_index() -> None:
     def ab_to_c(a: A, b: B) -> C:
         return C(a + b)
 
@@ -144,15 +144,29 @@ def test_compute_series_ignores_unrelated_index() -> None:
     assert result.name == A
 
 
-def test_compute_series_raises_if_node_is_not_mapped() -> None:
+def test_compute_mapped_raises_if_node_is_not_mapped() -> None:
     def ab_to_c(a: A, b: B) -> C:
         return C(a + b)
 
     pl = sl.Pipeline((ab_to_c,))
     pl[B] = B(7)
     mapped = pl.map({A: [A(10 * i) for i in range(3)]})
-    with pytest.raises(ValueError, match='does not depend on any mapped nodes'):
+    with pytest.raises(ValueError, match='is not a mapped node'):
         sl.compute_mapped(mapped, B)
+
+
+def test_compute_mapped_raises_if_node_depends_on_but_is_not_mapped() -> None:
+    def ab_to_c(a: A, b: B) -> C:
+        return C(a + b)
+
+    pl = sl.Pipeline((ab_to_c,))
+    pl[B] = B(7)
+    pl = pl.map({A: [A(10 * i) for i in range(3)]}).reduce(func=max, name=C)
+    pl.insert(c_to_d)
+    # Slightly different failure case from above: The relevant subgraph *does* have
+    # indices, but the node does not.
+    with pytest.raises(ValueError, match='is not a mapped node'):
+        sl.compute_mapped(pl, D)
 
 
 def test_can_compute_subset_of_get_mapped_node_names() -> None:
@@ -166,7 +180,23 @@ def test_can_compute_subset_of_get_mapped_node_names() -> None:
     ).rename_axis('x')
     mapped = pl.map(paramsA)
     result = sl.get_mapped_node_names(mapped, C)
-    # We lose the convenience of compute_series which returns a nicely setup series
+    # We lose the convenience of compute_mapped which returns a nicely setup series
     # but this is perfectly fine and possible.
     assert mapped.compute(result.iloc[1]) == A(17)
     assert mapped.compute(result.loc['b']) == A(17)
+
+
+def test_compute_mapped_raises_if_multiple_mapped_nodes_with_given_name() -> None:
+    def ab_to_c(a: A, b: B) -> C:
+        return C(a + b)
+
+    pl = sl.Pipeline((ab_to_c,))
+    paramsA = pd.DataFrame(
+        {A: [A(10 * i) for i in range(3)]}, index=['a', 'b', 'c']
+    ).rename_axis('x')
+    paramsB = pd.DataFrame(
+        {B: [B(i) for i in range(2)]}, index=['aa', 'bb']
+    ).rename_axis('y')
+    pl = pl.map(paramsA).map(paramsB).reduce(func=max, name=C, index='x')
+    with pytest.raises(ValueError, match='Multiple mapped nodes with name'):
+        sl.compute_mapped(pl, C)
