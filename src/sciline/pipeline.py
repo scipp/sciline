@@ -245,7 +245,8 @@ def get_mapped_node_names(
         raise ValueError(f"'{key}' is not a mapped node.")
     if len(candidates) > 1:
         raise ValueError(f"Multiple mapped nodes with name '{key}' found: {candidates}")
-    graph = graph[candidates[0]]  # Drops unrelated indices
+    # Drops unrelated indices
+    graph = graph[candidates[0]]  # type: ignore[index]
     indices = graph._cbgraph.indices
     if index_names is not None:
         indices = {name: indices[name] for name in indices if name in index_names}
