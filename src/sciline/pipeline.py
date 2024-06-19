@@ -2,7 +2,7 @@
 # Copyright (c) 2023 Scipp contributors (https://github.com/scipp)
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Hashable, Iterable, Sequence
 from itertools import chain
 from types import UnionType
 from typing import TYPE_CHECKING, Any, TypeVar, get_args, get_type_hints, overload
@@ -201,7 +201,9 @@ class Pipeline(DataGraph):
         return pipeline_html_repr(nodes)
 
 
-def get_mapped_node_names(graph: Pipeline, key: type) -> pandas.Series:
+def get_mapped_node_names(
+    graph: Pipeline, key: type, index_names: Sequence[Hashable] | None = None
+) -> pandas.Series:
     """
     Given a graph with key depending on mapped nodes, return a series corresponding
     mapped keys.
@@ -217,6 +219,10 @@ def get_mapped_node_names(graph: Pipeline, key: type) -> pandas.Series:
         The pipeline to get the mapped key names from.
     key:
         The key to get the mapped key names for. This key must depend on mapped nodes.
+    index_names:
+        Specifies the names of the indices of the mapped node. If not given this is
+        inferred from the graph, but the argument may be required to disambiguate
+        multiple mapped nodes with the same name.
 
     Returns
     -------
@@ -226,19 +232,25 @@ def get_mapped_node_names(graph: Pipeline, key: type) -> pandas.Series:
     import pandas as pd
     from cyclebane.graph import IndexValues, MappedNode, NodeName
 
-    underlying = graph._cbgraph.graph
     candidates = [
         node
-        for node in underlying.nodes
+        for node in graph._cbgraph.graph.nodes
         if isinstance(node, MappedNode) and node.name == key
     ]
+    if index_names is not None:
+        candidates = [
+            node for node in candidates if set(node.indices) == set(index_names)
+        ]
     if len(candidates) == 0:
         raise ValueError(f"'{key}' is not a mapped node.")
     if len(candidates) > 1:
         raise ValueError(f"Multiple mapped nodes with name '{key}' found: {candidates}")
     graph = graph[candidates[0]]  # Drops unrelated indices
     indices = graph._cbgraph.indices
+    if index_names is not None:
+        indices = {name: indices[name] for name in indices if name in index_names}
     index_names = tuple(indices)
+
     index = pd.MultiIndex.from_product(indices.values(), names=index_names)
     keys = tuple(NodeName(key, IndexValues(index_names, idx)) for idx in index)
     if index.nlevels == 1:  # Avoid more complicated MultiIndex if unnecessary
@@ -246,7 +258,9 @@ def get_mapped_node_names(graph: Pipeline, key: type) -> pandas.Series:
     return pd.Series(keys, index=index, name=key)
 
 
-def compute_mapped(graph: Pipeline, key: type) -> pandas.Series:
+def compute_mapped(
+    graph: Pipeline, key: type, index_names: Sequence[Hashable] | None = None
+) -> pandas.Series:
     """
     Given a graph with key depending on mapped nodes, compute a series for the key.
 
@@ -261,12 +275,16 @@ def compute_mapped(graph: Pipeline, key: type) -> pandas.Series:
         The pipeline to compute the series from.
     key:
         The key to compute the series for. This key must depend on mapped nodes.
+    index_names:
+        Specifies the names of the indices of the mapped node. If not given this is
+        inferred from the graph, but the argument may be required to disambiguate
+        multiple mapped nodes with the same name.
 
     Returns
     -------
     :
         The computed series.
     """
-    key_series = get_mapped_node_names(graph, key)
+    key_series = get_mapped_node_names(graph=graph, key=key, index_names=index_names)
     results = graph.compute(key_series)
     return key_series.apply(lambda x: results[x])

@@ -200,3 +200,29 @@ def test_compute_mapped_raises_if_multiple_mapped_nodes_with_given_name() -> Non
     pl = pl.map(paramsA).map(paramsB).reduce(func=max, name=C, index='x')
     with pytest.raises(ValueError, match='Multiple mapped nodes with name'):
         sl.compute_mapped(pl, C)
+
+
+def test_compute_mapped_indices_selects_between_multiple_candidates() -> None:
+    def ab_to_c(a: A, b: B) -> C:
+        return C(a + b)
+
+    pl = sl.Pipeline((ab_to_c,))
+    paramsA = pd.DataFrame(
+        {A: [A(10 * i) for i in range(3)]}, index=['a', 'b', 'c']
+    ).rename_axis('x')
+    paramsB = pd.DataFrame(
+        {B: [B(i) for i in range(2)]}, index=['aa', 'bb']
+    ).rename_axis('y')
+    mapped = pl.map(paramsA).map(paramsB)
+    pl = mapped.reduce(func=max, name=C, index='x')
+    result_y = sl.compute_mapped(pl, C, index_names=('y',))
+    assert result_y['aa'] == C(20)
+    assert result_y['bb'] == C(21)
+    for index_names in [('x', 'y'), ('y', 'x')]:
+        result_xy = sl.compute_mapped(pl, C, index_names=index_names)
+        assert result_xy['a', 'aa'] == C(0)
+        assert result_xy['a', 'bb'] == C(1)
+        assert result_xy['b', 'aa'] == C(10)
+        assert result_xy['b', 'bb'] == C(11)
+        assert result_xy['c', 'aa'] == C(20)
+        assert result_xy['c', 'bb'] == C(21)
