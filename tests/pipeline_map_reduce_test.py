@@ -62,7 +62,7 @@ def test_compute_series_single_index() -> None:
         {A: [A(10 * i) for i in range(3)]}, index=['a', 'b', 'c']
     ).rename_axis('x')
     mapped = pl.map(paramsA)
-    result = sl.compute_series(mapped, C)
+    result = sl.compute_mapped(mapped, C)
     assert result['a'] == C(7)
     assert result['b'] == C(17)
     assert result['c'] == C(27)
@@ -78,7 +78,7 @@ def test_compute_series_single_index_with_no_name() -> None:
     pl[B] = B(7)
     paramsA = pd.DataFrame({A: [A(10 * i) for i in range(3)]}, index=['a', 'b', 'c'])
     mapped = pl.map(paramsA)
-    result = sl.compute_series(mapped, C)
+    result = sl.compute_mapped(mapped, C)
     assert result['a'] == C(7)
     assert result['b'] == C(17)
     assert result['c'] == C(27)
@@ -93,7 +93,7 @@ def test_compute_series_from_mapped_with_implicit_index() -> None:
     pl = sl.Pipeline((ab_to_c,))
     pl[B] = B(7)
     mapped = pl.map({A: [A(10 * i) for i in range(3)]})
-    result = sl.compute_series(mapped, C)
+    result = sl.compute_mapped(mapped, C)
     assert result[0] == C(7)
     assert result[1] == C(17)
     assert result[2] == C(27)
@@ -113,7 +113,7 @@ def test_compute_series_multiple_indices_creates_multiindex() -> None:
         {B: [B(i) for i in range(2)]}, index=['aa', 'bb']
     ).rename_axis('y')
     mapped = pl.map(paramsA).map(paramsB)
-    result = sl.compute_series(mapped, C)
+    result = sl.compute_mapped(mapped, C)
     assert result['a', 'aa'] == C(0)
     assert result['a', 'bb'] == C(1)
     assert result['b', 'aa'] == C(10)
@@ -136,7 +136,7 @@ def test_compute_series_ignores_unrelated_index() -> None:
         {B: [B(i) for i in range(2)]}, index=['aa', 'bb']
     ).rename_axis('y')
     mapped = pl.map(paramsA).map(paramsB)
-    result = sl.compute_series(mapped, A)
+    result = sl.compute_mapped(mapped, A)
     assert result.index.name == 'x'
     assert result['a'] == A(0)
     assert result['b'] == A(10)
@@ -152,7 +152,7 @@ def test_compute_series_raises_if_node_is_not_mapped() -> None:
     pl[B] = B(7)
     mapped = pl.map({A: [A(10 * i) for i in range(3)]})
     with pytest.raises(ValueError, match='does not depend on any mapped nodes'):
-        sl.compute_series(mapped, B)
+        sl.compute_mapped(mapped, B)
 
 
 def test_can_compute_subset_of_get_mapped_node_names() -> None:

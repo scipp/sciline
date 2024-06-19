@@ -238,7 +238,7 @@ def get_mapped_node_names(graph: Pipeline, key: type) -> pandas.Series:
     return pd.Series(keys, index=index, name=key)
 
 
-def compute_series(graph: Pipeline, key: type) -> pandas.Series:
+def compute_mapped(graph: Pipeline, key: type) -> pandas.Series:
     """
     Given a graph with key depending on mapped nodes, compute a series for the key.
 

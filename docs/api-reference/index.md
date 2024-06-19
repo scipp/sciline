@@ -28,7 +28,7 @@
    :toctree: ../generated/functions
    :recursive:
 
-   compute_series
+   compute_mapped
    get_mapped_node_names
 ```
 
