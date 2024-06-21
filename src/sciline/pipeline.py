@@ -238,12 +238,12 @@ def get_mapped_node_names(
         for node in graph._cbgraph.graph.nodes
         if isinstance(node, MappedNode) and node.name == base_name
     ]
+    if len(candidates) == 0:
+        raise ValueError(f"'{base_name}' is not a mapped node.")
     if index_names is not None:
         candidates = [
             node for node in candidates if set(node.indices) == set(index_names)
         ]
-    if len(candidates) == 0:
-        raise ValueError(f"'{base_name}' is not a mapped node.")
     if len(candidates) > 1:
         raise ValueError(
             f"Multiple mapped nodes with name '{base_name}' found: {candidates}"
