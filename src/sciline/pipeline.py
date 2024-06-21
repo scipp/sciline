@@ -209,6 +209,11 @@ def get_mapped_node_names(
     mapped keys.
 
     This is meant to be used in combination with :py:func:`Pipeline.map`.
+    Return all mapped keys for a base key.
+
+    Given a graph with mapped nodes and a key to a node, this function returns
+    the keys of mapped nodes that correspond to the key.
+    This is meant to be used in combination with :py:func:`Pipeline.map`.
     If the key depends on multiple indices, the series will be a multi-index series.
 
     Note that Pandas is not a dependency of Sciline and must be installed separately.
