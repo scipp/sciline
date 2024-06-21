@@ -48,7 +48,7 @@ exceptiongroup==1.2.1
     # via ipython
 executing==2.0.1
     # via stack-data
-fastjsonschema==2.19.1
+fastjsonschema==2.20.0
     # via nbformat
 graphviz==0.20.3
     # via -r docs.in
@@ -120,7 +120,7 @@ nbsphinx==0.9.4
     # via -r docs.in
 nest-asyncio==1.6.0
     # via ipykernel
-numpy==1.26.4
+numpy==2.0.0
     # via pandas
 packaging==24.1
     # via
@@ -241,7 +241,7 @@ typing-extensions==4.12.2
     #   pydata-sphinx-theme
 tzdata==2024.1
     # via pandas
-urllib3==2.2.1
+urllib3==2.2.2
     # via requests
 wcwidth==0.2.13
     # via prompt-toolkit

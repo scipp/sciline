@@ -4,4 +4,5 @@
 graphviz
 jsonschema
 numpy
+pandas
 pytest
