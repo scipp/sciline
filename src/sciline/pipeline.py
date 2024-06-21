@@ -202,7 +202,7 @@ class Pipeline(DataGraph):
 
 
 def get_mapped_node_names(
-    graph: Pipeline, key: type, index_names: Sequence[Hashable] | None = None
+    graph: DataGraph, key: type, index_names: Sequence[Hashable] | None = None
 ) -> pandas.Series:
     """
     Given a graph with key depending on mapped nodes, return a series corresponding
@@ -221,7 +221,7 @@ def get_mapped_node_names(
     Parameters
     ----------
     graph:
-        The pipeline to get the mapped key names from.
+        The data graph to get the mapped key names from.
     key:
         The key to get the mapped key names for. This key must depend on mapped nodes.
     index_names:
@@ -265,10 +265,10 @@ def get_mapped_node_names(
 
 
 def compute_mapped(
-    graph: Pipeline, key: type, index_names: Sequence[Hashable] | None = None
+    pipeline: Pipeline, key: type, index_names: Sequence[Hashable] | None = None
 ) -> pandas.Series:
     """
-    Given a graph with key depending on mapped nodes, compute a series for the key.
+    Given a pipeline with key depending on mapped nodes, compute a series for the key.
 
     This is meant to be used in combination with :py:func:`Pipeline.map`.
     If the key depends on multiple indices, the series will be a multi-index series.
@@ -277,7 +277,7 @@ def compute_mapped(
 
     Parameters
     ----------
-    graph:
+    pipeline:
         The pipeline to compute the series from.
     key:
         The key to compute the series for. This key must depend on mapped nodes.
@@ -291,6 +291,6 @@ def compute_mapped(
     :
         The computed series.
     """
-    key_series = get_mapped_node_names(graph=graph, key=key, index_names=index_names)
-    results = graph.compute(key_series)
+    key_series = get_mapped_node_names(graph=pipeline, key=key, index_names=index_names)
+    results = pipeline.compute(key_series)
     return key_series.apply(lambda x: results[x])
