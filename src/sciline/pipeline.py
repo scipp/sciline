@@ -202,28 +202,24 @@ class Pipeline(DataGraph):
 
 
 def get_mapped_node_names(
-    graph: DataGraph, key: type, index_names: Sequence[Hashable] | None = None
+    graph: DataGraph, base_name: type, *, index_names: Sequence[Hashable] | None = None
 ) -> pandas.Series:
     """
-    Given a graph with key depending on mapped nodes, return a series corresponding
-    mapped keys.
+    Given a graph with a mapped node with given base_name, return a series of
+    corresponding mapped names.
 
-    This is meant to be used in combination with :py:func:`Pipeline.map`.
-    Return all mapped keys for a base key.
-
-    Given a graph with mapped nodes and a key to a node, this function returns
-    the keys of mapped nodes that correspond to the key.
-    This is meant to be used in combination with :py:func:`Pipeline.map`.
-    If the key depends on multiple indices, the series will be a multi-index series.
+    This is meant to be used in combination with :py:func:`DataGraph.map`.
+    If the mapped node depends on multiple indices, the index of the returned series
+    will have a multi-index.
 
     Note that Pandas is not a dependency of Sciline and must be installed separately.
 
     Parameters
     ----------
     graph:
-        The data graph to get the mapped key names from.
-    key:
-        The key to get the mapped key names for. This key must depend on mapped nodes.
+        The data graph to get the mapped node names from.
+    base_name:
+        The base name of the mapped node to get the names for.
     index_names:
         Specifies the names of the indices of the mapped node. If not given this is
         inferred from the graph, but the argument may be required to disambiguate
@@ -232,7 +228,7 @@ def get_mapped_node_names(
     Returns
     -------
     :
-        The series of mapped key names.
+        The series of node names corresponding to the mapped node.
     """
     import pandas as pd
     from cyclebane.graph import IndexValues, MappedNode, NodeName
@@ -240,16 +236,18 @@ def get_mapped_node_names(
     candidates = [
         node
         for node in graph._cbgraph.graph.nodes
-        if isinstance(node, MappedNode) and node.name == key
+        if isinstance(node, MappedNode) and node.name == base_name
     ]
     if index_names is not None:
         candidates = [
             node for node in candidates if set(node.indices) == set(index_names)
         ]
     if len(candidates) == 0:
-        raise ValueError(f"'{key}' is not a mapped node.")
+        raise ValueError(f"'{base_name}' is not a mapped node.")
     if len(candidates) > 1:
-        raise ValueError(f"Multiple mapped nodes with name '{key}' found: {candidates}")
+        raise ValueError(
+            f"Multiple mapped nodes with name '{base_name}' found: {candidates}"
+        )
     # Drops unrelated indices
     graph = graph[candidates[0]]  # type: ignore[index]
     indices = graph._cbgraph.indices
@@ -258,29 +256,34 @@ def get_mapped_node_names(
     index_names = tuple(indices)
 
     index = pd.MultiIndex.from_product(indices.values(), names=index_names)
-    keys = tuple(NodeName(key, IndexValues(index_names, idx)) for idx in index)
+    keys = tuple(NodeName(base_name, IndexValues(index_names, idx)) for idx in index)
     if index.nlevels == 1:  # Avoid more complicated MultiIndex if unnecessary
         index = index.get_level_values(0)
-    return pd.Series(keys, index=index, name=key)
+    return pd.Series(keys, index=index, name=base_name)
 
 
 def compute_mapped(
-    pipeline: Pipeline, key: type, index_names: Sequence[Hashable] | None = None
+    pipeline: Pipeline,
+    base_name: type,
+    *,
+    index_names: Sequence[Hashable] | None = None,
 ) -> pandas.Series:
     """
-    Given a pipeline with key depending on mapped nodes, compute a series for the key.
+    Given a graph with a mapped node with given base_name, return a series of computed
+    results.
 
     This is meant to be used in combination with :py:func:`Pipeline.map`.
-    If the key depends on multiple indices, the series will be a multi-index series.
+    If the mapped node depends on multiple indices, the index of the returned series
+    will have a multi-index.
 
     Note that Pandas is not a dependency of Sciline and must be installed separately.
 
     Parameters
     ----------
-    pipeline:
-        The pipeline to compute the series from.
-    key:
-        The key to compute the series for. This key must depend on mapped nodes.
+    graph:
+        The data graph to get the mapped node names from.
+    base_name:
+        The base name of the mapped node to get the names for.
     index_names:
         Specifies the names of the indices of the mapped node. If not given this is
         inferred from the graph, but the argument may be required to disambiguate
@@ -289,8 +292,10 @@ def compute_mapped(
     Returns
     -------
     :
-        The computed series.
+        The series of computed results corresponding to the mapped node.
     """
-    key_series = get_mapped_node_names(graph=pipeline, key=key, index_names=index_names)
+    key_series = get_mapped_node_names(
+        graph=pipeline, base_name=base_name, index_names=index_names
+    )
     results = pipeline.compute(key_series)
     return key_series.apply(lambda x: results[x])
