@@ -9,6 +9,7 @@ from typing import Any, TypeVar, get_args
 
 import cyclebane as cb
 import networkx as nx
+from cyclebane.node_values import IndexName, IndexValue
 
 from ._provider import ArgSpec, Provider, ToProvider, _bind_free_typevars
 from .handler import ErrorHandler, HandleAsBuildTimeException
@@ -66,12 +67,12 @@ class DataGraph:
         return self.copy()
 
     @property
-    def index_names(self) -> tuple[cb.graph.IndexName, ...]:
+    def index_names(self) -> tuple[IndexName, ...]:
         """Names of the indices (dimensions) of the graph."""
         return self._cbgraph.index_names
 
     @property
-    def indices(self) -> dict[cb.graph.IndexName, Iterable[cb.graph.IndexValue]]:
+    def indices(self) -> dict[IndexName, Iterable[IndexValue]]:
         """Names and values of the indices of the graph."""
         return self._cbgraph.indices
 
