@@ -197,7 +197,7 @@ class Pipeline(DataGraph):
         return results
 
     def _repr_html_(self) -> str:
-        nodes = ((key, data) for key, data in self._graph.nodes.items())
+        nodes = ((key, data) for key, data in self.networkx_graph.nodes.items())
         return pipeline_html_repr(nodes)
 
 
@@ -235,7 +235,7 @@ def get_mapped_node_names(
 
     candidates = [
         node
-        for node in graph._cbgraph.graph.nodes
+        for node in graph.networkx_graph.nodes
         if isinstance(node, MappedNode) and node.name == base_name
     ]
     if len(candidates) == 0:
@@ -250,7 +250,7 @@ def get_mapped_node_names(
         )
     # Drops unrelated indices
     graph = graph[candidates[0]]  # type: ignore[index]
-    indices = graph._cbgraph.indices
+    indices = graph.indices
     if index_names is not None:
         indices = {name: indices[name] for name in indices if name in index_names}
     index_names = tuple(indices)
