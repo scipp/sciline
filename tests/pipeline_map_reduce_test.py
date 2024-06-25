@@ -120,7 +120,7 @@ def test_compute_mapped_multiple_indices_creates_multiindex() -> None:
     assert result['b', 'bb'] == C(11)
     assert result['c', 'aa'] == C(20)
     assert result['c', 'bb'] == C(21)
-    assert result.index.names == list(mapped._cbgraph.index_names)
+    assert result.index.names == list(mapped.index_names)
     assert result.name == C
 
 
