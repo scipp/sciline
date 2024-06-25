@@ -77,29 +77,24 @@ class DataGraph:
         return self._cbgraph.indices
 
     @property
-    def cyclebane_graph(self) -> cb.Graph:
-        """The underlying Cyclebane graph."""
-        return self._cbgraph
-
-    @property
-    def networkx_graph(self) -> nx.DiGraph:
-        """The underlying NetworkX graph held by :py:func:`cyclebane_graph`."""
+    def underlying_graph(self) -> nx.DiGraph:
+        """The underlying NetworkX graph."""
         return self._cbgraph.graph
 
     def _get_clean_node(self, key: Key) -> Any:
         """Return node ready for setting value or provider."""
         if key is NoneType:
             raise ValueError('Key must not be None')
-        if key in self.networkx_graph:
-            self.networkx_graph.remove_edges_from(
-                list(self.networkx_graph.in_edges(key))
+        if key in self.underlying_graph:
+            self.underlying_graph.remove_edges_from(
+                list(self.underlying_graph.in_edges(key))
             )
-            self.networkx_graph.nodes[key].pop('value', None)
-            self.networkx_graph.nodes[key].pop('provider', None)
-            self.networkx_graph.nodes[key].pop('reduce', None)
+            self.underlying_graph.nodes[key].pop('value', None)
+            self.underlying_graph.nodes[key].pop('provider', None)
+            self.underlying_graph.nodes[key].pop('reduce', None)
         else:
-            self.networkx_graph.add_node(key)
-        return self.networkx_graph.nodes[key]
+            self.underlying_graph.add_node(key)
+        return self.underlying_graph.nodes[key]
 
     def insert(self, provider: ToProvider | Provider, /) -> None:
         """
@@ -123,7 +118,7 @@ class DataGraph:
         provider = provider.bind_type_vars({})
         self._get_clean_node(return_type)['provider'] = provider
         for dep in provider.arg_spec.keys():
-            self.networkx_graph.add_edge(dep, return_type, key=dep)
+            self.underlying_graph.add_edge(dep, return_type, key=dep)
 
     def __setitem__(self, key: Key, value: DataGraph | Any) -> None:
         """
@@ -171,13 +166,13 @@ class DataGraph:
         import graphviz
 
         dot = graphviz.Digraph(strict=True, **kwargs)
-        for node in self.networkx_graph.nodes:
+        for node in self.underlying_graph.nodes:
             dot.node(str(node), label=str(node), shape='box')
-            attrs = self.networkx_graph.nodes[node]
+            attrs = self.underlying_graph.nodes[node]
             attrs = '\n'.join(f'{k}={v}' for k, v in attrs.items())
             dot.node(str(node), label=f'{node}\n{attrs}', shape='box')
-        for edge in self.networkx_graph.edges:
-            key = self.networkx_graph.edges[edge].get('key')
+        for edge in self.underlying_graph.edges:
+            key = self.underlying_graph.edges[edge].get('key')
             label = str(key) if key is not None else ''
             dot.edge(str(edge[0]), str(edge[1]), label=label)
         return dot

@@ -197,7 +197,7 @@ class Pipeline(DataGraph):
         return results
 
     def _repr_html_(self) -> str:
-        nodes = ((key, data) for key, data in self.networkx_graph.nodes.items())
+        nodes = ((key, data) for key, data in self.underlying_graph.nodes.items())
         return pipeline_html_repr(nodes)
 
 
@@ -235,7 +235,7 @@ def get_mapped_node_names(
 
     candidates = [
         node
-        for node in graph.networkx_graph.nodes
+        for node in graph.underlying_graph.nodes
         if isinstance(node, MappedNode) and node.name == base_name
     ]
     if len(candidates) == 0:
