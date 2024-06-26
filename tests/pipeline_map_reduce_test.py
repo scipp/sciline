@@ -206,6 +206,8 @@ def test_compute_mapped_with_partial_reduction_identifies_correct_index() -> Non
     def ab_to_c(a: A, b: B) -> C:
         return C(a + b)
 
+    D = NewType('D', int)
+
     pl = sl.Pipeline((ab_to_c,))
     paramsA = pd.DataFrame(
         {A: [A(10 * i) for i in range(3)]}, index=['a', 'b', 'c']
@@ -213,8 +215,8 @@ def test_compute_mapped_with_partial_reduction_identifies_correct_index() -> Non
     paramsB = pd.DataFrame(
         {B: [B(i) for i in range(2)]}, index=['aa', 'bb']
     ).rename_axis('y')
-    pl = pl.map(paramsA).map(paramsB).reduce(func=max, name='reduced', index='x')
-    result = sl.compute_mapped(pl, 'reduced')
+    pl = pl.map(paramsA).map(paramsB).reduce(func=max, name=D, index='x')
+    result = sl.compute_mapped(pl, D)
     assert result['aa'] == C(20)
     assert result['bb'] == C(21)
 
