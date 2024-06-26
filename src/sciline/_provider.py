@@ -103,7 +103,7 @@ class Provider:
     @property
     def func(self) -> ToProvider:
         """Return the function that implements the provider."""
-        return self._func
+        return timed(self._func)
 
     @property
     def arg_spec(self) -> ArgSpec:
@@ -147,10 +147,27 @@ class Provider:
 
     def call(self, values: dict[Hashable, Any]) -> Any:
         """Call the provider with arguments extracted from ``values``."""
-        return self._func(
+        return self.func(
             *(values[arg] for arg in self._arg_spec.args),
             **{key: values[arg] for key, arg in self._arg_spec.kwargs},
         )
+
+
+def timed(func):
+    """Decorator that prints the run time of a function"""
+    import time
+    from functools import wraps
+
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        start = time.time()
+        result = func(*args, **kwargs)
+        end = time.time() - start
+        if end > 0.1:
+            print(f"{end:.2f} seconds {func.__name__}")
+        return result
+
+    return wrapper
 
 
 class ArgSpec:

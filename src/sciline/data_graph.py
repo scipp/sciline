@@ -209,7 +209,7 @@ def to_task_graph(
             if len(spec) != len(input_nodes):
                 # This should be caught by __setitem__, but we check here to be safe.
                 raise ValueError("Corrupted graph")
-            out[key] = Provider(func=provider.func, arg_spec=spec, kind='function')
+            out[key] = Provider(func=provider._func, arg_spec=spec, kind='function')
         elif (func := node.get('reduce')) is not None:
             spec = ArgSpec.from_args(*input_nodes)
             out[key] = Provider(func=func, arg_spec=spec, kind='function')
