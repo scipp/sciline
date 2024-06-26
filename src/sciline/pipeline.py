@@ -248,12 +248,9 @@ def get_mapped_node_names(
         raise ValueError(
             f"Multiple mapped nodes with name '{base_name}' found: {candidates}"
         )
-    # Drops unrelated indices
-    graph = graph[candidates[0]]  # type: ignore[index]
-    indices = graph.indices
-    if index_names is not None:
-        indices = {name: indices[name] for name in indices if name in index_names}
-    index_names = tuple(indices)
+
+    index_names = tuple(reversed(candidates[0].indices))
+    indices = {name: idx for name, idx in graph.indices.items() if name in index_names}
 
     index = pd.MultiIndex.from_product(indices.values(), names=index_names)
     keys = tuple(NodeName(base_name, IndexValues(index_names, idx)) for idx in index)

@@ -202,7 +202,26 @@ def test_compute_mapped_raises_if_multiple_mapped_nodes_with_given_name() -> Non
         sl.compute_mapped(pl, C)
 
 
-def test_compute_mapped_indices_selects_between_multiple_candidates() -> None:
+def test_compute_mapped_with_partial_reduction_identifies_correct_index() -> None:
+    def ab_to_c(a: A, b: B) -> C:
+        return C(a + b)
+
+    D = NewType('D', int)
+
+    pl = sl.Pipeline((ab_to_c,))
+    paramsA = pd.DataFrame(
+        {A: [A(10 * i) for i in range(3)]}, index=['a', 'b', 'c']
+    ).rename_axis('x')
+    paramsB = pd.DataFrame(
+        {B: [B(i) for i in range(2)]}, index=['aa', 'bb']
+    ).rename_axis('y')
+    pl = pl.map(paramsA).map(paramsB).reduce(func=max, name=D, index='x')
+    result = sl.compute_mapped(pl, D)
+    assert result['aa'] == C(20)
+    assert result['bb'] == C(21)
+
+
+def test_compute_mapped_index_names_selects_between_multiple_candidates() -> None:
     def ab_to_c(a: A, b: B) -> C:
         return C(a + b)
 
