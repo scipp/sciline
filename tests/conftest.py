@@ -1,5 +1,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright (c) 2023 Scipp contributors (https://github.com/scipp)
+from typing import Any
+
 import pytest
 
 from sciline.scheduler import DaskScheduler, NaiveScheduler, Scheduler
@@ -17,15 +19,40 @@ def dask_scheduler() -> DaskScheduler | None:
 
         return DaskScheduler()
     except ModuleNotFoundError:
-        return None
-
-
-@pytest.fixture(params=['naive', 'dask'])
-def scheduler(request: pytest.FixtureRequest) -> Scheduler:
-    if request.param == 'naive':
-        return request.getfixturevalue('naive_scheduler')  # type: ignore[no-any-return]
-
-    sched = request.getfixturevalue('dask_scheduler')
-    if sched is None:
         pytest.skip("Test requires Dask")
-    return sched  # type: ignore[no-any-return]
+
+
+@pytest.fixture(scope='session')
+def dask_distributed_client() -> Any:
+    """Manage a singleton Dask client for all tests.
+
+    Tests must always use this client if they need to use dask.distributed.
+    They must never create their own client.
+    Otherwise, the clients will be in conflict.
+    """
+    try:
+        from dask.distributed import Client
+
+        return Client(set_as_default=False)
+    except ModuleNotFoundError:
+        pytest.skip("Test requires Dask")
+
+
+@pytest.fixture()
+def dask_distributed_scheduler(dask_distributed_client: Any) -> DaskScheduler | None:
+    if dask_distributed_client is None:
+        return None
+    return DaskScheduler(dask_distributed_client.get)
+
+
+@pytest.fixture(params=['naive', 'dask', 'dask_distributed'])
+def scheduler(request: pytest.FixtureRequest) -> Scheduler:
+    match request.param:
+        case 'naive':
+            return request.getfixturevalue('naive_scheduler')  # type: ignore[no-any-return]
+        case 'dask':
+            return request.getfixturevalue('dask_scheduler')  # type: ignore[no-any-return]
+        case 'dask_distributed':
+            return request.getfixturevalue('dask_distributed_scheduler')  # type: ignore[no-any-return]
+        case _:
+            raise ValueError(f"Unknown scheduler: {request.param}")
