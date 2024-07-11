@@ -24,6 +24,11 @@ def test_key_name_new_type() -> None:
     assert _utils.key_name(MyType) == 'MyType'
 
 
+def test_key_name_union() -> None:
+    MyType = int | float
+    assert _utils.key_name(MyType) == 'int | float'  # type: ignore [arg-type]
+
+
 @pytest.mark.skipif(sys.version_info < (3, 12), reason="requires python3.12 or higher")
 def test_key_name_type_alias_type() -> None:
     # Use exec to avoid a syntax error in older python
@@ -90,6 +95,13 @@ def test_key_full_qualname_new_type() -> None:
     # missing test_key_full_qualname_new_type.<locals>
     MyType = NewType('MyType', str)
     assert _utils.key_full_qualname(MyType) == 'tests.utils_test.MyType'
+
+
+def test_key_full_qualname_union() -> None:
+    # The __qualname__ of NewTypes is the same as __name__, the result is therefore
+    # missing test_key_full_qualname_new_type.<locals>
+    MyType = int | float
+    assert _utils.key_full_qualname(MyType) == 'builtins.int | builtins.float'  # type: ignore [arg-type]
 
 
 @pytest.mark.skipif(sys.version_info < (3, 12), reason="requires python3.12 or higher")
