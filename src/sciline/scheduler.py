@@ -6,6 +6,8 @@ from typing import Any, Protocol, runtime_checkable
 
 from sciline.typing import Graph
 
+from ._utils import key_full_qualname
+
 
 class CycleError(Exception):
     pass
@@ -88,16 +90,19 @@ class DaskScheduler:
         # Otherwise, Dask would treat them as literal values instead of
         # references to other nodes.
         dsk = {
-            tp: (
+            _to_dask_key(tp): (
                 apply,
                 provider.func,
-                list(provider.arg_spec.args),
-                (dict, [[key, val] for key, val in provider.arg_spec.kwargs]),
+                list(map(_to_dask_key, provider.arg_spec.args)),
+                (
+                    dict,
+                    [[key, _to_dask_key(val)] for key, val in provider.arg_spec.kwargs],
+                ),
             )
             for tp, provider in graph.items()
         }
         try:
-            return self._dask_get(dsk, keys)
+            return self._dask_get(dsk, list(map(_to_dask_key, keys)))
         except RuntimeError as e:
             if str(e).startswith("Cycle detected"):
                 raise CycleError from e
@@ -107,3 +112,13 @@ class DaskScheduler:
         module = getattr(inspect.getmodule(self._dask_get), '__name__', '')
         name = self._dask_get.__name__
         return f'{self.__class__.__name__}({module}.{name})'
+
+
+def _to_dask_key(key: Hashable) -> str:
+    """Map a Sciline key to a dask key.
+
+    According to the docs (https://docs.dask.org/en/stable/spec.html#definitions),
+    keys in a Dask graph are not allowed to be types.
+    So this function converts Sciline keys (types) to strings.
+    """
+    return key_full_qualname(key)

@@ -26,7 +26,7 @@ def test_key_name_new_type() -> None:
 
 def test_key_name_union() -> None:
     MyType = int | float
-    assert _utils.key_name(MyType) == 'int | float'  # type: ignore [arg-type]
+    assert _utils.key_name(MyType) == 'int | float'
 
 
 @pytest.mark.skipif(sys.version_info < (3, 12), reason="requires python3.12 or higher")
@@ -51,7 +51,7 @@ assert _utils.key_name(MyType[int]) == 'MyType[int]'
 
 def test_key_name_type_var() -> None:
     MyType = TypeVar('MyType')
-    assert _utils.key_name(MyType) == '~MyType'  # type: ignore[arg-type]
+    assert _utils.key_name(MyType) == '~MyType'
 
 
 def test_key_name_builtin_generic() -> None:
@@ -101,7 +101,7 @@ def test_key_full_qualname_union() -> None:
     # The __qualname__ of NewTypes is the same as __name__, the result is therefore
     # missing test_key_full_qualname_new_type.<locals>
     MyType = int | float
-    assert _utils.key_full_qualname(MyType) == 'builtins.int | builtins.float'  # type: ignore [arg-type]
+    assert _utils.key_full_qualname(MyType) == 'builtins.int | builtins.float'
 
 
 @pytest.mark.skipif(sys.version_info < (3, 12), reason="requires python3.12 or higher")
@@ -128,7 +128,7 @@ def test_key_full_qualname_type_var() -> None:
     # TypeVar has no __qualname__, the result is therefore missing
     # test_key_full_qualname_type_var.<locals>
     MyType = TypeVar('MyType')
-    res = _utils.key_full_qualname(MyType)  # type: ignore[arg-type]
+    res = _utils.key_full_qualname(MyType)
     assert res == 'tests.utils_test.~MyType'
 
 

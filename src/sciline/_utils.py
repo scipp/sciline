@@ -7,7 +7,6 @@ from types import UnionType
 from typing import Any, TypeVar, get_args
 
 from ._provider import Provider
-from .typing import Key
 
 T = TypeVar('T')
 G = TypeVar('G')
@@ -32,7 +31,7 @@ def full_qualname(obj: Any) -> str:
     return f'{module.__name__}.{obj_name}'
 
 
-def key_name(key: Key | TypeVar | UnionType) -> str:
+def key_name(key: Any) -> str:
     args = get_args(key)
     if isinstance(key, UnionType):
         return ' | '.join(map(key_name, args))
@@ -43,11 +42,11 @@ def key_name(key: Key | TypeVar | UnionType) -> str:
     if isinstance(key, TypeVar):
         return str(key)
     if hasattr(key, '__name__'):
-        return key.__name__
+        return str(key.__name__)
     return str(key)
 
 
-def key_full_qualname(key: Key | TypeVar | UnionType) -> str:
+def key_full_qualname(key: Any) -> str:
     args = get_args(key)
     if isinstance(key, UnionType):
         return ' | '.join(map(key_full_qualname, args))

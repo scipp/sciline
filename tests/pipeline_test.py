@@ -1149,6 +1149,10 @@ def test_pipeline_mixed_arguments(scheduler: sl.scheduler.Scheduler) -> None:
 
 
 def test_pipeline_generic_keyword_only(scheduler: sl.scheduler.Scheduler) -> None:
+    if 'distributed' in repr(scheduler):
+        # This test does not work with the distributed scheduler because
+        # `func` cannot be pickled because `G` is local to this function.
+        return
     T = TypeVar('T')
     A = NewType('A', int)
     B = NewType('B', int)

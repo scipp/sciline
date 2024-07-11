@@ -155,7 +155,7 @@ class TaskGraph:
     def _repr_html_(self) -> str:
         leafs = sorted(
             [
-                escape(key_name(key))  # type: ignore[arg-type]
+                escape(key_name(key))
                 for key in (
                     self._keys if isinstance(self._keys, tuple) else [self._keys]
                 )
