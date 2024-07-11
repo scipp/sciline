@@ -34,8 +34,8 @@ def dask_distributed_client() -> Any:
         from dask.distributed import Client
 
         return Client(set_as_default=False)
-    except ModuleNotFoundError:
-        pytest.skip("Test requires Dask")
+    except ImportError:
+        pytest.skip("Test requires dask.distributed")
 
 
 @pytest.fixture()
