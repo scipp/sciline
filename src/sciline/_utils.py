@@ -37,8 +37,7 @@ def key_name(key: Any) -> str:
         return ' | '.join(map(key_name, args))
     if len(args):
         parameters = ', '.join(map(key_name, args))
-        # getattr is a fallback for python < 3.10
-        return f'{getattr(key, "__name__", "<Generic>")}[{parameters}]'
+        return f'{key.__name__}[{parameters}]'
     if isinstance(key, TypeVar):
         return str(key)
     if hasattr(key, '__name__'):
