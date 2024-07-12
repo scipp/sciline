@@ -46,7 +46,7 @@ Options
   the fully qualified name.
 """
 
-from typing import Any
+from typing import Any, NewType
 
 from sphinx.application import Sphinx
 from sphinx.config import Config
@@ -92,9 +92,7 @@ def _typehints_formatter(annotation: Any, config: Config) -> str | None:
 
 
 def _is_new_type(annotation: Any) -> bool:
-    # TODO Switch to isinstance(key, NewType) once our minimum is Python 3.10
-    # Note that we cannot pass mypy in Python<3.10 since NewType is not a type.
-    return hasattr(annotation, '__supertype__')
+    return isinstance(annotation, NewType)
 
 
 def _format_new_type(annotation: Any, prefix: str, aliases: dict[str, str]) -> str:

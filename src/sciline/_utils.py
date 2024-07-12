@@ -3,10 +3,10 @@
 import inspect
 from collections import defaultdict
 from collections.abc import Callable, Iterable
+from types import UnionType
 from typing import Any, TypeVar, get_args
 
 from ._provider import Provider
-from .typing import Key
 
 T = TypeVar('T')
 G = TypeVar('G')
@@ -31,23 +31,26 @@ def full_qualname(obj: Any) -> str:
     return f'{module.__name__}.{obj_name}'
 
 
-def key_name(key: Key | TypeVar) -> str:
+def key_name(key: Any) -> str:
     args = get_args(key)
+    if isinstance(key, UnionType):
+        return ' | '.join(map(key_name, args))
     if len(args):
         parameters = ', '.join(map(key_name, args))
-        # getattr is a fallback for python < 3.10
-        return f'{getattr(key, "__name__", "<Generic>")}[{parameters}]'
+        return f'{key.__name__}[{parameters}]'
     if isinstance(key, TypeVar):
         return str(key)
     if hasattr(key, '__name__'):
-        return key.__name__
+        return str(key.__name__)
     return str(key)
 
 
-def key_full_qualname(key: Key | TypeVar) -> str:
+def key_full_qualname(key: Any) -> str:
     args = get_args(key)
-    if len(args):
-        origin = key.__origin__  # type: ignore[union-attr] # key is a TypeVar
+    if isinstance(key, UnionType):
+        return ' | '.join(map(key_full_qualname, args))
+    if len(args) and (origin := getattr(key, '__origin__', None)) is not None:
+        # key is a type var
         parameters = ', '.join(map(key_full_qualname, args))
         return f'{full_qualname(origin)}[{parameters}]'
     return full_qualname(key)
