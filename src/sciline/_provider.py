@@ -25,9 +25,7 @@ if TYPE_CHECKING:
 ToProvider = Callable[..., Any]
 """Callable that can be converted to a provider."""
 
-ProviderKind = Literal[
-    'function', 'parameter', 'series', 'table_cell', 'sentinel', 'unsatisfied'
-]
+ProviderKind = Literal['function', 'parameter', 'unsatisfied']
 """Identifies the kind of a provider, most are used internally."""
 
 
@@ -75,18 +73,6 @@ class Provider:
             kind='parameter',
             location=ProviderLocation(
                 name=f'param({type(param).__name__})', module=_module_name(param)
-            ),
-        )
-
-    @classmethod
-    def table_cell(cls, param: Any) -> Provider:
-        """Construct a provider that returns the label for a table row."""
-        return cls(
-            func=lambda: param,
-            arg_spec=ArgSpec.null(),
-            kind='table_cell',
-            location=ProviderLocation(
-                name=f'table_cell({type(param).__name__})', module=_module_name(param)
             ),
         )
 
