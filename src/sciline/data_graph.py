@@ -128,7 +128,7 @@ class DataGraph:
         ----------
         key:
             Type to provide a value for.
-        param:
+        value:
             Concrete value to provide.
         """
         # This is a questionable approach: Using MyGeneric[T] as a key will actually
