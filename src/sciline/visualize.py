@@ -74,15 +74,9 @@ def to_graphviz(
 
 
 def _to_subgraphs(graph: FormattedGraph) -> dict[str, FormattedGraph]:
-    def get_subgraph_name(name: str, kind: str) -> str:
-        if kind == 'series':
-            # Example: Series[RowId, Material[Country]] -> RowId, Material[Country]
-            return name.partition('[')[-1].rpartition(']')[0]
-        return name.split('[')[0]
-
     subgraphs: dict[str, FormattedGraph] = {}
     for p, formatted_p in graph.items():
-        subgraph_name = get_subgraph_name(formatted_p.ret.name, formatted_p.kind)
+        subgraph_name = formatted_p.ret.name.split('[')[0]
         subgraphs.setdefault(subgraph_name, {})
         subgraphs[subgraph_name][p] = formatted_p
     return subgraphs
@@ -105,12 +99,7 @@ def _add_subgraph(graph: FormattedGraph, dot: Digraph, subgraph: Digraph) -> Non
                 formatted_p.ret.name,
                 shape='box3d' if formatted_p.ret.collapsed else 'rectangle',
             )
-        # Do not draw the internal provider gathering index-dependent results into
-        # a dict
-        if formatted_p.kind == 'series':
-            for arg in formatted_p.args:
-                dot.edge(arg.name, formatted_p.ret.name, style='dashed')
-        elif formatted_p.kind == 'function':
+        if formatted_p.kind == 'function':
             dot.node(p, formatted_p.name, shape='ellipse')
             for arg in formatted_p.args:
                 dot.edge(arg.name, p)

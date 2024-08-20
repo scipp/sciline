@@ -25,9 +25,7 @@ if TYPE_CHECKING:
 ToProvider = Callable[..., Any]
 """Callable that can be converted to a provider."""
 
-ProviderKind = Literal[
-    'function', 'parameter', 'series', 'table_cell', 'sentinel', 'unsatisfied'
-]
+ProviderKind = Literal['function', 'parameter', 'unsatisfied']
 """Identifies the kind of a provider, most are used internally."""
 
 
@@ -79,18 +77,6 @@ class Provider:
         )
 
     @classmethod
-    def table_cell(cls, param: Any) -> Provider:
-        """Construct a provider that returns the label for a table row."""
-        return cls(
-            func=lambda: param,
-            arg_spec=ArgSpec.null(),
-            kind='table_cell',
-            location=ProviderLocation(
-                name=f'table_cell({type(param).__name__})', module=_module_name(param)
-            ),
-        )
-
-    @classmethod
     def provide_none(cls) -> Provider:
         """Provider that takes no arguments and returns None."""
         return cls(
@@ -135,6 +121,14 @@ class Provider:
             arg_spec=self._arg_spec.bind_type_vars(bound),
             kind=self._kind,
         )
+
+    def __eq__(self, other: object) -> bool:
+        if isinstance(other, Provider):
+            return self._func == other._func
+        return NotImplemented
+
+    def __ne__(self, other: object) -> bool:
+        return not (self == other)
 
     def __str__(self) -> str:
         return f"Provider('{self.location.name}')"
