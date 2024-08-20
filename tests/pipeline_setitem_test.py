@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright (c) 2023 Scipp contributors (https://github.com/scipp)
-from typing import NewType
+from typing import NewType, TypeVar
 
 import pytest
 
@@ -11,6 +11,9 @@ B = NewType('B', int)
 C = NewType('C', int)
 D = NewType('D', int)
 X = NewType('X', int)
+Y = NewType('Y', int)
+
+P = TypeVar('P', X, Y)
 
 
 def a_to_b(a: A) -> B:
@@ -35,6 +38,38 @@ def test_setitem_can_compose_pipelines() -> None:
     bc = sl.Pipeline((b_to_c,))
     bc[B] = ab
     assert bc.compute(C) == C(3)
+
+
+def test_setitem_with_common_function_provider() -> None:
+    def a() -> A:
+        return A(2)
+
+    abc = sl.Pipeline((a, ab_to_c))
+    abc[B] = sl.Pipeline((a, a_to_b))
+    assert abc.compute(C) == C(5)
+
+
+def test_setitem_with_common_parameter_provider() -> None:
+    abc = sl.Pipeline((ab_to_c,), params={A: A(3)})
+    abc[B] = sl.Pipeline((a_to_b,), params={A: A(3)})
+    assert abc.compute(C) == C(7)
+
+
+def test_setitem_with_generic_providers() -> None:
+    class GA(sl.Scope[P, int], int): ...
+
+    class GB(sl.Scope[P, int], int): ...
+
+    def ga_to_gb(ga: GA[P]) -> GB[P]:
+        return GB[P](ga + 1)
+
+    def gb_to_c(gbx: GB[X], gby: GB[Y]) -> C:
+        return C(gbx + gby)
+
+    abc = sl.Pipeline((gb_to_c,), params={GA[X]: 3, GA[Y]: 4})
+    abc[GB[X]] = sl.Pipeline((ga_to_gb,), params={GA[X]: 3})[GB[X]]
+    abc[GB[Y]] = sl.Pipeline((ga_to_gb,), params={GA[Y]: 4})[GB[Y]]
+    assert abc.compute(C) == C(9)
 
 
 def test_setitem_raises_if_value_pipeline_has_no_unique_output() -> None:
@@ -79,6 +114,17 @@ def test_setitem_with_conflicting_nodes_in_value_pipeline_raises_on_data_mismatc
 ):
     ab = sl.Pipeline((a_to_b,))
     ab[A] = 100
+    abc = sl.Pipeline((ab_to_c,))
+    abc[A] = 666
+    with pytest.raises(ValueError, match="Node data differs"):
+        abc[B] = ab
+
+
+def test_setitem_with_conflicting_node_types_pipeline_raises_on_data_mismatch() -> None:
+    def a() -> A:
+        return A(100)
+
+    ab = sl.Pipeline((a, a_to_b))
     abc = sl.Pipeline((ab_to_c,))
     abc[A] = 666
     with pytest.raises(ValueError, match="Node data differs"):

@@ -122,6 +122,14 @@ class Provider:
             kind=self._kind,
         )
 
+    def __eq__(self, other: object) -> bool:
+        if isinstance(other, Provider):
+            return self._func == other._func
+        return NotImplemented
+
+    def __ne__(self, other: object) -> bool:
+        return not (self == other)
+
     def __str__(self) -> str:
         return f"Provider('{self.location.name}')"
 
