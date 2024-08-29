@@ -7,12 +7,12 @@ import pytest
 from sciline.scheduler import DaskScheduler, NaiveScheduler, Scheduler
 
 
-@pytest.fixture()
+@pytest.fixture
 def naive_scheduler() -> NaiveScheduler:
     return NaiveScheduler()
 
 
-@pytest.fixture()
+@pytest.fixture
 def dask_scheduler() -> DaskScheduler | None:
     try:
         import dask  # noqa: F401
@@ -38,7 +38,7 @@ def dask_distributed_client() -> Any:
         pytest.skip("Test requires dask.distributed")
 
 
-@pytest.fixture()
+@pytest.fixture
 def dask_distributed_scheduler(dask_distributed_client: Any) -> DaskScheduler | None:
     if dask_distributed_client is None:
         return None

@@ -9,6 +9,7 @@ source:
 
 {% set pyproject = load_file_data('pyproject.toml') %}
 {% set dependencies = pyproject.get('project', {}).get('dependencies', {}) %}
+{% set test_dependencies = pyproject.get('project', {}).get('optional-dependencies', {}).get('test', {}) %}
 
 
 requirements:
@@ -18,8 +19,9 @@ requirements:
   run:
     - python>=3.10
 
+  {# Conda does not allow spaces between package name and version, so remove them #}
   {% for package in dependencies %}
-    - {% if package == "graphviz" %}python-graphviz{% else %}{{ package }}{% endif %}
+    - {% if package == "graphviz" %}python-graphviz{% else %}{{ package|replace(" ", "") }}{% endif %}
   {% endfor %}
 
 
@@ -27,11 +29,11 @@ test:
   imports:
     - sciline
   requires:
-    - dask
-    - python-graphviz
-    - jsonschema
-    - numpy
-    - pytest
+  {# Conda does not allow spaces between package name and version, so remove them #}
+  {% for package in test_dependencies %}
+    - {% if package == "graphviz" %}python-graphviz{% else %}{{ package|replace(" ", "") }}{% endif %}
+  {% endfor %}
+
   source_files:
     - pyproject.toml
     - tests/
