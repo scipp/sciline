@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright (c) 2023 Scipp contributors (https://github.com/scipp)
-from typing import NewType, Optional, Union
+from typing import NewType, Optional, Union, no_type_check
 
 import pytest
 
@@ -100,8 +100,9 @@ def test_optional_dependency_can_be_set_to_None() -> None:
     assert pipeline.compute(str) == '123'
 
 
+@no_type_check  # disable type check to preserve exact MRE from bug report
 def test_optional_with_default_issue_182():
-    OptionalInt = NewType("OptionalInt", int | None)
+    OptionalInt = NewType("OptionalInt", int | None)  # type: ignore[valid-newtype]
 
     def foo(a: OptionalInt = None) -> str:
         return str(a) if a is not None else "Here is your default message."
