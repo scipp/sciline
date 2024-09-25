@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright (c) 2023 Scipp contributors (https://github.com/scipp)
-from typing import Optional, Union
+from typing import NewType, Optional, Union
 
 import pytest
 
@@ -98,3 +98,13 @@ def test_optional_dependency_can_be_set_to_None() -> None:
     pipeline = sl.Pipeline([use_optional])
     pipeline[Optional[int]] = None  # type: ignore[index] # noqa: UP007
     assert pipeline.compute(str) == '123'
+
+
+def test_optional_with_default_issue_182():
+    OptionalInt = NewType("OptionalInt", int | None)
+
+    def foo(a: OptionalInt = None) -> str:
+        return str(a) if a is not None else "Here is your default message."
+
+    wf = sl.Pipeline([foo], params={OptionalInt: OptionalInt(None)})
+    wf.compute(str)

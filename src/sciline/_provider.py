@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import inspect
+import sys
 from collections.abc import Callable, Generator, Hashable
 from dataclasses import dataclass
 from types import UnionType
@@ -303,6 +304,10 @@ def _get_func_args_and_types(
     func = _unwrap_decorated(func)
     hints = get_type_hints(func)
     signature = inspect.getfullargspec(func)
+    if sys.version_info[1] < 11:
+        for name, param in inspect.signature(func).parameters.items():
+            if param.default is None:
+                hints[name] = get_args(hints[name])[0]
     return signature.args, signature.kwonlyargs, hints
 
 
