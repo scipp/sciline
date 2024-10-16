@@ -5,7 +5,15 @@ from __future__ import annotations
 from collections.abc import Callable, Hashable, Iterable, Sequence
 from itertools import chain
 from types import UnionType
-from typing import TYPE_CHECKING, Any, TypeVar, get_args, get_type_hints, overload
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Literal,
+    TypeVar,
+    get_args,
+    get_type_hints,
+    overload,
+)
 
 from ._provider import Provider, ToProvider
 from .data_graph import DataGraph, to_task_graph
@@ -89,7 +97,15 @@ class Pipeline(DataGraph):
         """
         return self.get(tp, **kwargs).compute()
 
-    def visualize(self, tp: type | Iterable[type], **kwargs: Any) -> graphviz.Digraph:
+    def visualize(
+        self,
+        tp: type | Iterable[type],
+        compact: bool = False,
+        mode: Literal['data', 'task', 'both'] = 'both',
+        cluster_generics: bool = True,
+        cluster_color: str | None = '#f0f0ff',
+        **kwargs: Any,
+    ) -> graphviz.Digraph:
         """
         Return a graphviz Digraph object representing the graph for the given keys.
 
@@ -100,10 +116,26 @@ class Pipeline(DataGraph):
         tp:
             Type to visualize the graph for.
             Can be a single type or an iterable of types.
+        compact:
+            If True, parameter-table-dependent branches are collapsed into a single copy
+            of the branch. Recommended for large graphs with long parameter tables.
+        mode:
+            If 'data', only data nodes are shown. If 'task', only task nodes and input
+            data nodes are shown. If 'both', all nodes are shown.
+        cluster_generics:
+            If True, generic products are grouped into clusters.
+        cluster_color:
+            Background color of clusters. If None, clusters are dotted.
         kwargs:
             Keyword arguments passed to :py:class:`graphviz.Digraph`.
         """
-        return self.get(tp, handler=HandleAsComputeTimeException()).visualize(**kwargs)
+        return self.get(tp, handler=HandleAsComputeTimeException()).visualize(
+            compact=compact,
+            mode=mode,
+            cluster_generics=cluster_generics,
+            cluster_color=cluster_color,
+            **kwargs,
+        )
 
     def get(
         self,
