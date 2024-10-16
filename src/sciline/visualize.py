@@ -2,7 +2,7 @@
 # Copyright (c) 2023 Scipp contributors (https://github.com/scipp)
 from collections.abc import Hashable
 from dataclasses import dataclass
-from typing import Any, get_args, get_origin
+from typing import Any, Literal, get_args, get_origin
 
 import cyclebane
 from graphviz import Digraph
@@ -31,6 +31,7 @@ FormattedGraph = dict[str, FormattedProvider]
 def to_graphviz(
     graph: Graph,
     compact: bool = False,
+    mode: Literal['data', 'task', 'both'] = 'both',
     cluster_generics: bool = True,
     cluster_color: str | None = '#f0f0ff',
     **kwargs: Any,
@@ -69,7 +70,7 @@ def to_graphviz(
                     dot_subgraph.attr(style='dotted')
                 else:
                     dot_subgraph.attr(style='filled', color=cluster_color)
-            _add_subgraph(subgraph, dot, dot_subgraph)
+            _add_subgraph(subgraph, dot, dot_subgraph, mode=mode)
     return dot
 
 
@@ -82,7 +83,12 @@ def _to_subgraphs(graph: FormattedGraph) -> dict[str, FormattedGraph]:
     return subgraphs
 
 
-def _add_subgraph(graph: FormattedGraph, dot: Digraph, subgraph: Digraph) -> None:
+def _add_subgraph(
+    graph: FormattedGraph,
+    dot: Digraph,
+    subgraph: Digraph,
+    mode: Literal['data', 'task', 'both'] = 'both',
+) -> None:
     for p, formatted_p in graph.items():
         if formatted_p.kind == 'unsatisfied':
             subgraph.node(
@@ -93,17 +99,26 @@ def _add_subgraph(graph: FormattedGraph, dot: Digraph, subgraph: Digraph) -> Non
                 fontcolor='red',  # Set text color to red
                 style='dashed',
             )
-        else:
+        elif mode != 'task' or formatted_p.kind == 'parameter':
             subgraph.node(
                 formatted_p.ret.name,
                 formatted_p.ret.name,
                 shape='box3d' if formatted_p.ret.collapsed else 'rectangle',
             )
         if formatted_p.kind == 'function':
-            dot.node(p, formatted_p.name, shape='ellipse')
-            for arg in formatted_p.args:
-                dot.edge(arg.name, p)
-            dot.edge(p, formatted_p.ret.name)
+            if mode == 'both':
+                dot.node(p, formatted_p.name, shape='ellipse')
+                for arg in formatted_p.args:
+                    dot.edge(arg.name, p)
+                dot.edge(p, formatted_p.ret.name)
+            elif mode == 'task':
+                p = formatted_p.ret.name
+                dot.node(p, formatted_p.name, shape='ellipse')
+                for arg in formatted_p.args:
+                    dot.edge(arg.name, p)
+            elif mode == 'data':
+                for arg in formatted_p.args:
+                    dot.edge(arg.name, formatted_p.ret.name)
         # else: Do not draw dummy providers created by Pipeline when setting instances
 
 
