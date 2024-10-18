@@ -46,6 +46,9 @@ def to_graphviz(
     compact:
         If True, parameter-table-dependent branches are collapsed into a single copy
         of the branch. Recommended for large graphs with long parameter tables.
+    mode:
+        If 'data', only data nodes are shown. If 'task', only task nodes and input data
+        nodes are shown. If 'both', all nodes are shown.
     cluster_generics:
         If True, generic products are grouped into clusters.
     cluster_color:
@@ -54,6 +57,7 @@ def to_graphviz(
         Keyword arguments passed to :py:class:`graphviz.Digraph`.
     """
     dot = Digraph(strict=True, **kwargs)
+    dot.graph_attr['compound'] = 'true'
     formatted_graph = _format_graph(graph, compact=compact)
     ordered_graph = dict(
         sorted(formatted_graph.items(), key=lambda item: item[1].ret.name)
@@ -70,6 +74,8 @@ def to_graphviz(
                     dot_subgraph.attr(style='dotted')
                 else:
                     dot_subgraph.attr(style='filled', color=cluster_color)
+                origin = next(iter(subgraph.values())).ret.name.split('[')[0]
+                dot_subgraph.attr(label=f'<<b>{origin}</b>>')
             _add_subgraph(subgraph, dot, dot_subgraph, mode=mode)
     return dot
 
@@ -89,11 +95,26 @@ def _add_subgraph(
     subgraph: Digraph,
     mode: Literal['data', 'task', 'both'] = 'both',
 ) -> None:
+    cluster = subgraph.name is not None
+    cluster_connected = []
+    common_provider = len({v.name for v in graph.values()}) == 1
     for p, formatted_p in graph.items():
+        split = formatted_p.ret.name.split('[', maxsplit=1)
+        name = (
+            f'<font point-size="12">{split[1][:-1]}</font>'
+            if cluster
+            else formatted_p.ret.name
+        )
+        if mode == 'data' and formatted_p.kind == 'function':
+            # Show provider name in data mode
+            via = f'<font point-size="11">via:<i>{formatted_p.name}</i></font>'
+            name = f'<{name}<br/>{via}>'
+        else:
+            name = f'<{name}>'
         if formatted_p.kind == 'unsatisfied':
             subgraph.node(
                 formatted_p.ret.name,
-                formatted_p.ret.name,
+                name,
                 shape='box3d' if formatted_p.ret.collapsed else 'rectangle',
                 color='red',
                 fontcolor='red',  # Set text color to red
@@ -102,7 +123,7 @@ def _add_subgraph(
         elif mode != 'task' or formatted_p.kind == 'parameter':
             subgraph.node(
                 formatted_p.ret.name,
-                formatted_p.ret.name,
+                name,
                 shape='box3d' if formatted_p.ret.collapsed else 'rectangle',
             )
         if formatted_p.kind == 'function':
@@ -118,7 +139,17 @@ def _add_subgraph(
                     dot.edge(arg.name, p)
             elif mode == 'data':
                 for arg in formatted_p.args:
-                    dot.edge(arg.name, formatted_p.ret.name)
+                    if cluster and common_provider and '[' not in arg.name:
+                        # Avoid duplicate arrows to subnodes if all providers are the
+                        # same and the argument is not a generic
+                        if arg.name not in cluster_connected:
+                            dot.edge(
+                                arg.name, formatted_p.ret.name, lhead=subgraph.name
+                            )
+                            cluster_connected.append(arg.name)
+                    else:
+                        dot.edge(arg.name, formatted_p.ret.name)
+
         # else: Do not draw dummy providers created by Pipeline when setting instances
 
 
