@@ -57,6 +57,25 @@ def to_graphviz(
         Keyword arguments passed to :py:class:`graphviz.Digraph`.
     """
     dot = Digraph(strict=True, **kwargs)
+    if dot.graph_attr.get('rankdir', 'TB') == 'LR':
+        # Significant horizontal space helps distinguishing edges
+        dot.graph_attr['ranksep'] = '1'
+        # Little vertical space
+        dot.graph_attr['nodesep'] = '0.05'
+        # Avoiding edges connecting to top/bottom reduces edge clutter in larger graphs
+        dot.edge_attr['tailport'] = 'e'
+        dot.edge_attr['headport'] = 'w'
+    else:
+        dot.graph_attr['ranksep'] = '0.5'
+        dot.graph_attr['nodesep'] = '0.1'
+        dot.edge_attr['tailport'] = 's'
+        # Nodes are wide in west-east direction, so *not* connecting to headport='n'
+        # looks better
+    dot.node_attr.update({'height': '0', 'width': '0'})
+    # Ensure user can override defaults
+    dot.node_attr.update(kwargs.get('node_attr', {}))
+    dot.edge_attr.update(kwargs.get('edge_attr', {}))
+    dot.graph_attr.update(kwargs.get('graph_attr', {}))
     dot.graph_attr['compound'] = 'true'
     formatted_graph = _format_graph(graph, compact=compact)
     ordered_graph = dict(
@@ -74,8 +93,10 @@ def to_graphviz(
                     dot_subgraph.attr(style='dotted')
                 else:
                     dot_subgraph.attr(style='filled', color=cluster_color)
+                # For keys such as MyType[int] we show MyType only once as the cluster
+                # label. The nodes within the cluster will only show to bit inside [].
                 origin = next(iter(subgraph.values())).ret.name.split('[')[0]
-                dot_subgraph.attr(label=f'<<b>{origin}</b>>')
+                dot_subgraph.attr(label=f'{origin}')
             _add_subgraph(subgraph, dot, dot_subgraph, mode=mode)
     return dot
 
@@ -97,43 +118,45 @@ def _add_subgraph(
 ) -> None:
     cluster = subgraph.name is not None
     cluster_connected = []
-    common_provider = len({v.name for v in graph.values()}) == 1
+    common_provider = len(graph) > 1 and len({v.name for v in graph.values()}) == 1
     for p, formatted_p in graph.items():
-        split = formatted_p.ret.name.split('[', maxsplit=1)
-        name = (
-            f'<font point-size="12">{split[1][:-1]}</font>'
-            if cluster
-            else formatted_p.ret.name
-        )
+        ret_name = formatted_p.ret.name
+        if cluster:
+            # Remove the origin from the name if we are in a cluster, as it is shown
+            # as the cluster label
+            split = ret_name[ret_name.index('[') :]
+            # The nodes within the cluster use slightly smaller text.
+            name = f'<<font point-size="12">{split}</font>>'
+        else:
+            name = f'<{ret_name}>'
         if mode == 'data' and formatted_p.kind == 'function':
             # Show provider name in data mode
             via = f'<font point-size="11">via:<i>{formatted_p.name}</i></font>'
-            name = f'<{name}<br/>{via}>'
-        else:
-            name = f'<{name}>'
+            if common_provider:
+                origin = ret_name.split('[')[0]
+                subgraph.attr(label=f'<{origin}<br/>{via}>')
+            else:
+                name = f'{name[:-1]}<br/>{via}>'
+        shape = 'box3d' if formatted_p.ret.collapsed else 'rectangle'
         if formatted_p.kind == 'unsatisfied':
             subgraph.node(
-                formatted_p.ret.name,
+                ret_name,
                 name,
-                shape='box3d' if formatted_p.ret.collapsed else 'rectangle',
+                shape=shape,
                 color='red',
-                fontcolor='red',  # Set text color to red
+                fontcolor='red',
                 style='dashed',
             )
         elif mode != 'task' or formatted_p.kind == 'parameter':
-            subgraph.node(
-                formatted_p.ret.name,
-                name,
-                shape='box3d' if formatted_p.ret.collapsed else 'rectangle',
-            )
+            subgraph.node(ret_name, name, shape=shape)
         if formatted_p.kind == 'function':
             if mode == 'both':
                 dot.node(p, formatted_p.name, shape='ellipse')
                 for arg in formatted_p.args:
                     dot.edge(arg.name, p)
-                dot.edge(p, formatted_p.ret.name)
+                dot.edge(p, ret_name)
             elif mode == 'task':
-                p = formatted_p.ret.name
+                p = ret_name
                 dot.node(p, formatted_p.name, shape='ellipse')
                 for arg in formatted_p.args:
                     dot.edge(arg.name, p)
@@ -143,13 +166,10 @@ def _add_subgraph(
                         # Avoid duplicate arrows to subnodes if all providers are the
                         # same and the argument is not a generic
                         if arg.name not in cluster_connected:
-                            dot.edge(
-                                arg.name, formatted_p.ret.name, lhead=subgraph.name
-                            )
+                            dot.edge(arg.name, ret_name, lhead=subgraph.name)
                             cluster_connected.append(arg.name)
                     else:
-                        dot.edge(arg.name, formatted_p.ret.name)
-
+                        dot.edge(arg.name, ret_name)
         # else: Do not draw dummy providers created by Pipeline when setting instances
 
 
