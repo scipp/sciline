@@ -169,7 +169,13 @@ def _add_subgraph(
                         # Avoid duplicate arrows to subnodes if all providers are the
                         # same and the argument is not a generic
                         if arg.name not in cluster_connected:
-                            dot.edge(arg.name, ret_name, lhead=subgraph.name)
+                            dot.edge(
+                                arg.name,
+                                ret_name,
+                                lhead=subgraph.name,
+                                # Thick pen to indicate multiple connections
+                                penwidth='2.0',
+                            )
                             cluster_connected.append(arg.name)
                     else:
                         dot.edge(arg.name, ret_name)
