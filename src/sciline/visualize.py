@@ -31,7 +31,7 @@ FormattedGraph = dict[str, FormattedProvider]
 def to_graphviz(
     graph: Graph,
     compact: bool = False,
-    mode: Literal['data', 'task', 'both'] = 'both',
+    mode: Literal['data', 'task', 'both'] = 'data',
     cluster_generics: bool = True,
     cluster_color: str | None = '#f0f0ff',
     **kwargs: Any,
@@ -117,7 +117,7 @@ def _add_subgraph(
     graph: FormattedGraph,
     dot: Digraph,
     subgraph: Digraph,
-    mode: Literal['data', 'task', 'both'] = 'both',
+    mode: Literal['data', 'task', 'both'],
 ) -> None:
     cluster = subgraph.name is not None
     cluster_connected = []

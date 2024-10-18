@@ -101,7 +101,7 @@ class Pipeline(DataGraph):
         self,
         tp: type | Iterable[type],
         compact: bool = False,
-        mode: Literal['data', 'task', 'both'] = 'both',
+        mode: Literal['data', 'task', 'both'] = 'data',
         cluster_generics: bool = True,
         cluster_color: str | None = '#f0f0ff',
         **kwargs: Any,
