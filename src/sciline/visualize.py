@@ -76,6 +76,7 @@ def to_graphviz(
     dot.node_attr.update(kwargs.get('node_attr', {}))
     dot.edge_attr.update(kwargs.get('edge_attr', {}))
     dot.graph_attr.update(kwargs.get('graph_attr', {}))
+    # Compound is required for connecting edges to clusters
     dot.graph_attr['compound'] = 'true'
     formatted_graph = _format_graph(graph, compact=compact)
     ordered_graph = dict(
@@ -95,6 +96,8 @@ def to_graphviz(
                     dot_subgraph.attr(style='filled', color=cluster_color)
                 # For keys such as MyType[int] we show MyType only once as the cluster
                 # label. The nodes within the cluster will only show to bit inside [].
+                # This save a lot of horizontal space in the graph in LR mode and
+                # duplication and clutter in general.
                 origin = next(iter(subgraph.values())).ret.name.split('[')[0]
                 dot_subgraph.attr(label=f'{origin}')
             _add_subgraph(subgraph, dot, dot_subgraph, mode=mode)
