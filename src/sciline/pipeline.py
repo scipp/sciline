@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable, Hashable, Iterable, Sequence
 from itertools import chain
 from types import UnionType
-from typing import TYPE_CHECKING, Any, TypeVar, get_args, get_type_hints, overload
+from typing import TYPE_CHECKING, Any, TypeVar, cast, get_args, get_type_hints, overload
 
 from ._provider import Provider, ToProvider
 from ._utils import key_name
@@ -205,10 +205,12 @@ class Pipeline(DataGraph):
         nodes = ((key, data) for key, data in self.underlying_graph.nodes.items())
         return pipeline_html_repr(nodes)
 
-    def leafs(self):
+    def leafs(self) -> tuple[type, ...]:
         """Returns the keys that are not inputs to any other providers."""
         sink_nodes = [
-            node for node, degree in self.underlying_graph.out_degree if degree == 0
+            cast(type, node)
+            for node, degree in self.underlying_graph.out_degree
+            if degree == 0
         ]
         return tuple(sorted(sink_nodes, key=key_name))
 

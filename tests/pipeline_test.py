@@ -1416,7 +1416,7 @@ def test_inserting_provider_with_duplicate_arguments_raises() -> None:
         pipeline.insert(bad)
 
 
-def test_leafs_method():
+def test_leafs_method() -> None:
     def make_float() -> float:
         return 1.0
 
