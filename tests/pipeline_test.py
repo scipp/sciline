@@ -1414,3 +1414,13 @@ def test_inserting_provider_with_duplicate_arguments_raises() -> None:
     pipeline = sl.Pipeline()
     with pytest.raises(ValueError, match="Duplicate type hints"):
         pipeline.insert(bad)
+
+
+def test_leafs_method():
+    def make_float() -> float:
+        return 1.0
+
+    def make_str(x: int) -> str:
+        return "a string"
+
+    assert sl.Pipeline([make_float, make_str]).leafs() == (float, str)
