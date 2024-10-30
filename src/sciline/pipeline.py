@@ -11,7 +11,7 @@ from ._provider import Provider, ToProvider
 from ._utils import key_name
 from .data_graph import DataGraph, to_task_graph
 from .display import pipeline_html_repr
-from .handler import ErrorHandler, HandleAsComputeTimeException
+from .handler import ErrorHandler, HandleAsComputeTimeException, UnsatisfiedRequirement
 from .scheduler import Scheduler
 from .task_graph import TaskGraph
 from .typing import Key
@@ -107,7 +107,7 @@ class Pipeline(DataGraph):
             Keyword arguments passed to :py:class:`graphviz.Digraph`.
         """
         if tp is None:
-            tp = self.leafs()
+            tp = self.final_result_keys()
         return self.get(tp, handler=HandleAsComputeTimeException()).visualize(**kwargs)
 
     def get(
@@ -140,7 +140,11 @@ class Pipeline(DataGraph):
             targets = tuple(keys)  # type: ignore[arg-type]
         else:
             targets = (keys,)  # type: ignore[assignment]
-        graph = to_task_graph(self, targets=targets, handler=handler)
+        try:
+            graph = to_task_graph(self, targets=targets, handler=handler)
+        except UnsatisfiedRequirement as e:
+            final_result_keys = ", ".join(map(repr, self.final_result_keys()))
+            raise type(e)(f'Did you meant one of: {final_result_keys}?') from e
         return TaskGraph(
             graph=graph,
             targets=targets if multi else keys,  # type: ignore[arg-type]
@@ -205,7 +209,7 @@ class Pipeline(DataGraph):
         nodes = ((key, data) for key, data in self.underlying_graph.nodes.items())
         return pipeline_html_repr(nodes)
 
-    def leafs(self) -> tuple[type, ...]:
+    def final_result_keys(self) -> tuple[type, ...]:
         """Returns the keys that are not inputs to any other providers."""
         sink_nodes = [
             cast(type, node)
