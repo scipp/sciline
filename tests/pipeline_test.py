@@ -1428,7 +1428,7 @@ def test_final_result_keys_method() -> None:
 
 
 @pytest.mark.parametrize('get_method', ['get', 'compute'])
-def test_final_result_keys_in_not_found_error_message(get_method) -> None:
+def test_final_result_keys_in_not_found_error_message(get_method: str) -> None:
     def make_float() -> float:
         return 1.0
 
