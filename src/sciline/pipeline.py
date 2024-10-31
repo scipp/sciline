@@ -144,7 +144,7 @@ class Pipeline(DataGraph):
             graph = to_task_graph(self, targets=targets, handler=handler)
         except UnsatisfiedRequirement as e:
             output_keys = ", ".join(map(repr, self.output_keys()))
-            raise type(e)(f'Did you meant one of: {output_keys}?') from e
+            raise type(e)(f'{e} Did you mean one of: {output_keys}?') from e
         return TaskGraph(
             graph=graph,
             targets=targets if multi else keys,  # type: ignore[arg-type]
