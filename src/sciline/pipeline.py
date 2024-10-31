@@ -107,7 +107,7 @@ class Pipeline(DataGraph):
             Keyword arguments passed to :py:class:`graphviz.Digraph`.
         """
         if tp is None:
-            tp = self.final_result_keys()
+            tp = self.output_keys()
         return self.get(tp, handler=HandleAsComputeTimeException()).visualize(**kwargs)
 
     def get(
@@ -143,8 +143,8 @@ class Pipeline(DataGraph):
         try:
             graph = to_task_graph(self, targets=targets, handler=handler)
         except UnsatisfiedRequirement as e:
-            final_result_keys = ", ".join(map(repr, self.final_result_keys()))
-            raise type(e)(f'Did you meant one of: {final_result_keys}?') from e
+            output_keys = ", ".join(map(repr, self.output_keys()))
+            raise type(e)(f'Did you meant one of: {output_keys}?') from e
         return TaskGraph(
             graph=graph,
             targets=targets if multi else keys,  # type: ignore[arg-type]
@@ -209,7 +209,7 @@ class Pipeline(DataGraph):
         nodes = ((key, data) for key, data in self.underlying_graph.nodes.items())
         return pipeline_html_repr(nodes)
 
-    def final_result_keys(self) -> tuple[Key, ...]:
+    def output_keys(self) -> tuple[Key, ...]:
         """Returns the keys that are not inputs to any other providers."""
         sink_nodes = [
             node for node, degree in self.underlying_graph.out_degree if degree == 0

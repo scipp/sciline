@@ -1417,18 +1417,18 @@ def test_inserting_provider_with_duplicate_arguments_raises() -> None:
         pipeline.insert(bad)
 
 
-def test_final_result_keys_method() -> None:
+def test_output_keys_method() -> None:
     def make_float() -> float:
         return 1.0
 
     def make_str(x: int) -> str:
         return "a string"
 
-    assert sl.Pipeline([make_float, make_str]).final_result_keys() == (float, str)
+    assert sl.Pipeline([make_float, make_str]).output_keys() == (float, str)
 
 
 @pytest.mark.parametrize('get_method', ['get', 'compute'])
-def test_final_result_keys_in_not_found_error_message(get_method: str) -> None:
+def test_output_keys_in_not_found_error_message(get_method: str) -> None:
     def make_float() -> float:
         return 1.0
 
@@ -1438,5 +1438,5 @@ def test_final_result_keys_in_not_found_error_message(get_method: str) -> None:
     pl = sl.Pipeline([make_float, make_str])
     with pytest.raises(sl.handler.UnsatisfiedRequirement) as info:
         getattr(pl, get_method)(int)
-    for key in pl.final_result_keys():
+    for key in pl.output_keys():
         assert key_name(key) in info.value.args[0]
