@@ -8,9 +8,10 @@ from types import UnionType
 from typing import TYPE_CHECKING, Any, TypeVar, get_args, get_type_hints, overload
 
 from ._provider import Provider, ToProvider
+from ._utils import key_name
 from .data_graph import DataGraph, to_task_graph
 from .display import pipeline_html_repr
-from .handler import ErrorHandler, HandleAsComputeTimeException
+from .handler import ErrorHandler, HandleAsComputeTimeException, UnsatisfiedRequirement
 from .scheduler import Scheduler
 from .task_graph import TaskGraph
 from .typing import Key
@@ -89,7 +90,9 @@ class Pipeline(DataGraph):
         """
         return self.get(tp, **kwargs).compute()
 
-    def visualize(self, tp: type | Iterable[type], **kwargs: Any) -> graphviz.Digraph:
+    def visualize(
+        self, tp: type | Iterable[type] | None = None, **kwargs: Any
+    ) -> graphviz.Digraph:
         """
         Return a graphviz Digraph object representing the graph for the given keys.
 
@@ -103,6 +106,8 @@ class Pipeline(DataGraph):
         kwargs:
             Keyword arguments passed to :py:class:`graphviz.Digraph`.
         """
+        if tp is None:
+            tp = self.output_keys()
         return self.get(tp, handler=HandleAsComputeTimeException()).visualize(**kwargs)
 
     def get(
@@ -135,7 +140,11 @@ class Pipeline(DataGraph):
             targets = tuple(keys)  # type: ignore[arg-type]
         else:
             targets = (keys,)  # type: ignore[assignment]
-        graph = to_task_graph(self, targets=targets, handler=handler)
+        try:
+            graph = to_task_graph(self, targets=targets, handler=handler)
+        except UnsatisfiedRequirement as e:
+            output_keys = ", ".join(map(repr, self.output_keys()))
+            raise type(e)(f'{e} Did you mean one of: {output_keys}?') from e
         return TaskGraph(
             graph=graph,
             targets=targets if multi else keys,  # type: ignore[arg-type]
@@ -199,6 +208,13 @@ class Pipeline(DataGraph):
     def _repr_html_(self) -> str:
         nodes = ((key, data) for key, data in self.underlying_graph.nodes.items())
         return pipeline_html_repr(nodes)
+
+    def output_keys(self) -> tuple[Key, ...]:
+        """Returns the keys that are not inputs to any other providers."""
+        sink_nodes = [
+            node for node, degree in self.underlying_graph.out_degree if degree == 0
+        ]
+        return tuple(sorted(sink_nodes, key=key_name))
 
 
 def get_mapped_node_names(

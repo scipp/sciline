@@ -40,3 +40,11 @@ def test_generic_types_formatted_without_prefixes() -> None:
     assert sl.visualize._format_type(A[float]).name == 'A[float]'
     assert sl.visualize._format_type(SubA[float]).name == 'SubA[float]'
     assert sl.visualize._format_type(B[float]).name == 'B[float]'
+
+
+def test_can_visualize_graph_without_explicit_target() -> None:
+    def int_to_float(x: int) -> float:
+        return float(x)
+
+    pipeline = sl.Pipeline([int_to_float])
+    pipeline.visualize()
