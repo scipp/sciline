@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Generator, Hashable, Sequence
 from html import escape
-from typing import Any, TypeVar
+from typing import Any, Literal, TypeVar
 
 from ._utils import key_name
 from .scheduler import DaskScheduler, NaiveScheduler, Scheduler
@@ -126,18 +126,42 @@ class TaskGraph:
         """
         yield from self._graph.keys()
 
-    def visualize(self, **kwargs: Any) -> graphviz.Digraph:  # type: ignore[name-defined] # noqa: F821
+    def visualize(
+        self,
+        compact: bool = False,
+        mode: Literal['data', 'task', 'both'] = 'data',
+        cluster_generics: bool = True,
+        cluster_color: str | None = '#f0f0ff',
+        **kwargs: Any,
+    ) -> graphviz.Digraph:  # type: ignore[name-defined] # noqa: F821
         """
         Return a graphviz Digraph object representing the graph.
 
         Parameters
         ----------
+        compact:
+            If True, parameter-table-dependent branches are collapsed into a single copy
+            of the branch. Recommended for large graphs with long parameter tables.
+        mode:
+            If 'data', only data nodes are shown. If 'task', only task nodes and input
+            data nodes are shown. If 'both', all nodes are shown.
+        cluster_generics:
+            If True, generic products are grouped into clusters.
+        cluster_color:
+            Background color of clusters. If None, clusters are dotted.
         kwargs:
             Keyword arguments passed to :py:class:`graphviz.Digraph`.
         """
         from .visualize import to_graphviz
 
-        return to_graphviz(self._graph, **kwargs)
+        return to_graphviz(
+            self._graph,
+            compact=compact,
+            mode=mode,
+            cluster_generics=cluster_generics,
+            cluster_color=cluster_color,
+            **kwargs,
+        )
 
     def serialize(self) -> dict[str, Json]:
         """Serialize the graph to JSON.
