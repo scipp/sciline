@@ -69,7 +69,8 @@ def to_graphviz(
     else:
         dot.graph_attr['ranksep'] = '0.5'
         dot.graph_attr['nodesep'] = '0.1'
-        dot.edge_attr['tailport'] = 's'
+        # With tailport='s' we get more curved edges, so we omit it. In larger graphs
+        # this still seems to happen though, may need revisiting.
         # Nodes are wide in west-east direction, so *not* connecting to headport='n'
         # looks better
     dot.node_attr.update({'height': '0', 'width': '0'})
