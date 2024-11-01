@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright (c) 2023 Scipp contributors (https://github.com/scipp)
+import html
 from collections.abc import Hashable
 from dataclasses import dataclass
 from typing import Any, Literal, get_args, get_origin
@@ -134,7 +135,8 @@ def _add_subgraph(
             name = f'<{ret_name}>'
         if mode == 'data' and formatted_p.kind == 'function':
             # Show provider name in data mode
-            via = f'<font point-size="11">via:<i>{formatted_p.name}</i></font>'
+            via_name = html.escape(formatted_p.name)
+            via = f'<font point-size="11">via:<i>{via_name}</i></font>'
             if common_provider:
                 origin = ret_name.split('[')[0]
                 subgraph.attr(label=f'<{origin}<br/>{via}>')
