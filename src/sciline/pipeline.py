@@ -139,7 +139,6 @@ class Pipeline(DataGraph):
             cluster_color=cluster_color,
             **kwargs,
         )
-        return self.get(tp, handler=HandleAsComputeTimeException()).visualize(**kwargs)
 
     def get(
         self,
