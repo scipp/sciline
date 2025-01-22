@@ -177,6 +177,29 @@ class DataGraph:
             dot.edge(str(edge[0]), str(edge[1]), label=label)
         return dot
 
+    def override_input(self, original: Key, replacement: Key) -> DataGraph:
+        dg = self.copy()
+        dg._override_input_in_place(original, replacement)
+        return dg
+
+    def _override_input_in_place(self, original: Key, replacement: Key) -> None:
+        formal_args = getattr(replacement, '__args__', ())
+        assert getattr(original, '__args__', ()) == formal_args
+        for formal in formal_args:
+            # If `formal` is a type var, plug in all possible concrete types:
+            for actual in getattr(formal, '__constraints__', ()):
+                self._override_input_in_place(original[actual], replacement[actual])
+
+        _move_out_edges(self, original, replacement)
+
+
+def _move_out_edges(graph: DataGraph, original: Key, replacement: Key) -> None:
+    """Change all out edges from ``original`` to start from ``replacement``."""
+    g = graph.underlying_graph
+    to_replace = [edge for edge in g.edges(data=True) if edge[0] == original]
+    g.remove_edges_from(to_replace)
+    g.add_edges_from((replacement, *edge[1:]) for edge in to_replace)
+
 
 _no_value = object()
 
