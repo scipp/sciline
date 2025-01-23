@@ -1688,6 +1688,15 @@ def test_override_input_does_nothing_if_input_does_not_exist() -> None:
     assert new.compute(str) == "7"
 
 
+def test_override_input_preserves_uses_of_override_type() -> None:
+    def foo(x: float) -> str:
+        return str(x)
+
+    original = sl.Pipeline([foo], params={int: 7, float: 4.4})
+    new = original.override_input(int, float)  # keeps float arg of foo
+    assert new.compute(str) == "4.4"
+
+
 # TODO generic -> regular is ambiguous
 # TODO regular -> generic works, duplicates regular
 # TODO multiple type vars
