@@ -6,56 +6,28 @@
 #    pip-compile-multi
 #
 -r test.txt
-click==8.1.7
+dask[distributed]==2025.2.0
     # via
-    #   dask
-    #   distributed
-cloudpickle==3.0.0
-    # via
-    #   dask
-    #   distributed
-dask[distributed]==2024.7.0
-    # via
+    #   -r /home/johannes/work/sciline/requirements/basetest.in
     #   -r test-dask.in
     #   distributed
-distributed==2024.7.0
+distributed==2025.2.0
     # via dask
-fsspec==2024.6.1
-    # via dask
-importlib-metadata==8.0.0
-    # via dask
-jinja2==3.1.4
+jinja2==3.1.5
     # via distributed
-locket==1.0.0
-    # via
-    #   distributed
-    #   partd
-markupsafe==2.1.5
+markupsafe==3.0.2
     # via jinja2
-msgpack==1.0.8
+msgpack==1.1.0
     # via distributed
-partd==1.4.2
-    # via dask
-psutil==6.0.0
+psutil==7.0.0
     # via distributed
-pyyaml==6.0.1
-    # via
-    #   dask
-    #   distributed
 sortedcontainers==2.4.0
     # via distributed
 tblib==3.0.0
     # via distributed
-toolz==0.12.1
-    # via
-    #   dask
-    #   distributed
-    #   partd
-tornado==6.4.1
+tornado==6.4.2
     # via distributed
-urllib3==2.2.2
+urllib3==2.3.0
     # via distributed
 zict==3.0.0
     # via distributed
-zipp==3.19.2
-    # via importlib-metadata
