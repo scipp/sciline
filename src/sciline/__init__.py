@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: BSD-3-Clause
-# Copyright (c) 2024 Scipp contributors (https://github.com/scipp)
-# ruff: noqa: E402, F401
+# Copyright (c) 2025 Scipp contributors (https://github.com/scipp)
+# ruff: noqa: E402, F401, I
 
 import importlib.metadata
 
@@ -21,17 +21,17 @@ from .pipeline import Pipeline, compute_mapped, get_mapped_node_names
 from .task_graph import TaskGraph
 
 __all__ = [
+    "HandleAsBuildTimeException",
+    "HandleAsComputeTimeException",
     "Pipeline",
-    "scheduler",
     "Scope",
     "ScopeTwoParams",
     'TaskGraph',
     "UnboundTypeVar",
     "UnsatisfiedRequirement",
-    "HandleAsBuildTimeException",
-    "HandleAsComputeTimeException",
     "compute_mapped",
     "get_mapped_node_names",
+    "scheduler",
 ]
 
 del importlib
