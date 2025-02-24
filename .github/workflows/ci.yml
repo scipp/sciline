@@ -38,14 +38,16 @@ jobs:
     strategy:
       matrix:
         os: ['ubuntu-24.04']
+        # Need to be careful while running copier here as it assumes that
+        # there is one tox-env per python version.
+        tox-env: ['${{needs.formatting.outputs.min_tox_env}}', dask, mypy]
         python:
           - version: '${{needs.formatting.outputs.min_python}}'
-            tox-env: '${{needs.formatting.outputs.min_tox_env}}'
     uses: ./.github/workflows/test.yml
     with:
       os-variant: ${{ matrix.os }}
       python-version: ${{ matrix.python.version }}
-      tox-env: ${{ matrix.python.tox-env }}
+      tox-env: ${{ matrix.tox-env }}
     secrets: inherit
 
   docs:
