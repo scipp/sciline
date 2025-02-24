@@ -6,4 +6,5 @@ dask
 graphviz
 jsonschema
 numpy
+pandas
 cyclebane @ git+https://github.com/scipp/cyclebane@main

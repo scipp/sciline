@@ -10,6 +10,8 @@ accessible-pygments==0.0.5
     # via pydata-sphinx-theme
 alabaster==1.0.0
     # via sphinx
+appnope==0.1.4
+    # via ipykernel
 asttokens==3.0.0
     # via stack-data
 attrs==25.1.0
@@ -34,7 +36,7 @@ comm==0.2.2
     # via ipykernel
 debugpy==1.8.12
     # via ipykernel
-decorator==5.1.1
+decorator==5.2.1
     # via ipython
 defusedxml==0.7.1
     # via nbconvert
@@ -103,7 +105,7 @@ mdit-py-plugins==0.4.2
     # via myst-parser
 mdurl==0.1.2
     # via markdown-it-py
-mistune==3.1.1
+mistune==3.1.2
     # via nbconvert
 myst-parser==4.0.1
     # via -r docs.in
@@ -172,7 +174,7 @@ referencing==0.36.2
     #   jsonschema-specifications
 requests==2.32.3
     # via sphinx
-rpds-py==0.22.3
+rpds-py==0.23.1
     # via
     #   jsonschema
     #   referencing

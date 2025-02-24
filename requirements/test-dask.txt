@@ -8,7 +8,7 @@
 -r test.txt
 dask[distributed]==2025.2.0
     # via
-    #   -r /home/johannes/work/sciline/requirements/basetest.in
+    #   -r basetest.in
     #   -r test-dask.in
     #   distributed
 distributed==2025.2.0

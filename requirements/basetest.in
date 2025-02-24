@@ -12,3 +12,4 @@ dask
 graphviz
 jsonschema
 numpy
+pandas

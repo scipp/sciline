@@ -52,7 +52,7 @@ jsonpointer==3.0.0
     # via jsonschema
 jsonschema[format-nongpl]==4.23.0
     # via
-    #   -r /home/johannes/work/sciline/requirements/basetest.in
+    #   -r basetest.in
     #   jupyter-events
     #   jupyterlab-server
     #   nbformat
