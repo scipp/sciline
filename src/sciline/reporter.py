@@ -279,4 +279,8 @@ class _ProviderList:
             active_providers = rf"\[{', '.join(self._provider_names.values())}]"
         else:
             active_providers = ""
+        # Not overflowing the line seems more defensive when this code is used
+        # in a larger context.
+        options.overflow = 'ellipsis'
+        options.no_wrap = True
         return console.render(active_providers, options)
