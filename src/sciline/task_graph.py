@@ -7,6 +7,7 @@ from html import escape
 from typing import Any, Literal, TypeVar
 
 from ._utils import key_name
+from .reporter import Reporter
 from .scheduler import DaskScheduler, NaiveScheduler, Scheduler
 from .serialize import json_serialize_task_graph
 from .typing import Graph, Json, Key
@@ -87,7 +88,9 @@ class TaskGraph:
             )
         self._scheduler = scheduler
 
-    def compute(self, targets: Targets | None = None) -> Any:
+    def compute(
+        self, targets: Targets | None = None, reporter: Reporter | None = None
+    ) -> Any:
         """
         Compute the result of the graph.
 
@@ -97,6 +100,8 @@ class TaskGraph:
             Optional list of keys to compute. This can be used to override the keys
             stored in the graph instance. Note that the keys must be present in the
             graph as intermediate results, otherwise KeyError is raised.
+        reporter:
+            Optional reporter to track progress of this computation.
 
         Returns
         -------
@@ -107,10 +112,10 @@ class TaskGraph:
         if targets is None:
             targets = self._keys
         if isinstance(targets, tuple):
-            results = self._scheduler.get(self._graph, list(targets))
+            results = self._scheduler.get(self._graph, list(targets), reporter=reporter)
             return dict(zip(targets, results, strict=True))
         else:
-            return self._scheduler.get(self._graph, [targets])[0]
+            return self._scheduler.get(self._graph, [targets], reporter=reporter)[0]
 
     def keys(self) -> Generator[Key, None, None]:
         """

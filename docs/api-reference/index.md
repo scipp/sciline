@@ -52,6 +52,7 @@
    :template: module-template.rst
    :recursive:
 
+   reporter
    serialize
    sphinxext
 ```
