@@ -36,11 +36,9 @@ def test_arg_spec_from_function_simple() -> None:
 def test_arg_spec_from_function_typevar() -> None:
     arg_spec = ArgSpec.from_function(complicated_append)
 
-    assert list(arg_spec.args) == [T]
+    assert list(arg_spec.args) == [T]  # type: ignore[comparison-overlap]
     assert dict(arg_spec.kwargs) == {'b': list[T]}  # type: ignore[valid-type]
-    specific_arg_spec = arg_spec.bind_type_vars(
-        bound={T: int}  # type: ignore[dict-item]
-    )
+    specific_arg_spec = arg_spec.bind_type_vars(bound={T: int})
     assert list(specific_arg_spec.args) == [int]
     assert dict(specific_arg_spec.kwargs) == {'b': list[int]}
 

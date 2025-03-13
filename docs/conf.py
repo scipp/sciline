@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright (c) 2025 Scipp contributors (https://github.com/scipp)
+
 import doctest
 import os
 import sys
@@ -12,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 # General information about the project.
 project = 'Sciline'
-copyright = '2024 Scipp contributors'
+copyright = '2025 Scipp contributors'
 author = 'Scipp contributors'
 
 html_show_sourcelink = True

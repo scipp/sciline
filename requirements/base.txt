@@ -5,7 +5,7 @@
 #
 #    pip-compile-multi
 #
-cyclebane==24.6.0
+cyclebane==24.10.0
     # via -r base.in
-networkx==3.3
+networkx==3.4.2
     # via cyclebane
