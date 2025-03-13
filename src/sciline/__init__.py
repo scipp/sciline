@@ -10,7 +10,7 @@ except importlib.metadata.PackageNotFoundError:
     __version__ = "0.0.0"
 
 from . import scheduler
-from ._provider import UnboundTypeVar, Provider
+from ._provider import Provider, UnboundTypeVar
 from .domain import Scope, ScopeTwoParams
 from .handler import (
     HandleAsBuildTimeException,
