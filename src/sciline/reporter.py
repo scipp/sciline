@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright (c) 2025 Scipp contributors (https://github.com/scipp)
+"""Progress reporters for pipelines."""
 
 from __future__ import annotations
 
@@ -14,7 +15,20 @@ from ._utils import provider_name
 
 
 class Reporter(ABC):
-    """Base class for progress reporters of computations."""
+    """Base class for progress reporters of computations.
+
+    A ``Reporter`` instance must not be used for multiple computations concurrently!
+
+    Reporters should be passed to :meth:`sciline.Pipeline.compute`, e.g.:
+
+    .. code-block:: python
+
+         from sciline import Pipeline
+         from sciline.reporter import RichReporter
+         reporter = RichReporter()
+         pipeline = Pipeline(providers)
+         pipeline.compute(Result, reporter=reporter)
+    """
 
     def __init__(self) -> None:
         self._n_steps = 0
@@ -23,7 +37,8 @@ class Reporter(ABC):
     def run_computation(self, providers: Iterable[Provider]) -> Reporter:
         """Run a single computation with progress reporting.
 
-        A ``Reporter`` instance must not be used for multiple computations concurrently!
+        This method is primarily meant for internal use.
+        As a user, you should pass reporters to :meth:`Pipeline.compute`.
 
         Use this method in a ``with`` statement:
 
@@ -101,6 +116,17 @@ class RichReporter(Reporter):
     This class uses the `rich <https://rich.readthedocs.io/en/stable/index.html>`_
     package to display a progress bar.
     Rich is not a hard dependency of Sciline and must be installed separately.
+
+    Examples
+    --------
+
+    .. code-block:: python
+
+         from sciline import Pipeline
+         from sciline.reporter import RichReporter
+         reporter = RichReporter()
+         pipeline = Pipeline(providers)
+         pipeline.compute(Result, reporter=reporter)
     """
 
     def __init__(
