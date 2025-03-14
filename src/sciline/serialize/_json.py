@@ -34,7 +34,7 @@ def json_serialize_task_graph(graph: Graph) -> dict[str, Json]:
     """Serialize a graph to JSON.
 
     See the user guide on
-    `Serializing Providers <../../user-guide/serialization.rst>`_.
+    `Provenance <../../user-guide/provenance.rst>`_.
 
     Also available as :meth:`sciline.TaskGraph.serialize`.
 

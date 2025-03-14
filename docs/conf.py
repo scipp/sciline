@@ -71,6 +71,7 @@ intersphinx_mapping = {
     'python': ('https://docs.python.org/3', None),
     'numpy': ('https://numpy.org/doc/stable/', None),
     'scipp': ('https://scipp.github.io/', None),
+    'cyclebane': ('https://scipp.github.io/cyclebane/', None),
 }
 
 # autodocs includes everything, even irrelevant API internals. autosummary
@@ -262,4 +263,6 @@ doctest_default_flags = (
 linkcheck_ignore = [
     # Specific lines in Github blobs cannot be found by linkcheck.
     r'https?://github\.com/.*?/blob/[a-f0-9]+/.+?#',
+    # Fails to find the anchor even though it exists at the time of writing:
+    'https://github.com/google/guice/wiki/MentalModel#injection',
 ]
