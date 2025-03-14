@@ -3,7 +3,7 @@
 """Serialization of task graphs.
 
 .. autosummary::
-    :toctree: ../generated/functions
+    :toctree: ../functions
     :template: function-template.rst
 
     json_schema
