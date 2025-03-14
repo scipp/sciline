@@ -20,6 +20,7 @@ from ._utils import key_name
 from .data_graph import DataGraph, to_task_graph
 from .display import pipeline_html_repr
 from .handler import ErrorHandler, HandleAsComputeTimeException, UnsatisfiedRequirement
+from .reporter import Reporter
 from .scheduler import Scheduler
 from .task_graph import TaskGraph
 from .typing import Key
@@ -74,15 +75,26 @@ class Pipeline(DataGraph):
             self[tp] = param
 
     @overload
-    def compute(self, tp: type[T], **kwargs: Any) -> T: ...
+    def compute(
+        self, tp: type[T], reporter: Reporter | None = None, **kwargs: Any
+    ) -> T: ...
 
     @overload
-    def compute(self, tp: Iterable[type[T]], **kwargs: Any) -> dict[type[T], T]: ...
+    def compute(
+        self, tp: Iterable[type[T]], reporter: Reporter | None = None, **kwargs: Any
+    ) -> dict[type[T], T]: ...
 
     @overload
-    def compute(self, tp: UnionType, **kwargs: Any) -> Any: ...
+    def compute(
+        self, tp: UnionType, reporter: Reporter | None = None, **kwargs: Any
+    ) -> Any: ...
 
-    def compute(self, tp: type | Iterable[type] | UnionType, **kwargs: Any) -> Any:
+    def compute(
+        self,
+        tp: type | Iterable[type] | UnionType,
+        reporter: Reporter | None = None,
+        **kwargs: Any,
+    ) -> Any:
         """
         Compute result for the given keys.
 
@@ -93,10 +105,12 @@ class Pipeline(DataGraph):
         tp:
             Type to compute the result for.
             Can be a single type or an iterable of types.
+        reporter:
+            Optional reporter to track progress of this computation.
         kwargs:
             Keyword arguments passed to the ``.get()`` method.
         """
-        return self.get(tp, **kwargs).compute()
+        return self.get(tp, **kwargs).compute(reporter=reporter)
 
     def visualize(
         self,
