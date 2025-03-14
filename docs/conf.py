@@ -71,6 +71,7 @@ intersphinx_mapping = {
     'python': ('https://docs.python.org/3', None),
     'numpy': ('https://numpy.org/doc/stable/', None),
     'scipp': ('https://scipp.github.io/', None),
+    'cyclebane': ('https://scipp.github.io/cyclebane/', None),
 }
 
 # autodocs includes everything, even irrelevant API internals. autosummary
