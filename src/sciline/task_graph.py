@@ -172,7 +172,7 @@ class TaskGraph:
         """Serialize the graph to JSON.
 
         See the user guide on
-        `Serializing Providers <../../user-guide/serialization.rst>`_.
+        `Provenance <../../user-guide/provenance.rst>`_.
 
         Returns
         -------
