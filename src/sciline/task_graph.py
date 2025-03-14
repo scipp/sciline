@@ -4,13 +4,17 @@ from __future__ import annotations
 
 from collections.abc import Generator, Hashable, Sequence
 from html import escape
-from typing import Any, Literal, TypeVar
+from typing import TYPE_CHECKING, Any, Literal, TypeVar
 
 from ._utils import key_name
 from .reporter import Reporter
 from .scheduler import DaskScheduler, NaiveScheduler, Scheduler
 from .serialize import json_serialize_task_graph
 from .typing import Graph, Json, Key
+
+if TYPE_CHECKING:
+    import graphviz
+
 
 T = TypeVar("T")
 
@@ -138,7 +142,7 @@ class TaskGraph:
         cluster_generics: bool = True,
         cluster_color: str | None = '#f0f0ff',
         **kwargs: Any,
-    ) -> graphviz.Digraph:  # type: ignore[name-defined] # noqa: F821
+    ) -> graphviz.Digraph:
         """
         Return a graphviz Digraph object representing the graph.
 

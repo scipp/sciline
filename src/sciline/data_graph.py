@@ -5,7 +5,7 @@ from __future__ import annotations
 import itertools
 from collections.abc import Callable, Generator, Iterable
 from types import NoneType
-from typing import Any, TypeVar, get_args
+from typing import TYPE_CHECKING, Any, TypeVar, get_args
 
 import cyclebane as cb
 import networkx as nx
@@ -14,6 +14,9 @@ from cyclebane.node_values import IndexName, IndexValue
 from ._provider import ArgSpec, Provider, ToProvider, _bind_free_typevars
 from .handler import ErrorHandler, HandleAsBuildTimeException
 from .typing import Graph, Key
+
+if TYPE_CHECKING:
+    import graphviz
 
 
 def _as_graph(key: Key, value: Any) -> cb.Graph:
@@ -194,7 +197,7 @@ class DataGraph:
     def to_networkx(self) -> nx.DiGraph:
         return self._cbgraph.to_networkx()
 
-    def visualize_data_graph(self, **kwargs: Any) -> graphviz.Digraph:  # type: ignore[name-defined] # noqa: F821
+    def visualize_data_graph(self, **kwargs: Any) -> graphviz.Digraph:
         import graphviz
 
         dot = graphviz.Digraph(strict=True, **kwargs)
