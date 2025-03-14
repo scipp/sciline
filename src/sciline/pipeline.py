@@ -91,7 +91,7 @@ class Pipeline(DataGraph):
 
     def compute(
         self,
-        tp: type | Iterable[type] | UnionType,
+        tp: type | Iterable[type] | "UnionType",  # noqa: UP037 (needed by Sphinx)
         reporter: Reporter | None = None,
         **kwargs: Any,
     ) -> Any:
@@ -156,7 +156,7 @@ class Pipeline(DataGraph):
 
     def get(
         self,
-        keys: type | Iterable[type] | UnionType,
+        keys: type | Iterable[type] | "UnionType",  # noqa: UP037 (needed by Sphinx)
         *,
         scheduler: Scheduler | None = None,
         handler: ErrorHandler | None = None,
