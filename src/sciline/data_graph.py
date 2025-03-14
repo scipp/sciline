@@ -146,6 +146,7 @@ class DataGraph:
         )
 
     def __getitem__(self: T, key: Key) -> T:
+        """Return the subgraph that computes the given key."""
         return self._from_cyclebane(self._cbgraph[key])
 
     def map(self: T, node_values: dict[Key, Any]) -> T:
