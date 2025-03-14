@@ -4,6 +4,7 @@
 
 .. autoclass:: {{ objname }}
    :members:
+   :inherited-members:
    :special-members: __getitem__
 
    {% block methods %}
