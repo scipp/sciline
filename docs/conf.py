@@ -263,4 +263,6 @@ doctest_default_flags = (
 linkcheck_ignore = [
     # Specific lines in Github blobs cannot be found by linkcheck.
     r'https?://github\.com/.*?/blob/[a-f0-9]+/.+?#',
+    # Fails to find the anchor even though it exists at the time of writing:
+    'https://github.com/google/guice/wiki/MentalModel#injection',
 ]
