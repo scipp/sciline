@@ -5,7 +5,7 @@ from __future__ import annotations
 import itertools
 from collections.abc import Callable, Generator, Iterable
 from types import NoneType
-from typing import Any, TypeVar, get_args
+from typing import TYPE_CHECKING, Any, TypeVar, get_args
 
 import cyclebane as cb
 import networkx as nx
@@ -14,6 +14,9 @@ from cyclebane.node_values import IndexName, IndexValue
 from ._provider import ArgSpec, Provider, ToProvider, _bind_free_typevars
 from .handler import ErrorHandler, HandleAsBuildTimeException
 from .typing import Graph, Key
+
+if TYPE_CHECKING:
+    import graphviz
 
 
 def _as_graph(key: Key, value: Any) -> cb.Graph:
@@ -146,12 +149,44 @@ class DataGraph:
         )
 
     def __getitem__(self: T, key: Key) -> T:
+        """Return the subgraph that computes the given key."""
         return self._from_cyclebane(self._cbgraph[key])
 
     def map(self: T, node_values: dict[Key, Any]) -> T:
+        """Map the graph over given node values.
+
+        Creates a new graph where given nodes and their dependents are duplicated for
+        each given value and values are assigned to the given nodes.
+
+        Parameters
+        ----------
+        node_values:
+            Dictionary mapping nodes keys to collections of values.
+
+        Returns
+        -------
+        :
+            A new graph with mapped nodes.
+        """
         return self._from_cyclebane(self._cbgraph.map(node_values))
 
     def reduce(self: T, *, func: Callable[..., Any], **kwargs: Any) -> T:
+        """Reduce the outputs of a mapped graph into a single value and provider.
+
+        Parameters
+        ----------
+        func:
+            Function that takes the values to reduce and returns a single value.
+            This function is passed as many arguments as there are values to reduce.
+        kwargs:
+            Forwarded to :meth:`cyclebane.Graph.reduce`.
+
+        Returns
+        -------
+        :
+            A new graph with a new node that depends on all sink nodes of the input
+            graph and returns the output of ``func``.
+        """
         # Note that the type hints of `func` are not checked here. As we are explicit
         # about the modification, this is in line with __setitem__ which does not
         # perform such checks and allows for using generic reduction functions.
@@ -162,7 +197,7 @@ class DataGraph:
     def to_networkx(self) -> nx.DiGraph:
         return self._cbgraph.to_networkx()
 
-    def visualize_data_graph(self, **kwargs: Any) -> graphviz.Digraph:  # type: ignore[name-defined] # noqa: F821
+    def visualize_data_graph(self, **kwargs: Any) -> graphviz.Digraph:
         import graphviz
 
         dot = graphviz.Digraph(strict=True, **kwargs)
