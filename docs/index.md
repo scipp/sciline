@@ -1,6 +1,29 @@
-# Sciline
+:::{image} _static/logo.svg
+:class: only-light
+:alt: Sciline
+:width: 60%
+:align: center
+:::
+:::{image} _static/logo-dark.svg
+:class: only-dark
+:alt: Sciline
+:width: 60%
+:align: center
+:::
 
-<span style="font-size:1.2em;font-style:italic;color:#5a5a5a">
+```{raw} html
+   <style>
+    .transparent {display: none; visibility: hidden;}
+    .transparent + a.headerlink {display: none; visibility: hidden;}
+   </style>
+```
+
+```{role} transparent
+```
+
+# {transparent}`Sciline`
+
+<span style="font-size:1.2em;font-style:italic;color:var(--pst-color-text-muted)">
   Build scientific pipelines for your data
   </br></br>
 </span>
@@ -49,19 +72,9 @@ Your existing Python code can remain generic and can still be used without Scili
 
 ## At a glance
 
-### Install
-
-Pip:
-
-```sh
-pip install sciline
-```
-
-Conda:
-
-```sh
-conda install -c conda-forge -c scipp sciline
-```
+:::{include} user-guide/installation.md
+:heading-offset: 3
+:::
 
 ### Use
 
@@ -122,6 +135,11 @@ Consider the following concrete examples of how we use Sciline in our own projec
 
  As Sciline is still a young project, we are still in the process of uncovering best practices, but we hope the above can at least provide some ideas.
 
+
+## Get in touch
+
+- If you have questions that are not answered by these documentation pages, ask on [discussions](https://github.com/scipp/sciline/discussions). Please include a self-contained reproducible example if possible.
+- Report bugs (including unclear, missing, or wrong documentation!), suggest features or view the source code [on GitHub](https://github.com/scipp/sciline).
 
 ```{toctree}
 ---

@@ -9,4 +9,5 @@ getting-started
 parameter-tables
 generic-providers
 provenance
+installation
 ```
