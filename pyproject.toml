@@ -43,6 +43,7 @@ test = [
     "jsonschema",
     "numpy",
     "pandas",
+    "rich",
 ]
 progress = [
     "rich",
