@@ -7,4 +7,5 @@ graphviz
 jsonschema
 numpy
 pandas
+rich
 cyclebane @ git+https://github.com/scipp/cyclebane@main

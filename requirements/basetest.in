@@ -13,3 +13,4 @@ graphviz
 jsonschema
 numpy
 pandas
+rich

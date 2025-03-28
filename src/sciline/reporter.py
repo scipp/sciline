@@ -7,11 +7,18 @@ from __future__ import annotations
 import functools
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Hashable, Iterable
+from time import perf_counter
 from types import TracebackType
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from ._provider import Provider
-from ._utils import provider_name
+from ._utils import provider_full_qualname, provider_name
+
+if TYPE_CHECKING:
+    try:
+        import pandas as pd
+    except ModuleNotFoundError:
+        pd = object
 
 
 class Reporter(ABC):
@@ -108,6 +115,140 @@ class Reporter(ABC):
         """Return a unique identifier for a current provider."""
         self._provider_id += 1
         return self._provider_id
+
+
+class TimingReporter(Reporter):
+    """A reporter that tracks the time spent in each provider.
+
+    Examples
+    --------
+
+    .. code-block:: python
+
+        from sciline.reporter import TimingReporter
+        timer = TimingReporter()
+        pipeline.compute(Target, reporter=timer)
+        print(timer.summary())
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._times: dict[int, list[float | str]] = {}
+        self._total_start = 0.0
+        self._total_end = 0.0
+
+    def __enter__(self) -> None:
+        """Start the clock for the entire computation."""
+        self._times = {}
+        self._total_start = perf_counter()
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> None:
+        """Stop the clock for the entire computation."""
+        self._total_end = perf_counter()
+
+    def on_provider_start(self, provider: Provider) -> int:
+        """Start the clock for a provider call."""
+        provider_id = super()._get_provider_id()
+        self._times[provider_id] = [
+            perf_counter(),
+            0.0,
+            provider_full_qualname(provider),
+        ]
+        return provider_id
+
+    def on_provider_end(self, provider_id: int) -> None:
+        """Stop the clock for a provider call."""
+        self._times[provider_id][1] = perf_counter()
+
+    def summary(self) -> str:
+        """Return a summary of the recorded times.
+
+        Returns
+        -------
+        :
+            The summary as a string.
+
+        See Also
+        --------
+        TimingReporter.as_pandas:
+            Return the times as a Pandas DataFrame.
+        """
+        sorted_times = self._sorted_times()
+
+        names = ['Provider', *(name for name, _ in sorted_times)]
+        lens = _make_column(['N', *(f'({len(times)})' for _, times in sorted_times)])
+        sums = _make_column(
+            ['Sum [ms]', *(f'{sum(times):.3f}' for _, times in sorted_times)]
+        )
+        means = _make_column(
+            [
+                'Mean [ms]',
+                *(f'{sum(times) / len(times):.3f}' for _, times in sorted_times),
+            ]
+        )
+
+        return (
+            f'Total time: {self._total_end - self._total_start:.3f} ms\n'
+            + "\n".join(
+                f'{s} {m} {ll} {n}'
+                for s, m, ll, n in zip(sums, means, lens, names, strict=True)
+            )
+        )
+
+    def as_pandas(self) -> pd.DataFrame:
+        """Return the recorded times as a Pandas DataFrame.
+
+        See Also
+        --------
+        TimingReporter.summary:
+            Return a summary of the recorded times as a string.
+            Does not require Pandas.
+        """
+        import numpy as np  # pandas depends on numpy
+        import pandas as pd
+
+        return pd.DataFrame(
+            [
+                (
+                    name,
+                    len(times),
+                    np.sum(times),
+                    np.min(times),
+                    np.max(times),
+                    np.median(times),
+                    np.mean(times),
+                    np.std(times),
+                )
+                for name, times in self._sorted_times()
+            ],
+            columns=[
+                'Provider',
+                'N Runs',
+                'Sum [ms]',
+                'Min [ms]',
+                'Max [ms]',
+                'Median [ms]',
+                'Mean [ms]',
+                'Std [ms]',
+            ],
+        )
+
+    def _sorted_times(self) -> list[tuple[str, list[float]]]:
+        """Return the recorded times in milliseconds as a sorted list."""
+        run_times: dict[str, list[float]] = {}
+        for start, end, name in self._times.values():
+            run_times.setdefault(name, []).append((end - start) * 1000)  # type: ignore[arg-type, operator]
+        return sorted(run_times.items(), key=lambda x: sum(x[1]), reverse=True)
+
+
+def _make_column(values: list[str]) -> list[str]:
+    width = max(len(v) for v in values)
+    return [f'{v:>{width}}' for v in values]
 
 
 class RichReporter(Reporter):

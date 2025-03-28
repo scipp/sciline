@@ -5,7 +5,7 @@ from types import TracebackType
 from typing import NewType, TypeVar
 
 from sciline import Pipeline, Provider, Scope
-from sciline.reporter import Reporter
+from sciline.reporter import Reporter, RichReporter, TimingReporter
 
 
 class RecordingReporter(Reporter):
@@ -125,3 +125,37 @@ def test_reporter_records_all_function_providers_generic() -> None:
         provider.func.__name__ for provider in reporter.finished_providers.values()
     )
     assert finished_provider_names == ['f2', 'g1', 'g1', 'g2']
+
+
+def test_timing_reporter_tracks_all_calls() -> None:
+    reporter = TimingReporter()
+    pipeline = Pipeline((f1, f2, f3), params={})
+    pipeline[C] = pipeline[C].map({A: [2, 3]}).reduce(func=merge)
+    result = pipeline.compute(C, reporter=reporter)
+
+    assert result == 18
+    timings = reporter.as_pandas()
+    assert len(timings) == 3
+    assert (
+        timings.loc[timings['Provider'] == 'tests.reporter_test.f1']['N Runs'].iloc[0]
+        == 2
+    )
+    assert (
+        timings.loc[timings['Provider'] == 'tests.reporter_test.f2']['N Runs'].iloc[0]
+        == 2
+    )
+    assert (
+        timings.loc[timings['Provider'] == 'tests.reporter_test.merge']['N Runs'].iloc[
+            0
+        ]
+        == 1
+    )
+
+
+def test_rich_reporter_does_not_break_pipeline() -> None:
+    # It is very difficult to test the output of RichReporter,
+    # but we can at least make sure it doesn't change the final result.
+    reporter = RichReporter()
+    pipeline = Pipeline((f1, f2, f3), params={A: 3})
+    result = pipeline.compute(C, reporter=reporter)
+    assert result == 12
