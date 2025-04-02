@@ -261,6 +261,18 @@ class Pipeline(DataGraph):
         return tuple(sorted(sink_nodes, key=key_name))
 
 
+def _import_pandas(function_name: str) -> pandas:
+    try:
+        import pandas as pd
+
+        return pd
+    except ModuleNotFoundError:
+        raise ModuleNotFoundError(
+            f"{function_name} requires Pandas. Install Pandas using, e.g., "
+            f"`pip install pandas` or `conda install pandas`."
+        ) from None
+
+
 def get_mapped_node_names(
     graph: DataGraph, base_name: type, *, index_names: Sequence[Hashable] | None = None
 ) -> pandas.Series:
@@ -272,7 +284,10 @@ def get_mapped_node_names(
     If the mapped node depends on multiple indices, the index of the returned series
     will have a multi-index.
 
-    Note that Pandas is not a dependency of Sciline and must be installed separately.
+    Attention
+    ---------
+    This function requires `Pandas <https://pandas.pydata.org/>`_
+    which is not installed automatically as a dependency of Sciline.
 
     Parameters
     ----------
@@ -290,7 +305,7 @@ def get_mapped_node_names(
     :
         The series of node names corresponding to the mapped node.
     """
-    import pandas as pd
+    pd = _import_pandas("sciline.get_mapped_node_names")
     from cyclebane.graph import IndexValues, MappedNode, NodeName
 
     candidates = [
@@ -333,11 +348,14 @@ def compute_mapped(
     If the mapped node depends on multiple indices, the index of the returned series
     will have a multi-index.
 
-    Note that Pandas is not a dependency of Sciline and must be installed separately.
+    Attention
+    ---------
+    This function requires `Pandas <https://pandas.pydata.org/>`_
+    which is not installed automatically as a dependency of Sciline.
 
     Parameters
     ----------
-    graph:
+    pipeline:
         The data graph to get the mapped node names from.
     base_name:
         The base name of the mapped node to get the names for.
@@ -351,6 +369,7 @@ def compute_mapped(
     :
         The series of computed results corresponding to the mapped node.
     """
+    _ = _import_pandas("sciline.compute_mapped")  # required by get_mapped_node_names
     key_series = get_mapped_node_names(
         graph=pipeline, base_name=base_name, index_names=index_names
     )
