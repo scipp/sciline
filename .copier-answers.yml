@@ -1,5 +1,5 @@
 # Changes here will be overwritten by Copier; NEVER EDIT MANUALLY
-_commit: 5be9354
+_commit: d3d4dc7
 _src_path: gh:scipp/copier_template
 description: Build scientific pipelines for your data
 max_python: '3.12'

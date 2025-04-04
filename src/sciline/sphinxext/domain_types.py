@@ -98,7 +98,7 @@ def _is_new_type(annotation: Any) -> bool:
 def _format_new_type(annotation: Any, prefix: str, aliases: dict[str, str]) -> str:
     return (
         f'{_internal_link(annotation, "class", prefix)}'
-        f' ({_link(annotation.__supertype__, "class",aliases)})'
+        f' ({_link(annotation.__supertype__, "class", aliases)})'
     )
 
 
@@ -135,7 +135,7 @@ def _internal_link(
 ) -> str:
     annotation_name = _retrieve_name(annotation)
     target = f'{annotation.__module__}.{annotation_name}'
-    label = f'{annotation.__module__.removeprefix(prefix+".")}.{annotation_name}'
+    label = f'{annotation.__module__.removeprefix(prefix + ".")}.{annotation_name}'
     if type_params:
         label += f'[{", ".join(_retrieve_name(ty) for ty in type_params)}]'
     return f':{kind}:`{label} <{target}>`'
