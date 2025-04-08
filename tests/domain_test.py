@@ -61,3 +61,21 @@ def test_ScopeTwoParams() -> None:
     class A(sl.ScopeTwoParams[Param1, Param2, float], float): ...
 
     assert isinstance(A[int, int](1.5), float)
+
+
+def test_Scope_two_params_inconsistent_type_and_interface_raises() -> None:
+    Param1 = TypeVar('Param1')
+    Param2 = TypeVar('Param2')
+
+    with pytest.raises(TypeError, match="Missing or wrong interface for"):
+
+        class A(sl.Scope[Param1, Param2, str], float): ...
+
+
+def test_Scope_two_params() -> None:
+    Param1 = TypeVar('Param1')
+    Param2 = TypeVar('Param2')
+
+    class A(sl.Scope[Param1, Param2, float], float): ...
+
+    assert isinstance(A[int, int](1.5), float)
