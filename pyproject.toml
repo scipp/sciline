@@ -71,6 +71,7 @@ filterwarnings = [
   "error",
     # From jsonschema
     "ignore:datetime.datetime.utcfromtimestamp:DeprecationWarning",
+    "ignore:ScopeTwoParams is deprecated:DeprecationWarning",
 ]
 
 [tool.ruff]
