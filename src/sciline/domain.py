@@ -1,9 +1,13 @@
 # SPDX-License-Identifier: BSD-3-Clause
-# Copyright (c) 2023 Scipp contributors (https://github.com/scipp)
+# Copyright (c) 2025 Scipp contributors (https://github.com/scipp)
 from typing import Any, Generic, TypeVar, get_args, get_origin
+from warnings import warn
+
+from typing_extensions import TypeVarTuple, Unpack
 
 PARAM = TypeVar("PARAM")
 PARAM2 = TypeVar("PARAM2")
+PARAMS = TypeVarTuple("PARAMS")
 SUPER = TypeVar("SUPER")
 
 
@@ -31,7 +35,7 @@ def _check_supertype(cls: type, scope_cls: type) -> None:
             )
 
 
-class Scope(Generic[PARAM, SUPER]):
+class Scope(Generic[Unpack[PARAMS], SUPER]):
     """
     Helper for defining a generic type alias.
     """
@@ -51,6 +55,12 @@ class ScopeTwoParams(Generic[PARAM, PARAM2, SUPER]):
     """
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
+        warn(
+            "ScopeTwoParams is deprecated, use Scope[P1, P2, SUPER] instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+
         _check_supertype(cls, ScopeTwoParams)
         return super().__init_subclass__(**kwargs)
 

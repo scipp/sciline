@@ -73,12 +73,24 @@ def test_key_name_custom_generic() -> None:
     assert _utils.key_name(G[MyType]) == 'G[MyType]'
 
 
-def test_key_name_custom_generic_two_params() -> None:
+def test_key_name_custom_generic_ScopeTwoParams() -> None:
     MyType = NewType('MyType', float)
     Var1 = TypeVar('Var1')
     Var2 = TypeVar('Var2')
 
     class G(sciline.ScopeTwoParams[Var1, Var2, str], str): ...
+
+    assert _utils.key_name(G) == 'G'
+    assert _utils.key_name(G[int, tuple[float]]) == 'G[int, tuple[float]]'
+    assert _utils.key_name(G[list[MyType], MyType]) == 'G[list[MyType], MyType]'
+
+
+def test_key_name_custom_generic_two_params() -> None:
+    MyType = NewType('MyType', float)
+    Var1 = TypeVar('Var1')
+    Var2 = TypeVar('Var2')
+
+    class G(sciline.Scope[Var1, Var2, str], str): ...
 
     assert _utils.key_name(G) == 'G'
     assert _utils.key_name(G[int, tuple[float]]) == 'G[int, tuple[float]]'
@@ -168,12 +180,35 @@ def test_key_full_qualname_custom_generic() -> None:
     )
 
 
-def test_key_full_qualname_custom_generic_two_params() -> None:
+def test_key_full_qualname_custom_generic_ScopeTwoParams() -> None:
     MyType = NewType('MyType', float)
     Var1 = TypeVar('Var1')
     Var2 = TypeVar('Var2')
 
     class G(sciline.ScopeTwoParams[Var1, Var2, str], str): ...
+
+    assert (
+        _utils.key_full_qualname(G)
+        == 'tests.utils_test.test_key_full_qualname_custom_generic_ScopeTwoParams.<locals>.G'  # noqa: E501
+    )
+    assert (
+        _utils.key_full_qualname(G[int, tuple[float]])
+        == 'tests.utils_test.test_key_full_qualname_custom_generic_ScopeTwoParams.'
+        '<locals>.G[builtins.int, builtins.tuple[builtins.float]]'
+    )
+    assert (
+        _utils.key_full_qualname(G[list[MyType], MyType])
+        == 'tests.utils_test.test_key_full_qualname_custom_generic_ScopeTwoParams.<locals>.'  # noqa: E501
+        'G[builtins.list[tests.utils_test.MyType], tests.utils_test.MyType]'
+    )
+
+
+def test_key_full_qualname_custom_generic_two_params() -> None:
+    MyType = NewType('MyType', float)
+    Var1 = TypeVar('Var1')
+    Var2 = TypeVar('Var2')
+
+    class G(sciline.Scope[Var1, Var2, str], str): ...
 
     assert (
         _utils.key_full_qualname(G)
