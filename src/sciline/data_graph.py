@@ -41,8 +41,11 @@ def _get_typevar_constraints(t: TypeVar) -> set[type]:
 
 def _mapping_to_constrained(
     type_vars: set[TypeVar],
+    override: dict[TypeVar, set[type]] | None = None,
 ) -> Generator[dict[TypeVar, type], None, None]:
-    constraints = [_get_typevar_constraints(t) for t in type_vars]
+    constraints = [
+        override[t] if t in override else _get_typevar_constraints(t) for t in type_vars
+    ]
     if any(len(c) == 0 for c in constraints):
         raise ValueError('Typevars must have constraints')
     for combination in itertools.product(*constraints):
@@ -53,8 +56,13 @@ T = TypeVar('T', bound='DataGraph')
 
 
 class DataGraph:
-    def __init__(self, providers: None | Iterable[ToProvider | Provider]) -> None:
+    def __init__(
+        self,
+        providers: None | Iterable[ToProvider | Provider],
+        constraints: dict | None,
+    ) -> None:
         self._cbgraph = cb.Graph(nx.DiGraph())
+        self._constraints = constraints
         for provider in providers or []:
             self.insert(provider)
 
@@ -100,7 +108,7 @@ class DataGraph:
             self.underlying_graph.add_node(key)
         return self.underlying_graph.nodes[key]
 
-    def insert(self, provider: ToProvider | Provider, /) -> None:
+    def insert(self, provider: ToProvider | Provider, /, level: int = 0) -> None:
         """
         Insert a callable into the graph that provides its return value.
 
@@ -115,8 +123,8 @@ class DataGraph:
             provider = Provider.from_function(provider)
         return_type = provider.deduce_key()
         if typevars := _find_all_typevars(return_type):
-            for bound in _mapping_to_constrained(typevars):
-                self.insert(provider.bind_type_vars(bound))
+            for bound in _mapping_to_constrained(typevars, override=self._constraints):
+                self.insert(provider.bind_type_vars(bound), level=level + 1)
             return
         # Trigger UnboundTypeVar error if any input typevars are not bound
         provider = provider.bind_type_vars({})

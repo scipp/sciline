@@ -56,6 +56,7 @@ class Pipeline(DataGraph):
     def __init__(
         self,
         providers: Iterable[ToProvider | Provider] | None = None,
+        constraints: dict | None = None,
         *,
         params: dict[type[Any], Any] | None = None,
     ):
@@ -70,7 +71,7 @@ class Pipeline(DataGraph):
         params:
             Dictionary of concrete values to provide for types.
         """
-        super().__init__(providers)
+        super().__init__(providers, constraints if constraints is not None else {})
         for tp, param in (params or {}).items():
             self[tp] = param
 
