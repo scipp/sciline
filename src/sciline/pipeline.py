@@ -50,7 +50,9 @@ def _is_multiple_keys(keys: type | Iterable[type] | UnionType) -> bool:
     )
 
 
-def _build_tree_msg(graph, node, depth=0, max_depth=4, indent='    '):
+def _build_tree_msg(
+    graph: Any, node: Any, depth: int = 0, max_depth: int = 4, indent: str = '    '
+) -> str:
     """Build a tree message showing dependencies recursively.
 
     Parameters
