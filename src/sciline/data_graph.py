@@ -55,7 +55,7 @@ def _mapping_to_constrained(
 
 
 def _normalize_custom_constraints(
-    constraints: dict[TypeVar, Iterable[type]] | None,
+    constraints: Mapping[TypeVar, Iterable[type]] | None,
 ) -> dict[TypeVar, frozenset[type]]:
     if constraints is None:
         return {}

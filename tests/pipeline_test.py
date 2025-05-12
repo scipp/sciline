@@ -1365,7 +1365,7 @@ def test_over_constrained_type_removes_types() -> None:
     )
 
     with pytest.raises(sl.handler.UnsatisfiedRequirement):
-        assert pipeline.get(B[str])  # str not given in constraints
+        pipeline.get(B[str])  # str not given in constraints
 
 
 def test_over_constrained_type_does_not_affect_other_type_var() -> None:
