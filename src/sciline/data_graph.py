@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 import itertools
-from collections.abc import Callable, Generator, Iterable
+from collections.abc import Callable, Generator, Iterable, Mapping
 from types import NoneType
 from typing import TYPE_CHECKING, Any, TypeVar, get_args
 
@@ -13,6 +13,7 @@ import networkx as nx
 from cyclebane.node_values import IndexName, IndexValue
 
 from ._provider import ArgSpec, Provider, ToProvider, _bind_free_typevars
+from ._utils import key_full_qualname
 from .handler import ErrorHandler, HandleAsBuildTimeException
 from .typing import Graph, Key
 
@@ -34,26 +35,56 @@ def _find_all_typevars(t: type | TypeVar) -> set[TypeVar]:
     return set(itertools.chain(*map(_find_all_typevars, get_args(t))))
 
 
-def _get_typevar_constraints(t: TypeVar) -> set[type]:
+def _get_typevar_constraints(
+    t: TypeVar, over_constraints: dict[TypeVar, frozenset[type]]
+) -> frozenset[type]:
     """Returns the set of constraints of a TypeVar."""
-    return set(t.__constraints__)
+    if (constraints := over_constraints.get(t, None)) is not None:
+        return frozenset(constraints)
+    return frozenset(t.__constraints__)
 
 
 def _mapping_to_constrained(
-    type_vars: set[TypeVar],
+    type_vars: set[TypeVar], over_constraints: dict[TypeVar, frozenset[type]]
 ) -> Generator[dict[TypeVar, type], None, None]:
-    constraints = [_get_typevar_constraints(t) for t in type_vars]
+    constraints = [_get_typevar_constraints(t, over_constraints) for t in type_vars]
     if any(len(c) == 0 for c in constraints):
         raise ValueError('Typevars must have constraints')
     for combination in itertools.product(*constraints):
         yield dict(zip(type_vars, combination, strict=True))
 
 
+def _normalize_custom_constraints(
+    constraints: dict[TypeVar, Iterable[type]] | None,
+) -> dict[TypeVar, frozenset[type]]:
+    if constraints is None:
+        return {}
+
+    normalized = {}
+    for key, value in constraints.items():
+        types = frozenset(value)
+        for ty in types:
+            if ty not in key.__constraints__:
+                raise ValueError(
+                    f"Constraint '{key_full_qualname(ty)}' is not valid for type var "
+                    f"'{key_full_qualname(key)}' which supports constraints "
+                    f"{tuple(map(key_full_qualname, key.__constraints__))}."
+                )
+        normalized[key] = types
+    return normalized
+
+
 T = TypeVar('T', bound='DataGraph')
 
 
 class DataGraph:
-    def __init__(self, providers: None | Iterable[ToProvider | Provider]) -> None:
+    def __init__(
+        self,
+        providers: None | Iterable[ToProvider | Provider],
+        *,
+        constraints: Mapping[TypeVar, Iterable[type]] | None = None,
+    ) -> None:
+        self._constraints = _normalize_custom_constraints(constraints)
         self._cbgraph = cb.Graph(nx.DiGraph())
         for provider in providers or []:
             self.insert(provider)
@@ -115,7 +146,7 @@ class DataGraph:
             provider = Provider.from_function(provider)
         return_type = provider.deduce_key()
         if typevars := _find_all_typevars(return_type):
-            for bound in _mapping_to_constrained(typevars):
+            for bound in _mapping_to_constrained(typevars, self._constraints):
                 self.insert(provider.bind_type_vars(bound))
             return
         # Trigger UnboundTypeVar error if any input typevars are not bound
@@ -139,7 +170,7 @@ class DataGraph:
         # not pass mypy [valid-type] checks. What we do on our side is ok, but the
         # calling code is not.
         if typevars := _find_all_typevars(key):
-            for bound in _mapping_to_constrained(typevars):
+            for bound in _mapping_to_constrained(typevars, self._constraints):
                 self[_bind_free_typevars(key, bound)] = value
             return
 
