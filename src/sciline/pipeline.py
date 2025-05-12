@@ -58,7 +58,7 @@ class Pipeline(DataGraph):
         providers: Iterable[ToProvider | Provider] | None = None,
         *,
         params: dict[type[Any], Any] | None = None,
-        constraints: Mapping[TypeVar, Iterable[type]] | None = None,
+        constraints: Mapping[TypeVar, Iterable[Key]] | None = None,
     ):
         """
         Setup a Pipeline from a list providers

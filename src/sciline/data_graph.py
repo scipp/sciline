@@ -36,8 +36,8 @@ def _find_all_typevars(t: type | TypeVar) -> set[TypeVar]:
 
 
 def _get_typevar_constraints(
-    t: TypeVar, over_constraints: dict[TypeVar, frozenset[type]]
-) -> frozenset[type]:
+    t: TypeVar, over_constraints: dict[TypeVar, frozenset[Key]]
+) -> frozenset[Key]:
     """Returns the set of constraints of a TypeVar."""
     if (constraints := over_constraints.get(t, None)) is not None:
         return frozenset(constraints)
@@ -45,8 +45,8 @@ def _get_typevar_constraints(
 
 
 def _mapping_to_constrained(
-    type_vars: set[TypeVar], over_constraints: dict[TypeVar, frozenset[type]]
-) -> Generator[dict[TypeVar, type], None, None]:
+    type_vars: set[TypeVar], over_constraints: dict[TypeVar, frozenset[Key]]
+) -> Generator[dict[TypeVar, Key], None, None]:
     constraints = [_get_typevar_constraints(t, over_constraints) for t in type_vars]
     if any(len(c) == 0 for c in constraints):
         raise ValueError('Typevars must have constraints')
@@ -55,8 +55,8 @@ def _mapping_to_constrained(
 
 
 def _normalize_custom_constraints(
-    constraints: Mapping[TypeVar, Iterable[type]] | None,
-) -> dict[TypeVar, frozenset[type]]:
+    constraints: Mapping[TypeVar, Iterable[Key]] | None,
+) -> dict[TypeVar, frozenset[Key]]:
     if constraints is None:
         return {}
 
@@ -82,7 +82,7 @@ class DataGraph:
         self,
         providers: None | Iterable[ToProvider | Provider],
         *,
-        constraints: Mapping[TypeVar, Iterable[type]] | None = None,
+        constraints: Mapping[TypeVar, Iterable[Key]] | None = None,
     ) -> None:
         self._constraints = _normalize_custom_constraints(constraints)
         self._cbgraph = cb.Graph(nx.DiGraph())
