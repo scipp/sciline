@@ -64,7 +64,7 @@ def _normalize_custom_constraints(
     for key, value in constraints.items():
         types = frozenset(value)
         for ty in types:
-            if ty not in key.__constraints__:
+            if key.__constraints__ and ty not in key.__constraints__:
                 raise ValueError(
                     f"Constraint '{key_full_qualname(ty)}' is not valid for type var "
                     f"'{key_full_qualname(key)}' which supports constraints "
