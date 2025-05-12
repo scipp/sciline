@@ -10,7 +10,6 @@ import numpy.typing as npt
 import pytest
 
 import sciline as sl
-from sciline._utils import key_name
 
 
 def int_to_float(x: int) -> float:
@@ -1478,7 +1477,7 @@ def test_output_keys_method() -> None:
 
 
 @pytest.mark.parametrize('get_method', ['get', 'compute'])
-def test_output_keys_in_not_found_error_message(get_method: str) -> None:
+def test_missing_input_error(get_method: str) -> None:
     def make_float() -> float:
         return 1.0
 
@@ -1486,7 +1485,26 @@ def test_output_keys_in_not_found_error_message(get_method: str) -> None:
         return "a string"
 
     pl = sl.Pipeline([make_float, make_str])
-    with pytest.raises(sl.handler.UnsatisfiedRequirement) as info:
+    with pytest.raises(
+        sl.handler.UnsatisfiedRequirement, match="Missing input node 'int'"
+    ):
         getattr(pl, get_method)(int)
-    for key in pl.output_keys():
-        assert key_name(key) in info.value.args[0]
+    with pytest.raises(
+        sl.handler.UnsatisfiedRequirement, match="Missing input node 'int'"
+    ):
+        getattr(pl, get_method)(str)
+
+
+@pytest.mark.parametrize('get_method', ['get', 'compute'])
+def test_not_in_graph_error(get_method: str) -> None:
+    def make_float() -> float:
+        return 1.0
+
+    def make_str(x: int) -> str:
+        return "a string"
+
+    pl = sl.Pipeline([make_float, make_str])
+    with pytest.raises(
+        sl.handler.UnsatisfiedRequirement, match="Requested node not in graph"
+    ):
+        getattr(pl, get_method)(bool)

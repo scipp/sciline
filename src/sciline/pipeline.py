@@ -50,6 +50,45 @@ def _is_multiple_keys(keys: type | Iterable[type] | UnionType) -> bool:
     )
 
 
+def _build_tree_msg(graph, node, depth=0, max_depth=4, indent='    '):
+    """Build a tree message showing dependencies recursively.
+
+    Parameters
+    ----------
+    graph:
+        The graph to traverse
+    node:
+        The node to start from
+    depth:
+        Current depth in the tree
+    max_depth:
+        Maximum depth to traverse
+    indent:
+        Indentation string
+
+    Returns
+    -------
+    :
+        The tree message as a string
+    """
+    if depth == 0:
+        tree_msg = (
+            f"Missing input node '{key_name(node)}'. "
+            f"Possibly requested via:\n{key_name(node)}"
+        )
+    else:
+        tree_msg = f"{indent * depth}{key_name(node)}"
+
+    if depth < max_depth:
+        children = list(graph.successors(node))
+        for child in children:
+            tree_msg += (
+                f"\n{_build_tree_msg(graph, child, depth + 1, max_depth, indent)}"
+            )
+
+    return tree_msg
+
+
 class Pipeline(DataGraph):
     """A container for providers that can be assembled into a task graph."""
 
@@ -160,6 +199,7 @@ class Pipeline(DataGraph):
         *,
         scheduler: Scheduler | None = None,
         handler: ErrorHandler | None = None,
+        max_depth: int = 4,
     ) -> TaskGraph:
         """
         Return a TaskGraph for the given keys.
@@ -179,6 +219,8 @@ class Pipeline(DataGraph):
             During development and debugging it can be helpful to use a handler that
             raises an exception only when the graph is computed. This can be achieved
             by passing :py:class:`HandleAsComputeTimeException` as the handler.
+        max_depth:
+            Maximum depth to show in the dependency tree when reporting errors.
         """
         if multi := _is_multiple_keys(keys):
             targets = tuple(keys)  # type: ignore[arg-type]
@@ -187,8 +229,14 @@ class Pipeline(DataGraph):
         try:
             graph = to_task_graph(self, targets=targets, handler=handler)
         except UnsatisfiedRequirement as e:
-            output_keys = ", ".join(map(repr, self.output_keys()))
-            raise type(e)(f'{e} Did you mean one of: {output_keys}?') from e
+            missing = e.args[1]
+            nx_graph = self.underlying_graph
+            if missing in nx_graph:
+                info = _build_tree_msg(nx_graph, missing, max_depth=max_depth)
+            else:
+                nodes = ", ".join(map(key_name, nx_graph.nodes))
+                info = f'{e} Requested node not in graph. Did you mean one of: {nodes}?'
+            raise type(e)(f'{info}\n\n') from e
         return TaskGraph(
             graph=graph,
             targets=targets if multi else keys,  # type: ignore[arg-type]
