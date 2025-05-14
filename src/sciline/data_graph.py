@@ -39,17 +39,20 @@ def _get_typevar_constraints(
     t: TypeVar, over_constraints: dict[TypeVar, frozenset[Key]]
 ) -> frozenset[Key]:
     """Returns the set of constraints of a TypeVar."""
-    if (constraints := over_constraints.get(t, None)) is not None:
-        return frozenset(constraints)
-    return frozenset(t.__constraints__)
+    if (override := over_constraints.get(t, None)) is not None:
+        return override
+    if not (constraints := t.__constraints__):
+        raise ValueError(
+            f"Type variable {t!r} has no constraints. Either constrain the type "
+            f"variable in its definition or via the 'constraints' argument of Pipeline."
+        )
+    return frozenset(constraints)
 
 
 def _mapping_to_constrained(
     type_vars: set[TypeVar], over_constraints: dict[TypeVar, frozenset[Key]]
 ) -> Generator[dict[TypeVar, Key], None, None]:
     constraints = [_get_typevar_constraints(t, over_constraints) for t in type_vars]
-    if any(len(c) == 0 for c in constraints):
-        raise ValueError('Typevars must have constraints')
     for combination in itertools.product(*constraints):
         yield dict(zip(type_vars, combination, strict=True))
 

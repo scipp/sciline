@@ -1404,6 +1404,30 @@ def test_over_constrained_type_rejects_bad_constraint() -> None:
         )
 
 
+def test_can_constrain_type_to_nothing() -> None:
+    T = TypeVar('T', int, float, str)
+
+    @dataclass
+    class A(Generic[T]):
+        v: T
+
+    @dataclass
+    class B(Generic[T]):
+        v: T
+
+    def f(x: A[T]) -> B[T]:
+        return B[T](2 * x.v)
+
+    pipeline = sl.Pipeline(
+        [f],
+        params={A[int]: A[int](4)},
+        constraints={T: []},
+    )
+
+    with pytest.raises(sl.handler.UnsatisfiedRequirement, match='node not in graph'):
+        pipeline.get(B[int])
+
+
 def test_type_vars_must_be_constrained() -> None:
     T = TypeVar('T')
 
@@ -1418,7 +1442,7 @@ def test_type_vars_must_be_constrained() -> None:
     def foo(x: A[T]) -> B[T]:
         return B[T](x.v)
 
-    with pytest.raises(ValueError, match="constraint"):
+    with pytest.raises(ValueError, match="no constraint"):
         sl.Pipeline([foo])
 
 
