@@ -15,6 +15,9 @@ from typing import (
     overload,
 )
 
+import networkx as nx
+from networkx.algorithms.simple_paths import all_simple_paths
+
 from ._provider import Provider, ToProvider
 from ._utils import key_name
 from .data_graph import DataGraph, to_task_graph
@@ -50,45 +53,64 @@ def _is_multiple_keys(keys: type | Iterable[type] | UnionType) -> bool:
     )
 
 
-def _build_tree_msg(
-    graph: Any, node: Any, depth: int = 0, max_depth: int = 4, indent: str = '    '
-) -> str:
-    """Build a tree message showing dependencies recursively.
+def _find_paths_to_targets(
+    graph: Any, missing: Any, targets: tuple[Any, ...]
+) -> list[list[Any]]:
+    """Find paths from missing node to each target.
 
     Parameters
     ----------
     graph:
         The graph to traverse
-    node:
-        The node to start from
-    depth:
-        Current depth in the tree
-    max_depth:
-        Maximum depth to traverse
-    indent:
-        Indentation string
+    missing:
+        The missing node
+    targets:
+        The target nodes
 
     Returns
     -------
     :
-        The tree message as a string
+        List of paths, where each path is a list of nodes from missing to target
     """
-    if depth == 0:
-        tree_msg = (
-            f"Missing input node '{key_name(node)}'. "
-            f"Possibly requested via:\n{key_name(node)}"
+
+    paths = []
+    for target in targets:
+        try:
+            # Find all simple paths from the missing node to the target
+            target_paths = list(all_simple_paths(graph, missing, target))
+            # Sort by length to show the shortest path first
+            paths.extend(sorted(target_paths, key=len))
+        except (nx.NetworkXNoPath, nx.NodeNotFound):  # noqa: PERF203
+            # No path found or nodes not in graph
+            continue
+
+    return paths
+
+
+def _format_paths_msg(nx_graph: Any, paths: list[list[Any]]) -> str:
+    """Format paths into a readable message.
+
+    Parameters
+    ----------
+    paths:
+        List of paths, where each path is a list of nodes
+
+    Returns
+    -------
+    :
+        The formatted message
+    """
+    msg = f"Missing input node '{key_name(paths[0][0])}'. "
+    msg += "Affects requested targets (via providers given in parentheses):"
+
+    for i, path in enumerate(paths):
+        msg += f"\n{i + 1}. {key_name(path[0])} → "
+        msg += " → ".join(
+            f"({nx_graph.nodes[node]['provider'].location.qualname}) → {key_name(node)}"
+            for node in path[1:]
         )
-    else:
-        tree_msg = f"{indent * depth}{key_name(node)}"
 
-    if depth < max_depth:
-        children = list(graph.successors(node))
-        for child in children:
-            tree_msg += (
-                f"\n{_build_tree_msg(graph, child, depth + 1, max_depth, indent)}"
-            )
-
-    return tree_msg
+    return msg
 
 
 class Pipeline(DataGraph):
@@ -234,11 +256,14 @@ class Pipeline(DataGraph):
             missing = e.args[1]
             nx_graph = self.underlying_graph
             if missing in nx_graph:
-                info = _build_tree_msg(nx_graph, missing, max_depth=max_depth)
+                paths = _find_paths_to_targets(nx_graph, missing, targets)
+                info = _format_paths_msg(nx_graph, paths)
             else:
                 nodes = ", ".join(map(key_name, nx_graph.nodes))
                 info = f'{e} Requested node not in graph. Did you mean one of: {nodes}?'
-            raise type(e)(f'{info}\n\n') from e
+            # Not raising `from e` because that includes noisy traceback of internals,
+            # which are not relevant to the user.
+            raise type(e)(f'{info}\n\n') from None
         return TaskGraph(
             graph=graph,
             targets=targets if multi else keys,  # type: ignore[arg-type]
