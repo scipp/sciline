@@ -15,6 +15,9 @@ from typing import (
     overload,
 )
 
+import networkx as nx
+from networkx.algorithms.simple_paths import all_simple_paths
+
 from ._provider import Provider, ToProvider
 from ._utils import key_name
 from .data_graph import DataGraph, to_task_graph
@@ -48,6 +51,64 @@ def _is_multiple_keys(keys: type | Iterable[type] | UnionType) -> bool:
     return (
         not isinstance(keys, type) and not get_args(keys) and isinstance(keys, Iterable)
     )
+
+
+def _find_paths_to_targets(
+    graph: Any, missing: Any, targets: tuple[Any, ...]
+) -> list[list[Any]]:
+    """Find paths from missing node to each target.
+
+    Parameters
+    ----------
+    graph:
+        The graph to traverse
+    missing:
+        The missing node
+    targets:
+        The target nodes
+
+    Returns
+    -------
+    :
+        List of paths, where each path is a list of nodes from missing to target
+    """
+
+    paths = []
+    for target in targets:
+        try:
+            # Find all simple paths from the missing node to the target
+            paths.extend(list(all_simple_paths(graph, missing, target)))
+        except (nx.NetworkXNoPath, nx.NodeNotFound):  # noqa: PERF203
+            # No path found or nodes not in graph
+            continue
+
+    return sorted(paths, key=len)  # Sort by length to show the shortest path first
+
+
+def _format_paths_msg(nx_graph: Any, paths: list[list[Any]]) -> str:
+    """Format paths into a readable message.
+
+    Parameters
+    ----------
+    paths:
+        List of paths, where each path is a list of nodes
+
+    Returns
+    -------
+    :
+        The formatted message
+    """
+    msg = f"Missing input node '{key_name(paths[0][0])}'. "
+    msg += "Affects requested targets (via providers given in parentheses):"
+
+    for i, path in enumerate(paths):
+        msg += f"\n{i + 1}. {key_name(path[0])} → "
+        msg += " → ".join(
+            f"({nx_graph.nodes[node]['provider'].location.qualname}) → {key_name(node)}"
+            for node in path[1:]
+        )
+
+    return msg
 
 
 class Pipeline(DataGraph):
@@ -168,6 +229,7 @@ class Pipeline(DataGraph):
         *,
         scheduler: Scheduler | None = None,
         handler: ErrorHandler | None = None,
+        max_depth: int = 4,
     ) -> TaskGraph:
         """
         Return a TaskGraph for the given keys.
@@ -187,6 +249,8 @@ class Pipeline(DataGraph):
             During development and debugging it can be helpful to use a handler that
             raises an exception only when the graph is computed. This can be achieved
             by passing :py:class:`HandleAsComputeTimeException` as the handler.
+        max_depth:
+            Maximum depth to show in the dependency tree when reporting errors.
         """
         if multi := _is_multiple_keys(keys):
             targets = tuple(keys)  # type: ignore[arg-type]
@@ -195,8 +259,17 @@ class Pipeline(DataGraph):
         try:
             graph = to_task_graph(self, targets=targets, handler=handler)
         except UnsatisfiedRequirement as e:
-            output_keys = ", ".join(map(repr, self.output_keys()))
-            raise type(e)(f'{e} Did you mean one of: {output_keys}?') from e
+            missing = e.args[1]
+            nx_graph = self.underlying_graph
+            if missing in nx_graph:
+                paths = _find_paths_to_targets(nx_graph, missing, targets)
+                info = _format_paths_msg(nx_graph, paths)
+            else:
+                nodes = ", ".join(map(key_name, nx_graph.nodes))
+                info = f'{e} Requested node not in graph. Did you mean one of: {nodes}?'
+            # Not raising `from e` because that includes noisy traceback of internals,
+            # which are not relevant to the user.
+            raise type(e)(f'{info}\n\n') from None
         return TaskGraph(
             graph=graph,
             targets=targets if multi else keys,  # type: ignore[arg-type]
