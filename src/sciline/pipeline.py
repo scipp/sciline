@@ -77,14 +77,12 @@ def _find_paths_to_targets(
     for target in targets:
         try:
             # Find all simple paths from the missing node to the target
-            target_paths = list(all_simple_paths(graph, missing, target))
-            # Sort by length to show the shortest path first
-            paths.extend(sorted(target_paths, key=len))
+            paths.extend(list(all_simple_paths(graph, missing, target)))
         except (nx.NetworkXNoPath, nx.NodeNotFound):  # noqa: PERF203
             # No path found or nodes not in graph
             continue
 
-    return paths
+    return sorted(paths, key=len)  # Sort by length to show the shortest path first
 
 
 def _format_paths_msg(nx_graph: Any, paths: list[list[Any]]) -> str:
