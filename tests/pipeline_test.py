@@ -1033,6 +1033,20 @@ def test_pipeline_copy_after_setitem() -> None:
     assert b.compute(float) == 49.5
 
 
+def test_pipeline_copy_with_constraints() -> None:
+    Param = TypeVar('Param')
+
+    class Str(sl.Scope[Param, str], str): ...
+
+    def parametrized(x: Param) -> Str[Param]:
+        return Str(f'{x}')
+
+    a = sl.Pipeline([], params={int: 99}, constraints={Param: [int, float]})
+    b = a.copy()
+    b.insert(parametrized)  # constraints are applied to Param
+    assert b.compute(Str[int]) == Str[int]('99')
+
+
 def test_copy_with_generic_providers() -> None:
     Param = TypeVar('Param', int, float)
 
