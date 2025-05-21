@@ -130,7 +130,7 @@ At first it may feel unclear how to apply Sciline to your own code and workflows
 Consider the following concrete examples of how we use Sciline in our own projects:
 
  - [Small Angle Neutron Scattering](https://scipp.github.io/esssans/user-guide/isis/sans2d.html)
- - [Neutron Powder Diffraction](https://scipp.github.io/essdiffraction/user-guide/dream/dream-data-reduction.html)
+ - [Neutron Powder Diffraction](https://scipp.github.io/essdiffraction/user-guide/dream/dream-powder-reduction.html)
  - [Neutron Reflectometry](https://scipp.github.io/essreflectometry/user-guide/amor/amor-reduction.html)
 
  As Sciline is still a young project, we are still in the process of uncovering best practices, but we hope the above can at least provide some ideas.
