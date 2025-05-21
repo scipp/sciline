@@ -99,7 +99,9 @@ class DataGraph:
         return out
 
     def copy(self: T) -> T:
-        return self._from_cyclebane(self._cbgraph.copy())
+        cpy = self._from_cyclebane(self._cbgraph.copy())
+        cpy._constraints = self._constraints
+        return cpy
 
     def __copy__(self: T) -> T:
         return self.copy()
