@@ -247,9 +247,9 @@ def test_compute_mapped_index_names_selects_between_multiple_candidates() -> Non
         assert result_xy['c', 'bb'] == C(21)
 
 
-def test_compute_mapped_error_message_is_correct():
+def test_compute_mapped_error_message_is_correct() -> None:
     def a_to_b(a: A, i: int) -> B:
-        return B(a)
+        return B(a + i)
 
     pl = sl.Pipeline((a_to_b,))
     paramsA = pd.DataFrame(

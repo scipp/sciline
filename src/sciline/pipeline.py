@@ -101,7 +101,7 @@ def _format_paths_msg(nx_graph: Any, paths: list[list[Any]]) -> str:
     msg = f"Missing input node '{key_name(paths[0][0])}'. "
     msg += "Affects requested targets (via providers given in parentheses):"
 
-    def qualname_of_node(node):
+    def qualname_of_node(node: Any) -> Any:
         return (
             nx_graph.nodes[node]['provider'].location.qualname
             if 'provider' in nx_graph.nodes[node]
