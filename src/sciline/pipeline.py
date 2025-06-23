@@ -101,11 +101,20 @@ def _format_paths_msg(nx_graph: Any, paths: list[list[Any]]) -> str:
     msg = f"Missing input node '{key_name(paths[0][0])}'. "
     msg += "Affects requested targets (via providers given in parentheses):"
 
+    def qualname_of_node(node: Any) -> Any:
+        return (
+            nx_graph.nodes[node]['provider'].location.qualname
+            if 'provider' in nx_graph.nodes[node]
+            else nx_graph.nodes[node]['reduce'].__qualname__
+            if 'reduce' in nx_graph.nodes[node]
+            # To fail gracefully in case there are more cases
+            else nx_graph.nodes[node]
+        )
+
     for i, path in enumerate(paths):
         msg += f"\n{i + 1}. {key_name(path[0])} → "
         msg += " → ".join(
-            f"({nx_graph.nodes[node]['provider'].location.qualname}) → {key_name(node)}"
-            for node in path[1:]
+            f"({qualname_of_node(node)}) → {key_name(node)}" for node in path[1:]
         )
 
     return msg

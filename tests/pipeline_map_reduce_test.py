@@ -245,3 +245,18 @@ def test_compute_mapped_index_names_selects_between_multiple_candidates() -> Non
         assert result_xy['b', 'bb'] == C(11)
         assert result_xy['c', 'aa'] == C(20)
         assert result_xy['c', 'bb'] == C(21)
+
+
+def test_compute_mapped_error_message_is_correct() -> None:
+    def a_to_b(a: A, i: int) -> B:
+        return B(a + i)
+
+    pl = sl.Pipeline((a_to_b,))
+    paramsA = pd.DataFrame(
+        {A: [A(10 * i) for i in range(3)]}, index=['a', 'b', 'c']
+    ).rename_axis('x')
+
+    reduced = pl.map(paramsA).reduce(func=max, name=B, index='x')
+
+    with pytest.raises(sl.UnsatisfiedRequirement, match="Missing input node 'int'"):
+        reduced.compute(B)
