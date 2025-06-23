@@ -258,5 +258,5 @@ def test_compute_mapped_error_message_is_correct() -> None:
 
     reduced = pl.map(paramsA).reduce(func=max, name=B, index='x')
 
-    with pytest.raises(sl.UnsatisfiedRequirement):
+    with pytest.raises(sl.UnsatisfiedRequirement, match="Missing input node 'int'"):
         reduced.compute(B)
