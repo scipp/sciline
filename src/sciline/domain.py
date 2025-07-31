@@ -5,7 +5,6 @@ from typing import Any, Generic, TypeVar, get_args, get_origin
 from typing_extensions import TypeVarTuple, Unpack
 
 PARAM = TypeVar("PARAM")
-PARAM2 = TypeVar("PARAM2")
 PARAMS = TypeVarTuple("PARAMS")
 SUPER = TypeVar("SUPER")
 
