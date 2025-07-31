@@ -11,7 +11,7 @@ except importlib.metadata.PackageNotFoundError:
 
 from . import scheduler
 from ._provider import Provider, UnboundTypeVar
-from .domain import Scope, ScopeTwoParams
+from .domain import Scope
 from .handler import (
     HandleAsBuildTimeException,
     HandleAsComputeTimeException,
@@ -26,7 +26,6 @@ __all__ = [
     "Pipeline",
     "Provider",
     "Scope",
-    "ScopeTwoParams",
     'TaskGraph',
     "UnboundTypeVar",
     "UnsatisfiedRequirement",

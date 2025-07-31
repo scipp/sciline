@@ -12,7 +12,6 @@
 
    Pipeline
    Scope
-   ScopeTwoParams
    scheduler.Scheduler
    scheduler.DaskScheduler
    scheduler.NaiveScheduler
