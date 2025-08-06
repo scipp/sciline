@@ -2,7 +2,7 @@
 # Copyright (c) 2025 Scipp contributors (https://github.com/scipp)
 from typing import Any, Generic, TypeVar, get_args, get_origin
 
-from typing_extensions import TypeVarTuple, Unpack
+from typing_extensions import TypeVarTuple
 
 PARAM = TypeVar("PARAM")
 PARAMS = TypeVarTuple("PARAMS")
@@ -33,7 +33,7 @@ def _check_supertype(cls: type, scope_cls: type) -> None:
             )
 
 
-class Scope(Generic[Unpack[PARAMS], SUPER]):
+class Scope(Generic[*PARAMS, SUPER]):
     """
     Helper for defining a generic type alias.
     """
