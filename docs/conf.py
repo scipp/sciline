@@ -32,6 +32,7 @@ extensions = [
     'sphinx_autodoc_typehints',
     'sphinx_copybutton',
     'sphinx_design',
+    'sphinxcontrib.autodoc_pydantic',
     'nbsphinx',
     'myst_parser',
 ]
@@ -185,7 +186,7 @@ html_theme_options = {
         },
         {
             "name": "Conda",
-            "url": "https://anaconda.org/scipp/sciline",
+            "url": "https://anaconda.org/conda-forge/sciline",
             "icon": "fa-custom fa-anaconda",
             "type": "fontawesome",
         },
@@ -265,4 +266,8 @@ linkcheck_ignore = [
     r'https?://github\.com/.*?/blob/[a-f0-9]+/.+?#',
     # Fails to find the anchor even though it exists at the time of writing:
     'https://github.com/google/guice/wiki/MentalModel#injection',
+    # Linkcheck seems to be denied access by some DOI resolvers.
+    # Since DOIs are supposed to be permanent, we don't need to check them.'
+    r'https?://doi\.org/',
+    r'https?://dx\.doi\.org/',
 ]
