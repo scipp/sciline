@@ -260,7 +260,7 @@ def _bind_free_typevars(tp: TypeVar | Key, bound: dict[TypeVar, Key]) -> Key:
         result = origin[tuple(_bind_free_typevars(arg, bound) for arg in get_args(tp))]
         if result is None:
             raise ValueError(f'Binding type variables in {tp} resulted in `None`')
-        return result
+        return result  # type: ignore[no-any-return]
     else:
         return tp
 
