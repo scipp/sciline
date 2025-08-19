@@ -77,7 +77,7 @@ def _normalize_custom_constraints(
     return normalized
 
 
-T = TypeVar('T', bound='DataGraph')
+T = TypeVar("T", bound="DataGraph")
 
 
 class DataGraph:
@@ -124,14 +124,14 @@ class DataGraph:
     def _get_clean_node(self, key: Key) -> Any:
         """Return node ready for setting value or provider."""
         if key is NoneType:
-            raise ValueError('Key must not be None')
+            raise ValueError("Key must not be None")
         if key in self.underlying_graph:
             self.underlying_graph.remove_edges_from(
                 list(self.underlying_graph.in_edges(key))
             )
-            self.underlying_graph.nodes[key].pop('value', None)
-            self.underlying_graph.nodes[key].pop('provider', None)
-            self.underlying_graph.nodes[key].pop('reduce', None)
+            self.underlying_graph.nodes[key].pop("value", None)
+            self.underlying_graph.nodes[key].pop("provider", None)
+            self.underlying_graph.nodes[key].pop("reduce", None)
         else:
             self.underlying_graph.add_node(key)
         return self.underlying_graph.nodes[key]
@@ -156,7 +156,7 @@ class DataGraph:
             return
         # Trigger UnboundTypeVar error if any input typevars are not bound
         provider = provider.bind_type_vars({})
-        self._get_clean_node(return_type)['provider'] = provider
+        self._get_clean_node(return_type)["provider"] = provider
         for dep in provider.arg_spec.keys():
             self.underlying_graph.add_edge(dep, return_type, key=dep)
 
@@ -207,6 +207,10 @@ class DataGraph:
         """
         return self._from_cyclebane(self._cbgraph.map(node_values))
 
+    def groupby(self: T, node: Key) -> T:
+        """ """
+        return self._from_cyclebane(self._cbgraph.groupby(node))
+
     def reduce(self: T, *, func: Callable[..., Any], **kwargs: Any) -> T:
         """Reduce the outputs of a mapped graph into a single value and provider.
 
@@ -228,7 +232,7 @@ class DataGraph:
         # about the modification, this is in line with __setitem__ which does not
         # perform such checks and allows for using generic reduction functions.
         return self._from_cyclebane(
-            self._cbgraph.reduce(attrs={'reduce': func}, **kwargs)
+            self._cbgraph.reduce(attrs={"reduce": func}, **kwargs)
         )
 
     def to_networkx(self) -> nx.DiGraph:
@@ -239,13 +243,13 @@ class DataGraph:
 
         dot = graphviz.Digraph(strict=True, **kwargs)
         for node in self.underlying_graph.nodes:
-            dot.node(str(node), label=str(node), shape='box')
+            dot.node(str(node), label=str(node), shape="box")
             attrs = self.underlying_graph.nodes[node]
-            attrs = '\n'.join(f'{k}={v}' for k, v in attrs.items())
-            dot.node(str(node), label=f'{node}\n{attrs}', shape='box')
+            attrs = "\n".join(f"{k}={v}" for k, v in attrs.items())
+            dot.node(str(node), label=f"{node}\n{attrs}", shape="box")
         for edge in self.underlying_graph.edges:
-            key = self.underlying_graph.edges[edge].get('key')
-            label = str(key) if key is not None else ''
+            key = self.underlying_graph.edges[edge].get("key")
+            label = str(key) if key is not None else ""
             dot.edge(str(edge[0]), str(edge[1]), label=label)
         return dot
 
@@ -270,10 +274,10 @@ def to_task_graph(
         node = graph.nodes[key]
         input_nodes = list(graph.predecessors(key))
         input_edges = list(graph.in_edges(key, data=True))
-        orig_keys = [edge[2].get('key', None) for edge in input_edges]
-        if (value := node.get('value', _no_value)) is not _no_value:
+        orig_keys = [edge[2].get("key", None) for edge in input_edges]
+        if (value := node.get("value", _no_value)) is not _no_value:
             out[key] = Provider.parameter(value)
-        elif (provider := node.get('provider')) is not None:
+        elif (provider := node.get("provider")) is not None:
             new_key = dict(zip(orig_keys, input_nodes, strict=True))
             # By using map_keys (instead of creating an ArgSpec from scratch),
             # we automatically preserve what args and kwargs are.
@@ -281,10 +285,10 @@ def to_task_graph(
             if len(spec) != len(input_nodes):
                 # This should be caught by __setitem__, but we check here to be safe.
                 raise ValueError("Corrupted graph")
-            out[key] = Provider(func=provider.func, arg_spec=spec, kind='function')
-        elif (func := node.get('reduce')) is not None:
+            out[key] = Provider(func=provider.func, arg_spec=spec, kind="function")
+        elif (func := node.get("reduce")) is not None:
             spec = ArgSpec.from_args(*input_nodes)
-            out[key] = Provider(func=func, arg_spec=spec, kind='function')
+            out[key] = Provider(func=func, arg_spec=spec, kind="function")
         else:
             out[key] = handler.handle_unsatisfied_requirement(key)
     return out
