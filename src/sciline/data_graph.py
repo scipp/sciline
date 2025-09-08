@@ -207,6 +207,23 @@ class DataGraph:
         """
         return self._from_cyclebane(self._cbgraph.map(node_values))
 
+    def groupby(self: T, node: Key) -> T:
+        """Group the graph by a specific node.
+
+        Parameters
+        ----------
+        node:
+            Node key to group by.
+
+        Returns
+        -------
+        :
+            A new graph that groups mapped nodes by the given key. This graph is not
+            meant to be executed directly, but to be further processed via
+            :meth:`reduce`.
+        """
+        return self._from_cyclebane(self._cbgraph.groupby(node))
+
     def reduce(self: T, *, func: Callable[..., Any], **kwargs: Any) -> T:
         """Reduce the outputs of a mapped graph into a single value and provider.
 
