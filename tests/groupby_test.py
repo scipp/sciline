@@ -1,5 +1,6 @@
 from typing import NewType
 
+import numpy as np
 import pandas as pd
 
 import sciline as sl
@@ -99,12 +100,11 @@ def test_groupby_material_at_rawdata():
         return out
 
     # Group by Material and merge RawData
-    MergedData = NewType('MergedData', int)
     grouped = (
         base[RawData]
         .map(param_table)
         .groupby('Material')
-        .reduce(key=RawData, func=merge_raw, name=MergedData)
+        .reduce(key=RawData, func=merge_raw, name='merged')
     )
 
     # Join back to base pipeline
@@ -118,18 +118,29 @@ def test_groupby_material_at_rawdata():
         )
     )
 
-    # Attach the grouped MergedData to the lower part of the pipeline
-    mapped[RawData] = grouped[MergedData]
+    # Attach the grouped merged data to the lower part of the pipeline
+    mapped[RawData] = grouped['merged']
 
     clean_data = sl.compute_mapped(mapped, CleanedData)
-    assert clean_data['diamond'] == [1, 2, 3]
-    assert clean_data['graphite'] == [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+    assert np.array_equal(clean_data['diamond'], [1, 2, 3])
+    assert np.array_equal(
+        clean_data['graphite'], [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+    )
 
     result = sl.compute_mapped(mapped, Result)
     assert result['diamond'] == 12.0
     assert result['graphite'] == 228.0
 
-    # TODO: currently cannot compute RawData: ValueError: Multiple mapped nodes with
-    # name '__main__.RawData' found:
-    # - MappedNode(name=__main__.RawData, indices=('Material',))
-    # - MappedNode(name=__main__.RawData, indices=('run_id',))
+    raw_data = sl.compute_mapped(mapped, RawData, index_names=['Material'])
+    assert np.array_equal(
+        raw_data['diamond']['data'], [1, 2, float('nan'), 3], equal_nan=True
+    )
+    assert np.array_equal(
+        raw_data['graphite']['data'],
+        [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+        equal_nan=True,
+    )
+    assert raw_data['diamond']['meta'] == {'filename': ['file102.txt']}
+    assert raw_data['graphite']['meta'] == {
+        'filename': ['file103.txt', 'file104.txt', 'file105.txt']
+    }
