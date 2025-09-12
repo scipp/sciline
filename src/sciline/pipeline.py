@@ -129,7 +129,7 @@ class Pipeline(DataGraph):
         *,
         params: dict[type[Any], Any] | None = None,
         # TODO: Change to Mapping[type[TypeVar], Iterable[Key]] once we move to
-        # Python 3.12 (an error is raised by autodoc-typehints for 3.11:
+        # Python 3.12 (an error is raised by autodoc-typehints for 3.11)
         constraints: Mapping[type[Any], Iterable[Key]] | None = None,
     ):
         """
