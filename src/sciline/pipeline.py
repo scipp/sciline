@@ -128,7 +128,10 @@ class Pipeline(DataGraph):
         providers: Iterable[ToProvider | Provider] | None = None,
         *,
         params: dict[type[Any], Any] | None = None,
-        constraints: Mapping[TypeVar, Iterable[Key]] | None = None,
+        # TODO: Change to Mapping[type[TypeVar], Iterable[Key]] once we move to
+        # Python 3.12 (an error is raised by autodoc-typehints for 3.11:
+        # type object 'TypeVar' has no attribute '__bound__')
+        constraints: Mapping[type[Any], Iterable[Key]] | None = None,
     ):
         """
         Setup a Pipeline from a list providers
