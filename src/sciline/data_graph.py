@@ -85,9 +85,7 @@ class DataGraph:
         self,
         providers: None | Iterable[ToProvider | Provider],
         *,
-        # TODO: Change to Mapping[type[TypeVar], Iterable[Key]] once we move to
-        # Python 3.12 (an error is raised by autodoc-typehints for 3.11)
-        constraints: Mapping[type[Any], Iterable[Key]] | None = None,
+        constraints: Mapping[TypeVar, Iterable[Key]] | None = None,
     ) -> None:
         self._constraints = _normalize_custom_constraints(constraints)
         self._cbgraph = cb.Graph(nx.DiGraph())
