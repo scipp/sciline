@@ -23,10 +23,10 @@
 
 # {transparent}`Sciline`
 
-<span style="font-size:1.2em;font-style:italic;color:var(--pst-color-text-muted)">
+<div style="font-size:1.2em;font-style:italic;color:var(--pst-color-text-muted);text-align:center;">
   Build scientific pipelines for your data
   </br></br>
-</span>
+</div>
 
 ## Why Sciline?
 

@@ -78,7 +78,7 @@ def _find_paths_to_targets(
         try:
             # Find all simple paths from the missing node to the target
             paths.extend(list(all_simple_paths(graph, missing, target)))
-        except (nx.NetworkXNoPath, nx.NodeNotFound):  # noqa: PERF203
+        except (nx.NetworkXNoPath, nx.NodeNotFound):
             # No path found or nodes not in graph
             continue
 
