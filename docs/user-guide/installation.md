@@ -10,7 +10,7 @@ pip install sciline
 ````
 ````{tab-item} conda
 ```sh
-conda install -c conda-forge -c scipp sciline
+conda install -c conda-forge sciline
 ```
 ````
 `````
