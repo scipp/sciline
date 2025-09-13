@@ -363,6 +363,30 @@ def _import_pandas(function_name: str) -> pandas:
         ) from None
 
 
+def _get_mapped_candidates(graph: DataGraph, base_name: type) -> list:
+    from cyclebane.graph import MappedNode
+
+    return [
+        node
+        for node in graph.underlying_graph.nodes
+        if isinstance(node, MappedNode) and node.name == base_name
+    ]
+
+
+def is_mapped_node(graph: DataGraph, base_name: type) -> bool:
+    """
+    Check if the given base_name is a mapped node in the graph.
+
+    Parameters
+    ----------
+    graph:
+        The data graph to check for the mapped node.
+    base_name:
+        The base name of the mapped node to check for.
+    """
+    return bool(_get_mapped_candidates(graph, base_name))
+
+
 def get_mapped_node_names(
     graph: DataGraph, base_name: type, *, index_names: Sequence[Hashable] | None = None
 ) -> pandas.Series:
@@ -396,13 +420,9 @@ def get_mapped_node_names(
         The series of node names corresponding to the mapped node.
     """
     pd = _import_pandas("sciline.get_mapped_node_names")
-    from cyclebane.graph import IndexValues, MappedNode, NodeName
+    from cyclebane.graph import IndexValues, NodeName
 
-    candidates = [
-        node
-        for node in graph.underlying_graph.nodes
-        if isinstance(node, MappedNode) and node.name == base_name
-    ]
+    candidates = _get_mapped_candidates(graph, base_name)
     if len(candidates) == 0:
         raise ValueError(f"'{base_name}' is not a mapped node.")
     if index_names is not None:

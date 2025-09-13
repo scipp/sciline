@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any, TypeVar, get_args
 
 import cyclebane as cb
 import networkx as nx
+from cyclebane.graph import GroupbyGraph as CbGroupbyGraph
 from cyclebane.node_values import IndexName, IndexValue
 
 from ._provider import ArgSpec, Provider, ToProvider, _bind_free_typevars
@@ -207,6 +208,25 @@ class DataGraph:
         """
         return self._from_cyclebane(self._cbgraph.map(node_values))
 
+    def groupby(self: T, node: Key) -> T:
+        """Group the graph by a specific node.
+
+        Parameters
+        ----------
+        node:
+            Node key to group by.
+
+        Returns
+        -------
+        :
+            A new graph that groups mapped nodes by the given key. This graph is not
+            meant to be executed directly, but to be further processed via
+            :meth:`GroupbyGraph.reduce`.
+        """
+        return GroupbyGraph(
+            graph=self._cbgraph.groupby(node), graph_maker=self._from_cyclebane
+        )
+
     def reduce(self: T, *, func: Callable[..., Any], **kwargs: Any) -> T:
         """Reduce the outputs of a mapped graph into a single value and provider.
 
@@ -248,6 +268,40 @@ class DataGraph:
             label = str(key) if key is not None else ''
             dot.edge(str(edge[0]), str(edge[1]), label=label)
         return dot
+
+
+class GroupbyGraph:
+    """
+    A graph that has been grouped by a specific index.
+    This is a specialized graph that is used to represent the result of a groupby
+    operation. It allows for operations on the grouped data,
+    such as aggregation or summarization.
+    """
+
+    def __init__(
+        self, graph: CbGroupbyGraph, graph_maker: Callable[..., DataGraph]
+    ) -> None:
+        self._cbgraph = graph
+        # We forward the constructor so this can be used by both DataGraph and Pipeline
+        self._graph_maker = graph_maker
+
+    def reduce(self, *, func: Callable[..., Any], **kwargs: Any) -> DataGraph:
+        """Reduce the grouped node in the graph group by group, so that it results in a
+        single value and provider per group.
+
+        Parameters
+        ----------
+        func:
+            Function that takes the values to reduce and returns a single value.
+        kwargs:
+            Forwarded to :meth:`cyclebane.GroupbyGraph.reduce`.
+
+        Returns
+        -------
+        :
+            A new :class:`DataGraph` with reduced grouped nodes.
+        """
+        return self._graph_maker(self._cbgraph.reduce(attrs={'reduce': func}, **kwargs))
 
 
 _no_value = object()
