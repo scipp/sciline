@@ -56,6 +56,10 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12.*'
+          # TODO: There is an issue with some TypeVar type hints and autodoc-typehints
+          # in python 3.11, so we hard code the python version for building the docs.
+          # Uncomment below to go back to the min version, once we drop python 3.11
+          # python-version: '.github/workflows/python-version-ci'
       - run: python -m pip install --upgrade pip
       - run: python -m pip install -r requirements/ci.txt
       - run: tox -e releasedocs -- "${VERSION}"
