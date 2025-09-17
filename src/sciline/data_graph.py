@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 import itertools
-from collections.abc import Callable, Generator, Iterable, Mapping
+from collections.abc import Callable, Generator, Hashable, Iterable, Mapping
 from types import NoneType
 from typing import TYPE_CHECKING, Any, TypeVar, get_args
 
@@ -285,7 +285,14 @@ class GroupbyGraph:
         # We forward the constructor so this can be used by both DataGraph and Pipeline
         self._graph_maker = graph_maker
 
-    def reduce(self, *, func: Callable[..., Any], **kwargs: Any) -> DataGraph:
+    def reduce(
+        self,
+        *,
+        func: Callable[..., Any],
+        key: None | Hashable = None,
+        name: None | Hashable = None,
+        attrs: None | dict[str, Any] = None,
+    ) -> DataGraph:
         """Reduce the grouped node in the graph group by group, so that it results in a
         single value and provider per group.
 
@@ -293,15 +300,33 @@ class GroupbyGraph:
         ----------
         func:
             Function that takes the values to reduce and returns a single value.
-        kwargs:
-            Forwarded to :meth:`cyclebane.GroupbyGraph.reduce`.
+        key:
+            The name of the source node to reduce. This is the original name prior to
+            mapping. If not given, tries to find a unique sink node.
+            See :meth:`cyclebane.Graph.reduce`.
+        name:
+            The name of the new node. If not given, a unique name is generated.
+            See :meth:`cyclebane.Graph.reduce`.
+        attrs:
+            Attributes to set on the new node(s). See :meth:`cyclebane.Graph.reduce`.
 
         Returns
         -------
         :
             A new :class:`DataGraph` with reduced grouped nodes.
         """
-        return self._graph_maker(self._cbgraph.reduce(attrs={'reduce': func}, **kwargs))
+        cbattrs = {'reduce': func}
+        if attrs is not None:
+            if "func" in attrs:
+                raise ValueError(
+                    "The 'func' attribute cannot be set via 'attrs'. "
+                    "Use the 'func' argument instead."
+                )
+            cbattrs.update(attrs)
+
+        return self._graph_maker(
+            self._cbgraph.reduce(attrs=cbattrs, key=key, name=name)
+        )
 
 
 _no_value = object()
