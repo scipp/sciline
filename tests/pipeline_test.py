@@ -7,6 +7,7 @@ from typing import Any, Generic, NewType, TypeVar
 
 import numpy as np
 import numpy.typing as npt
+import pydantic
 import pytest
 
 import sciline as sl
@@ -567,7 +568,8 @@ def test_setitem_generic_sets_up_working_subproviders() -> None:
 
 
 def test_setitem_generic_works_without_params() -> None:
-    T = TypeVar('T')
+    # Setting a generic automatically specializes for its parameters.
+    T = TypeVar('T', int, float)
 
     @dataclass
     class A(Generic[T]):
@@ -575,7 +577,54 @@ def test_setitem_generic_works_without_params() -> None:
 
     pl = sl.Pipeline()
     pl[A] = A(3)
-    assert pl.compute(A) == A(3)
+    assert pl.compute(A[int]) == A[int](3)
+    assert pl.compute(A[float]) == A[float](3)
+
+
+def test_setitem_generic_works_with_generic_params() -> None:
+    T = TypeVar('T', int, float)
+
+    @dataclass
+    class A(Generic[T]):
+        value: T
+
+    pl = sl.Pipeline()
+    pl[A[T]] = A[T](3)
+    assert pl.compute(A[int]) == A[int](3)
+    assert pl.compute(A[float]) == A[float](3)
+
+
+def test_insert_generic_works_without_params() -> None:
+    # Inserting a generic automatically specializes for its parameters.
+    T = TypeVar('T', int, float)
+
+    @dataclass
+    class A(Generic[T]):
+        value: T
+
+    def foo() -> A:
+        return A(value=3)
+
+    pl = sl.Pipeline()
+    pl.insert(foo)
+    assert pl.compute(A[int]) == A[int](3)
+    assert pl.compute(A[float]) == A[float](3)
+
+
+def test_insert_generic_works_with_generic_params() -> None:
+    T = TypeVar('T', int, float)
+
+    @dataclass
+    class A(Generic[T]):
+        value: T
+
+    def foo() -> A[T]:
+        return A[T](value=3)
+
+    pl = sl.Pipeline()
+    pl.insert(foo)
+    assert pl.compute(A[int]) == A[int](3)
+    assert pl.compute(A[float]) == A[float](3)
 
 
 def test_setitem_can_replace_param_with_param() -> None:
@@ -687,6 +736,52 @@ def test_setitem_can_replace_generic_param_with_generic_param() -> None:
     assert pl.compute(A[int]) == A[int](1)
     pl[A[T]] = A[T](2)  # type: ignore[valid-type]
     assert pl.compute(A[int]) == A[int](2)
+
+
+def test_setitem_generic_pydantic_model() -> None:
+    T = TypeVar('T')
+
+    class Model(pydantic.BaseModel, Generic[T]):
+        value: T
+
+    pl = sl.Pipeline()
+    pl[Model[int]] = Model[int](value=3)
+    pl[Model[float]] = Model[float](value=5.6)
+    assert pl.compute(Model[int]) == Model[int](value=3)
+    assert pl.compute(Model[float]) == Model[float](value=5.6)
+
+
+def test_insert_generic_pydantic_model() -> None:
+    # This case is special because BaseModel sets a metaclass that prevents us from
+    # detecting type parameters purely based on the type hint.
+    # We have to inspect the underlying type that was used as a hint.
+    # That is, `typing.get_type_hints(a_to_b)` finds the return type `B`, not `B[T]` as
+    # it would without pydantic.
+    T = TypeVar('T')
+
+    @dataclass
+    class A(Generic[T]):
+        value: T
+
+    class B(pydantic.BaseModel, Generic[T]):
+        value: T
+
+    class C(pydantic.BaseModel, Generic[T]):
+        value: T
+
+    def a_to_b(a: A[T]) -> B[T]:
+        return B[T](value=a.value)
+
+    def b_to_c(b: B[T]) -> C[T]:
+        return C[T](value=2 * b.value)
+
+    pl = sl.Pipeline(constraints={T: (int, float)})
+    pl.insert(a_to_b)
+    pl.insert(b_to_c)
+    pl[A[int]] = A[int](value=3)
+    pl[A[float]] = A[float](value=5.6)
+    assert pl.compute(C[int]) == C[int](value=2 * 3)
+    assert pl.compute(C[float]) == C[float](value=2 * 5.6)
 
 
 def test_init_with_params() -> None:

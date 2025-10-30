@@ -32,6 +32,8 @@ def _find_all_typevars(t: type | TypeVar) -> set[TypeVar]:
     """Returns the set of all TypeVars in a type expression."""
     if isinstance(t, TypeVar):
         return {t}
+    if params := getattr(t, '__parameters__', ()):
+        return set(params)
     return set(itertools.chain(*map(_find_all_typevars, get_args(t))))
 
 
