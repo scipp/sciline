@@ -2,7 +2,7 @@
 # Do not make an environment from this file, use test.txt instead!
 # Add more dependencies in the ``test`` list
 # under ``[project.optional-dependencies]`` section, in ``pyproject.toml``
-
+    
 # Anything above "--- END OF CUSTOM SECTION ---"
 # will not be touched by ``make_base.py``
 # --- END OF CUSTOM SECTION ---
@@ -14,4 +14,5 @@ graphviz
 jsonschema
 numpy
 pandas
+pydantic
 rich
