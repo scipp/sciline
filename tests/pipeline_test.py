@@ -589,7 +589,7 @@ def test_setitem_generic_works_with_generic_params() -> None:
         value: T
 
     pl = sl.Pipeline()
-    pl[A[T]] = A[T](3)
+    pl[A[T]] = A[T](3)  # type: ignore[valid-type]
     assert pl.compute(A[int]) == A[int](3)
     assert pl.compute(A[float]) == A[float](3)
 
@@ -602,7 +602,7 @@ def test_insert_generic_works_without_explicit_params() -> None:
     class A(Generic[T]):
         value: T
 
-    def foo() -> A:
+    def foo() -> A:  # type: ignore[type-arg]
         return A(value=3)
 
     pl = sl.Pipeline()
@@ -757,7 +757,7 @@ def test_insert_generic_pydantic_model() -> None:
     # We have to inspect the underlying type that was used as a hint.
     # That is, `typing.get_type_hints(a_to_b)` finds the return type `B`, not `B[T]` as
     # it would without pydantic.
-    T = TypeVar('T')
+    T = TypeVar('T', int, float)
 
     @dataclass
     class A(Generic[T]):
