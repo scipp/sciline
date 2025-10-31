@@ -567,7 +567,7 @@ def test_setitem_generic_sets_up_working_subproviders() -> None:
         pl.compute(A[str])
 
 
-def test_setitem_generic_works_without_params() -> None:
+def test_setitem_generic_works_without_explicit_params() -> None:
     # Setting a generic automatically specializes for its parameters.
     T = TypeVar('T', int, float)
 
@@ -594,7 +594,7 @@ def test_setitem_generic_works_with_generic_params() -> None:
     assert pl.compute(A[float]) == A[float](3)
 
 
-def test_insert_generic_works_without_params() -> None:
+def test_insert_generic_works_without_explicit_params() -> None:
     # Inserting a generic automatically specializes for its parameters.
     T = TypeVar('T', int, float)
 
