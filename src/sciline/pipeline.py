@@ -37,7 +37,7 @@ T = TypeVar('T')
 KeyType = TypeVar('KeyType', bound=Key)
 
 
-def _is_multiple_keys(keys: type | Iterable[type] | UnionType) -> bool:
+def _is_multiple_keys(keys: type | Iterable[type] | UnionType | str) -> bool:
     # Cannot simply use isinstance(keys, Iterable) because that is True for
     # generic aliases of iterable types, e.g.,
     #
@@ -234,7 +234,7 @@ class Pipeline(DataGraph):
 
     def get(
         self,
-        keys: type | Iterable[type] | "UnionType",  # noqa: UP037 (needed by Sphinx)
+        keys: type | Iterable[type] | "UnionType" | str,  # noqa: UP037 (needed by Sphinx)
         *,
         scheduler: Scheduler | None = None,
         handler: ErrorHandler | None = None,
@@ -264,9 +264,9 @@ class Pipeline(DataGraph):
         if multi := _is_multiple_keys(keys):
             targets = tuple(keys)  # type: ignore[arg-type]
         else:
-            targets = (keys,)  # type: ignore[assignment]
+            targets = (keys,)
         try:
-            graph = to_task_graph(self, targets=targets, handler=handler)
+            graph = to_task_graph(self, targets=targets, handler=handler)  # type: ignore[arg-type]
         except UnsatisfiedRequirement as e:
             missing = e.args[1]
             nx_graph = self.underlying_graph

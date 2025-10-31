@@ -26,6 +26,8 @@ def test_can_visualize_graph_with_unsatisfied_requirements() -> None:
 
 
 def test_generic_types_formatted_without_prefixes() -> None:
+    from sciline.visualize import _format_type
+
     T = TypeVar('T')
 
     class A(sl.Scope[T, int], int):
@@ -37,9 +39,9 @@ def test_generic_types_formatted_without_prefixes() -> None:
     class SubA(A[T]):
         pass
 
-    assert sl.visualize._format_type(A[float]).name == 'A[float]'
-    assert sl.visualize._format_type(SubA[float]).name == 'SubA[float]'
-    assert sl.visualize._format_type(B[float]).name == 'B[float]'
+    assert _format_type(A[float]).name == 'A[float]'
+    assert _format_type(SubA[float]).name == 'SubA[float]'
+    assert _format_type(B[float]).name == 'B[float]'
 
 
 def test_can_visualize_graph_without_explicit_target() -> None:

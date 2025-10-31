@@ -9,5 +9,5 @@ cyclebane==24.10.0
     # via -r base.in
 networkx==3.5
     # via cyclebane
-typing-extensions==4.14.1
+typing-extensions==4.15.0
     # via -r base.in
