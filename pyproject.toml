@@ -39,6 +39,7 @@ dynamic = ["version"]
 [project.optional-dependencies]
 test = [
     "pytest",
+    "pytest-randomly >= 3",
     "dask",
     "graphviz",
     "jsonschema",
