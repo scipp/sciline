@@ -1,0 +1,831 @@
+
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="../../" >
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Workflow Design &#8212; Sciline</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "";
+  </script>
+  <!--
+    this give us a css class that will be invisible only if js is disabled
+  -->
+  <noscript>
+    <style>
+      .pst-js-only { display: none !important; }
+
+    </style>
+  </noscript>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="../../_static/styles/theme.css?digest=8878045cc6db502f8baf" rel="stylesheet" />
+<link href="../../_static/styles/pydata-sphinx-theme.css?digest=8878045cc6db502f8baf" rel="stylesheet" />
+
+    <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=03e43079" />
+    <link rel="stylesheet" type="text/css" href="../../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../../_static/autodoc_pydantic.css" />
+    <link rel="stylesheet" type="text/css" href="../../_static/sphinx-design.min.css?v=95c83b7e" />
+  
+  <!-- So that users can add custom icons -->
+  <script src="../../_static/scripts/fontawesome.js?digest=8878045cc6db502f8baf"></script>
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="../../_static/scripts/bootstrap.js?digest=8878045cc6db502f8baf" />
+<link rel="preload" as="script" href="../../_static/scripts/pydata-sphinx-theme.js?digest=8878045cc6db502f8baf" />
+
+    <script src="../../_static/documentation_options.js?v=0d8463a1"></script>
+    <script src="../../_static/doctools.js?v=9bcbadda"></script>
+    <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../../_static/copybutton.js?v=f281be69"></script>
+    <script src="../../_static/design-tabs.js?v=f930bc37"></script>
+    <script crossorigin="anonymous" integrity="sha256-Ae2Vz/4ePdIu6ZyI/5ZGsYnb+m0JlOmKPjt6XZ9JJkA=" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js"></script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'developer/architecture-and-design/workflow-design';</script>
+    <script src="../../_static/anaconda-icon.js?v=461bdc62"></script>
+    <link rel="icon" href="../../_static/favicon.ico"/>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" />
+    <link rel="next" title="Rewrite of Sciline’s Pipeline as a Data Graph" href="rewrite.html" />
+    <link rel="prev" title="Architecture and Design" href="index.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="docsearch:language" content="en"/>
+  <meta name="docsearch:version" content="25.11.1" />
+  </head>
+  
+  
+  <body data-bs-spy="scroll" data-bs-target=".bd-toc-nav" data-offset="180" data-bs-root-margin="0px 0px -60%" data-default-mode="">
+
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+
+  
+  <dialog id="pst-search-dialog">
+    
+<form class="bd-search d-flex align-items-center"
+      action="../../search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         placeholder="Search the docs ..."
+         aria-label="Search the docs ..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form>
+  </dialog>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+<div class="bd-header__inner bd-page-width">
+  <button class="pst-navbar-icon sidebar-toggle primary-toggle" aria-label="Site navigation">
+    <span class="fa-solid fa-bars"></span>
+  </button>
+  
+  
+  <div class="col-lg-3 navbar-header-items__start">
+    
+      <div class="navbar-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="../../index.html">
+  
+  
+  
+  
+  
+    
+    
+      
+    
+    
+    <img src="../../_static/logo.svg" class="logo__image only-light" alt="Sciline - Home"/>
+    <img src="../../_static/logo-dark.svg" class="logo__image only-dark pst-js-only" alt="Sciline - Home"/>
+  
+  
+</a></div>
+    
+  </div>
+  
+  <div class="col-lg-9 navbar-header-items">
+    
+    <div class="me-auto navbar-header-items__center">
+      
+        <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../user-guide/index.html">
+    User Guide
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../recipes/index.html">
+    Recipes
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../api-reference/index.html">
+    API Reference
+  </a>
+</li>
+
+
+<li class="nav-item current active">
+  <a class="nav-link nav-internal" href="../index.html">
+    Development
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../about/index.html">
+    About
+  </a>
+</li>
+
+            <li class="nav-item dropdown">
+                <button class="btn dropdown-toggle nav-item" type="button"
+                data-bs-toggle="dropdown" aria-expanded="false"
+                aria-controls="pst-nav-more-links">
+                    More
+                </button>
+                <ul id="pst-nav-more-links" class="dropdown-menu">
+                    
+<li class=" ">
+  <a class="nav-link dropdown-item nav-external" href="https://scipp.github.io/cyclebane">
+    Cyclebane
+  </a>
+</li>
+
+
+<li class=" ">
+  <a class="nav-link dropdown-item nav-external" href="https://scipp.github.io">
+    Scipp
+  </a>
+</li>
+
+                </ul>
+            </li>
+            
+  </ul>
+</nav></div>
+      
+    </div>
+    
+    
+    <div class="navbar-header-items__end">
+      
+        <div class="navbar-item navbar-persistent--container">
+          
+
+<button class="btn btn-sm pst-navbar-icon search-button search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="fa-solid fa-magnifying-glass fa-lg"></i>
+</button>
+        </div>
+      
+      
+        <div class="navbar-item">
+
+<button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button pst-js-only" aria-label="Color mode" data-bs-title="Color mode"  data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <i class="theme-switch fa-solid fa-sun                fa-lg" data-mode="light" title="Light"></i>
+  <i class="theme-switch fa-solid fa-moon               fa-lg" data-mode="dark"  title="Dark"></i>
+  <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"  title="System Settings"></i>
+</button></div>
+      
+        <div class="navbar-item"><ul class="navbar-icon-links"
+    aria-label="Icon Links">
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://github.com/scipp/sciline" title="GitHub" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fa-brands fa-github fa-lg" aria-hidden="true"></i>
+            <span class="sr-only">GitHub</span></a>
+        </li>
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://pypi.org/project/sciline/" title="PyPI" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fa-brands fa-python fa-lg" aria-hidden="true"></i>
+            <span class="sr-only">PyPI</span></a>
+        </li>
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://anaconda.org/conda-forge/sciline" title="Conda" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fa-custom fa-anaconda fa-lg" aria-hidden="true"></i>
+            <span class="sr-only">Conda</span></a>
+        </li>
+</ul></div>
+      
+    </div>
+    
+  </div>
+  
+  
+    <div class="navbar-persistent--mobile">
+
+<button class="btn btn-sm pst-navbar-icon search-button search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="fa-solid fa-magnifying-glass fa-lg"></i>
+</button>
+    </div>
+  
+
+  
+</div>
+
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+      <dialog id="pst-primary-sidebar-modal"></dialog>
+      <div id="pst-primary-sidebar" class="bd-sidebar-primary bd-sidebar">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+      <div class="sidebar-header-items__center">
+        
+          
+          
+            <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../user-guide/index.html">
+    User Guide
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../recipes/index.html">
+    Recipes
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../api-reference/index.html">
+    API Reference
+  </a>
+</li>
+
+
+<li class="nav-item current active">
+  <a class="nav-link nav-internal" href="../index.html">
+    Development
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../about/index.html">
+    About
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-external" href="https://scipp.github.io/cyclebane">
+    Cyclebane
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-external" href="https://scipp.github.io">
+    Scipp
+  </a>
+</li>
+
+  </ul>
+</nav></div>
+          
+        
+      </div>
+    
+    
+    
+      <div class="sidebar-header-items__end">
+        
+          <div class="navbar-item">
+
+<button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button pst-js-only" aria-label="Color mode" data-bs-title="Color mode"  data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <i class="theme-switch fa-solid fa-sun                fa-lg" data-mode="light" title="Light"></i>
+  <i class="theme-switch fa-solid fa-moon               fa-lg" data-mode="dark"  title="Dark"></i>
+  <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"  title="System Settings"></i>
+</button></div>
+        
+          <div class="navbar-item"><ul class="navbar-icon-links"
+    aria-label="Icon Links">
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://github.com/scipp/sciline" title="GitHub" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fa-brands fa-github fa-lg" aria-hidden="true"></i>
+            <span class="sr-only">GitHub</span></a>
+        </li>
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://pypi.org/project/sciline/" title="PyPI" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fa-brands fa-python fa-lg" aria-hidden="true"></i>
+            <span class="sr-only">PyPI</span></a>
+        </li>
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://anaconda.org/conda-forge/sciline" title="Conda" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fa-custom fa-anaconda fa-lg" aria-hidden="true"></i>
+            <span class="sr-only">Conda</span></a>
+        </li>
+</ul></div>
+        
+      </div>
+    
+  </div>
+  
+    <div class="sidebar-primary-items__start sidebar-primary__section">
+        <div class="sidebar-primary-item">
+<nav class="bd-docs-nav bd-links"
+     aria-label="Section Navigation">
+  <p class="bd-links__title" role="heading" aria-level="1">Section Navigation</p>
+  <div class="bd-toc-item navbar-nav"><ul class="current nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../getting-started.html">Getting started</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../coding-conventions.html">Coding conventions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../dependency-management.html">Dependency management</a></li>
+<li class="toctree-l1 current active has-children"><a class="reference internal" href="index.html">Architecture and Design</a><details open="open"><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul class="current">
+<li class="toctree-l2 current active"><a class="current reference internal" href="#">Workflow Design</a></li>
+<li class="toctree-l2"><a class="reference internal" href="rewrite.html">Rewrite of Sciline’s Pipeline as a Data Graph</a></li>
+</ul>
+</details></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../architecture-decision-records.html">Architecture Decision Records</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="../adr/0001-remove-isinstance-checks-when-setting-parameters.html">ADR 0001: Remove isinstance checks when setting parameters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../adr/0002-remove-special-handling-of-optional-and-union.html">ADR 0002: Remove special handling of Optional and Union</a></li>
+</ul>
+</details></li>
+</ul>
+</div>
+</nav></div>
+        <div class="sidebar-primary-item">
+<div
+    id="pst-page-navigation-heading-2"
+    class="page-toc tocsection onthispage">
+    <i class="fa-solid fa-list"></i> On this page
+  </div>
+  <nav class="bd-toc-nav page-toc" aria-labelledby="pst-page-navigation-heading-2">
+    <ul class="visible nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#context">Context</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#introduction">Introduction</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#traditional-data-reduction-workflows">Traditional data-reduction workflows</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#high-level-summary-of-proposed-approach">High-level summary of proposed approach</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#domain-driven-design">Domain-driven design</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#dependency-injection">Dependency injection</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#architecture">Architecture</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#in-a-nutshell">In a nutshell</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#parameter-handling">Parameter handling</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#metadata-handling">Metadata handling</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#domain-specific-types">Domain-specific types</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#notes">Notes</a></li>
+</ul>
+  </nav></div>
+    </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+      <div class="sidebar-primary-item">
+  <div role="note" aria-label="source link">
+    <h3>This Page</h3>
+    <ul class="this-page-menu">
+      <li><a href="../../_sources/developer/architecture-and-design/workflow-design.md"
+            rel="nofollow">Show Source</a></li>
+    </ul>
+   </div></div>
+  </div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item">
+
+<nav aria-label="Breadcrumb" class="d-print-none">
+  <ul class="bd-breadcrumbs">
+    
+    <li class="breadcrumb-item breadcrumb-home">
+      <a href="../../index.html" class="nav-link" aria-label="Home">
+        <i class="fa-solid fa-home"></i>
+      </a>
+    </li>
+    
+    <li class="breadcrumb-item"><a href="../index.html" class="nav-link">Development</a></li>
+    
+    
+    <li class="breadcrumb-item"><a href="index.html" class="nav-link">Architecture and Design</a></li>
+    
+    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">Workflow Design</span></li>
+  </ul>
+</nav>
+</div>
+      
+    </div>
+  
+  
+</div>
+</div>
+              
+              
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <section class="tex2jax_ignore mathjax_ignore" id="workflow-design">
+<h1>Workflow Design<a class="headerlink" href="#workflow-design" title="Link to this heading">#</a></h1>
+<section id="context">
+<h2>Context<a class="headerlink" href="#context" title="Link to this heading">#</a></h2>
+<p>This document discusses problems and requirements for data-reduction of neutron-scattering experiments which have led to the design of Sciline.
+The terminology used in the examples is specific to neutron-scattering experiments, but the concepts are general and can be applied to other domains.</p>
+</section>
+<section id="introduction">
+<h2>Introduction<a class="headerlink" href="#introduction" title="Link to this heading">#</a></h2>
+<section id="traditional-data-reduction-workflows">
+<h3>Traditional data-reduction workflows<a class="headerlink" href="#traditional-data-reduction-workflows" title="Link to this heading">#</a></h3>
+<p>Traditionally, we have supplied users with a toolbox of algorithms and optionally a reduction script or a notebook that uses those algorithms.
+Conceptually this looks similar to the following:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Define parameters</span>
+<span class="n">sample_run_id</span> <span class="o">=</span> <span class="mi">12345</span>
+<span class="n">background_run_id</span> <span class="o">=</span> <span class="mi">12300</span>
+<span class="n">direct_beam_filename</span> <span class="o">=</span> <span class="s1">&#39;direct_beam.h5&#39;</span>
+<span class="n">wav_bins</span> <span class="o">=</span> <span class="n">linspace</span><span class="p">(</span><span class="o">...</span><span class="p">)</span>
+<span class="n">Q_bins</span> <span class="o">=</span> <span class="n">linspace</span><span class="p">(</span><span class="o">...</span><span class="p">)</span>
+
+<span class="c1"># Load data</span>
+<span class="n">sample</span> <span class="o">=</span> <span class="n">load_sample</span><span class="p">(</span><span class="n">run</span><span class="o">=</span><span class="n">sample_run_id</span><span class="p">)</span>
+<span class="n">background</span> <span class="o">=</span> <span class="n">load_background</span><span class="p">(</span><span class="n">run</span><span class="o">=</span><span class="n">background_run_id</span><span class="p">)</span>
+<span class="n">direct_beam</span> <span class="o">=</span> <span class="n">load_direct_beam</span><span class="p">(</span><span class="n">run</span><span class="o">=</span><span class="n">direct_beam_filename</span><span class="p">)</span>
+
+<span class="c1"># Process</span>
+<span class="n">mask_detectors</span><span class="p">(</span><span class="n">sample</span><span class="p">)</span>
+<span class="n">mask_detectors</span><span class="p">(</span><span class="n">background</span><span class="p">)</span>
+<span class="n">sample_monitors</span> <span class="o">=</span> <span class="n">preprocess_monitors</span><span class="p">(</span><span class="n">sample</span><span class="p">,</span> <span class="n">wav_bins</span><span class="p">)</span>
+<span class="n">background_monitors</span> <span class="o">=</span> <span class="n">preprocess_monitors</span><span class="p">(</span><span class="n">background</span><span class="p">,</span> <span class="n">wav_bins</span><span class="p">)</span>
+
+<span class="n">transmission_fraction</span> <span class="o">=</span> <span class="n">transmission_fraction</span><span class="p">(</span><span class="o">**</span><span class="n">sample_monitors</span><span class="p">)</span>
+<span class="n">sample_iofq</span> <span class="o">=</span> <span class="n">compute_i_of_q</span><span class="p">(</span>
+    <span class="n">sample</span><span class="p">,</span>
+    <span class="n">direct_beam</span><span class="p">,</span>
+    <span class="n">transmission_fraction</span><span class="p">,</span>
+    <span class="n">Q_bins</span><span class="p">)</span>
+
+<span class="n">transmission_fraction</span> <span class="o">=</span> <span class="n">transmission_fraction</span><span class="p">(</span><span class="o">**</span><span class="n">background_monitors</span><span class="p">)</span>
+<span class="n">background_iofq</span> <span class="o">=</span> <span class="n">compute_i_of_q</span><span class="p">(</span>
+    <span class="n">background</span><span class="p">,</span>
+    <span class="n">direct_beam</span><span class="p">,</span>
+    <span class="n">transmission_fraction</span><span class="p">,</span>
+    <span class="n">Q_bins</span><span class="p">)</span>
+
+<span class="n">iofq</span> <span class="o">=</span> <span class="n">subtract_background</span><span class="p">(</span><span class="n">sample_iofq</span><span class="p">,</span> <span class="n">background_iofq</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>This is an <em>imperative workflow</em>, where the user specifies the order of operations and the dependencies between them.
+This is not ideal for a number of reasons:</p>
+<ul class="simple">
+<li><p>The user has to know the order of operations and the dependencies between them.</p></li>
+<li><p>The user has to know which algorithms to use.</p></li>
+<li><p>The user has to know which parameters to use for each algorithm.</p></li>
+<li><p>The user has to know which data to use for each algorithm.</p></li>
+<li><p>The user can easily introduce mistakes into a workflow, e.g., by using the wrong order of operations, or by overwriting data.
+This is especially problematic in Jupyter notebooks, where the user can easily run cells out of order.</p></li>
+</ul>
+<p>Our most basic programming models provide little help to the user.
+For example we typically write components of reduction workflows as functions of <code class="docutils literal notranslate"><span class="pre">scipp.Variable</span></code> or <code class="docutils literal notranslate"><span class="pre">scipp.DataArray</span></code> objects:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">transmission_fraction</span><span class="p">(</span>
+    <span class="n">incident_monitor</span><span class="p">:</span> <span class="n">sc</span><span class="o">.</span><span class="n">DataArray</span><span class="p">,</span>
+    <span class="n">transmission_monitor</span><span class="p">:</span> <span class="n">sc</span><span class="o">.</span><span class="n">DataArray</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">sc</span><span class="o">.</span><span class="n">DataArray</span><span class="p">:</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">Compute transmission fraction from incident and transmission monitors.</span>
+
+<span class="sd">Parameters</span>
+<span class="sd">----------</span>
+<span class="sd">incident_monitor:</span>
+<span class="sd">    Incident monitor.</span>
+<span class="sd">transmission_monitor:</span>
+<span class="sd">    Transmission monitor.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">transmission_monitor</span> <span class="o">/</span> <span class="n">incident_monitor</span>
+</pre></div>
+</div>
+<p>Here, we rely on naming of function parameters as well as docstrings to convey the meaning of the parameters, and it is up to the user to pass the correct inputs.
+While good practices such as keyword-only arguments can help, this is still far from a scalable and maintainable solution.</p>
+<p>As an improvement, we could adopt an approach with more specific domain types, e.g.,</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">transmission_fraction</span><span class="p">(</span>
+    <span class="n">incident_monitor</span><span class="p">:</span> <span class="n">IncidentMonitor</span><span class="p">,</span>
+    <span class="n">transmission_monitor</span><span class="p">:</span> <span class="n">TransmissionMonitor</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">TransmissionFraction</span><span class="p">:</span>
+    <span class="k">return</span> <span class="n">TransmissionFraction</span><span class="p">(</span><span class="n">transmission_monitor</span> <span class="o">/</span> <span class="n">incident_monitor</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>We could now run <a class="reference external" href="https://mypy-lang.org/">mypy</a> on reduction scripts to ensure that the correct types are passed to each function.
+However, this is not practical with dynamic workflows, i.e., when users modifying workflows in a Jupyter notebooks on the fly.
+Aside from this, such an approach would still not help with several of the other issues listed above.</p>
+</section>
+<section id="high-level-summary-of-proposed-approach">
+<h3>High-level summary of proposed approach<a class="headerlink" href="#high-level-summary-of-proposed-approach" title="Link to this heading">#</a></h3>
+<p>We propose an architecture combining <em>domain-driven design</em> with <em>dependency injection</em>.
+Dependency injection aids in building a declarative workflow.
+We define domain-specific concepts that are meaningful to the (instrument) scientist.
+Simple functions provide workflow components that define relations between these domain concepts.</p>
+<p>Concretely, we propose to define specific domain types, such as <code class="docutils literal notranslate"><span class="pre">IncidentMonitor</span></code>, <code class="docutils literal notranslate"><span class="pre">TransmissionMonitor</span></code>, and <code class="docutils literal notranslate"><span class="pre">TransmissionFraction</span></code> in the example above.
+However, instead of the user having to pass these to functions, we use dependency injection to provide them to the functions.
+In essence this will build a workflow’s task graph.</p>
+</section>
+<section id="domain-driven-design">
+<h3>Domain-driven design<a class="headerlink" href="#domain-driven-design" title="Link to this heading">#</a></h3>
+<p>Domain-Driven Design (DDD) is an approach to software development that aims to make software more closely match the domain it is used in.
+The obvious benefit of this is that it makes it easier for domain experts to understand and modify the software.</p>
+<p>How should we define the domain for the purpose of data reduction?
+Looking at, e.g., <a class="reference external" href="https://www.mantidproject.org/">Mantid</a>, we see that the domain is defined as “data reduction for any type of neutron scattering experiment”.
+This has led to more than 1000 algorithms, making it hard for users to know how to use them.
+Furthermore, while algorithms provide some sort of domain-specific language, the data types are generic.</p>
+<p>What we propose here is to define the domain more narrowly, highly specific to a technique or even specific to an instrument or experiment.
+This will reduce the scope to cover in the domain-specific language.
+By making data types specific to the domain, we provide nouns for the domain-specific language.</p>
+</section>
+<section id="dependency-injection">
+<h3>Dependency injection<a class="headerlink" href="#dependency-injection" title="Link to this heading">#</a></h3>
+<p>Dependency injection is a common technique for implementing the <a class="reference external" href="https://en.wikipedia.org/wiki/Inversion_of_control">inversion of control</a> principle.
+It makes components of a system more loosely coupled, and makes it easier to replace components, including for testing purposes.
+Dependency injection can be performed manually, but there are also frameworks that can help with this.</p>
+<p>From the <a class="reference external" href="https://github.com/google/guice/wiki/MentalModel#injection">Guice documentation</a> (Guice is a dependency injection framework for Java):</p>
+<blockquote>
+<div><p>“This is the essence of dependency injection. If you need something, you don’t go out and get it from somewhere, or even ask a class to return you something. Instead, you simply declare that you can’t do your work without it, and rely on Guice to give you what you need.</p>
+<p>This model is backwards from how most people think about code: it’s a more <em>declarative model</em> rather than an <em>imperative one</em>. This is why dependency injection is often described as a kind of inversion of control (IoC).”
+(emphasis added)</p>
+</div></blockquote>
+</section>
+</section>
+<section id="architecture">
+<h2>Architecture<a class="headerlink" href="#architecture" title="Link to this heading">#</a></h2>
+<section id="in-a-nutshell">
+<h3>In a nutshell<a class="headerlink" href="#in-a-nutshell" title="Link to this heading">#</a></h3>
+<ol class="arabic">
+<li><p>The user will define building blocks of a workflow using highly specific domain types for the type-hints, such as <code class="docutils literal notranslate"><span class="pre">IncidentMonitor</span></code>, <code class="docutils literal notranslate"><span class="pre">TransmissionMonitor</span></code>, and <code class="docutils literal notranslate"><span class="pre">TransmissionFraction</span></code>, e.g.,</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">transmission_fraction</span><span class="p">(</span>
+    <span class="n">incident_monitor</span><span class="p">:</span> <span class="n">IncidentMonitor</span><span class="p">,</span>
+    <span class="n">transmission_monitor</span><span class="p">:</span> <span class="n">TransmissionMonitor</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">TransmissionFraction</span><span class="p">:</span>
+    <span class="k">return</span> <span class="n">TransmissionFraction</span><span class="p">(</span><span class="n">transmission_monitor</span> <span class="o">/</span> <span class="n">incident_monitor</span><span class="p">)</span>
+</pre></div>
+</div>
+</li>
+<li><p>The user passes a set of building blocks to the system, which assembles a dependency graph based on the type-hints.</p></li>
+<li><p>The user requests a specific output from the system using one of the domain types.
+This may be computed directly, or the system may construct a <code class="docutils literal notranslate"><span class="pre">dask</span></code> graph to compute the output.</p></li>
+</ol>
+<p>Depending on the level of expertise of the user and the level of control they need, step 1.) or step 1.) and 2.) will be omitted, as pre-defined building blocks and sets of building blocks can be provided in domain-specific support-libraries for common use cases.</p>
+</section>
+<section id="parameter-handling">
+<h3>Parameter handling<a class="headerlink" href="#parameter-handling" title="Link to this heading">#</a></h3>
+<p>Generally, the user must provide configuration parameters to a workflow.
+In many cases there are defaults that can be used.
+In either case, these parameters must be associated with the correct step in the workflow.
+This gets complicated by the non-linear nature of the workflow.
+A flat list of parameters has been used traditionally, relying entirely on parameter naming.
+This is problematic for two reasons:
+First, certain basic workflow steps may be used in multiple places.
+Second, workflows frequently contain nested steps, which may have the same parameters (or not).
+This makes the process of setting parameters somewhat opaque and error-prone.
+Furthermore, it relies on a hand-written higher-level workflow to set parameters for nested steps, mapping between globally-uniquely-named parameters and the parameters of the nested steps.
+These, in turn, require complicated testing.</p>
+<p>A hierarchical parameter system could provide an alternative, but makes it harder to set “global” parameters.
+For example, we may want to use the same wavelength-binning for all steps in the workflow.</p>
+<p>We propose to handle parameters as dependencies of workflow steps.
+That is, the dependency-injection system is used to provide parameters to workflow steps.
+Parameters are identified via their type, i.e., we will require defining a domain-specific type for each parameter, such as <code class="docutils literal notranslate"><span class="pre">WavelengthBinning</span></code>.</p>
+<p>For nested workflows, we can use a child injector, which provides a scope for parameters.
+Parent-scopes can be searched for parameters that are not found in the child-scope, providing a mechanism for “global” parameters.</p>
+<p><em>Note:
+The idea of using child injectors was discarded during implementation for a number of reasons.
+Parameters in a “nested” scope can now be realized using the mechanism of generic providers.</em></p>
+</section>
+<section id="metadata-handling">
+<h3>Metadata handling<a class="headerlink" href="#metadata-handling" title="Link to this heading">#</a></h3>
+<p>There have been a number of discussions around metadata handling.
+For example, the support (or non-support) of an arbitrary <code class="docutils literal notranslate"><span class="pre">attrs</span></code> dict as part of <code class="docutils literal notranslate"><span class="pre">scipp.Variable</span></code> and <code class="docutils literal notranslate"><span class="pre">scipp.DataArray</span></code>.
+Furthermore, we may have metadata that is part of the data-catalog, which may partially overlap with the metadata that is part of the data itself.
+The current conclusion is that any attempt to handle metadata in a generic and automatic way will not work.
+Therefore, if a user wants to provide metadata for a workflow result, they must do so <em>explicitly</em> by specifying functions that can assemble that metadata.
+As with regular results, this can be done by injecting the input metadata into the function that computes the result’s metadata.</p>
+</section>
+<section id="domain-specific-types">
+<h3>Domain-specific types<a class="headerlink" href="#domain-specific-types" title="Link to this heading">#</a></h3>
+<p>The system will use domain-specific types to identify workflow steps and parameters.
+The system does not require subclassing or use of decorators.
+Domain-specific types can be defined as regular classes or subclasses of existing types.
+In many cases, a simple alias will be sufficient.</p>
+<p><code class="docutils literal notranslate"><span class="pre">typing.NewType</span></code> can be used as a simple way of creating a domain-specific type alias for type-checking.
+For example, we can use it to create a type for a <code class="docutils literal notranslate"><span class="pre">scipp.DataArray</span></code> that represents a transmission monitor.
+This avoids a more complex solution such as creating a wrapper class or a subclass:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">typing</span>
+
+<span class="n">TransmissionMonitor</span> <span class="o">=</span> <span class="n">typing</span><span class="o">.</span><span class="n">NewType</span><span class="p">(</span><span class="s1">&#39;TransmissionMonitor&#39;</span><span class="p">,</span> <span class="n">scipp</span><span class="o">.</span><span class="n">DataArray</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Note that this does not create a new type, but rather a new name for an existing type.
+That is, <code class="docutils literal notranslate"><span class="pre">isinstance(monitor,</span> <span class="pre">TransmissionMonitor)</span></code> does not work, since <code class="docutils literal notranslate"><span class="pre">TransmissionMonitor</span></code> is not a type.
+Furthermore, operations will revert to the underlying type, e.g., <code class="docutils literal notranslate"><span class="pre">monitor</span> <span class="pre">*</span> <span class="pre">2</span></code> will return a <code class="docutils literal notranslate"><span class="pre">scipp.DataArray</span></code>.
+For this application this would actually be desired behavior:
+Applying an operation to a domain type will generally result in a different type, so falling back to the underlying type is the correct behavior and forces the user to be explicit about the type of the result.</p>
+</section>
+</section>
+<section id="notes">
+<h2>Notes<a class="headerlink" href="#notes" title="Link to this heading">#</a></h2>
+<ul class="simple">
+<li><p>Earlier versions of this design document included a detailed discussion on how to handle nested workflows using child-injectors.
+During initial implementation efforts this idea was discarded, as it was found to be too complicated and not necessary.</p></li>
+<li><p>Earlier versions of this design document included considerations on the use of the <a class="reference external" href="https://injector.readthedocs.io/en/latest/">injector</a> Python library.
+During early implementation efforts it was found that this library did not provide advantages beyond the very basic features (which can be implemented in a few lines of code).
+For example, it was attempted to use <code class="docutils literal notranslate"><span class="pre">injector</span></code>’s <code class="docutils literal notranslate"><span class="pre">multibind</span></code> and child-injector mechanism to handle nested workflows as well as multiple runs.
+This turned out to be way too complicated.
+By using a dedicated home-grown solution, in particular using generic providers and parameter tables, we found a more straightforward solution and furthermore avoided introducing a dependency.</p></li>
+</ul>
+</section>
+</section>
+
+
+                </article>
+              
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+    <a class="left-prev"
+       href="index.html"
+       title="previous page">
+      <i class="fa-solid fa-angle-left"></i>
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">previous</p>
+        <p class="prev-next-title">Architecture and Design</p>
+      </div>
+    </a>
+    <a class="right-next"
+       href="rewrite.html"
+       title="next page">
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">next</p>
+        <p class="prev-next-title">Rewrite of Sciline’s Pipeline as a Data Graph</p>
+      </div>
+      <i class="fa-solid fa-angle-right"></i>
+    </a>
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+          </footer>
+        
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script defer src="../../_static/scripts/bootstrap.js?digest=8878045cc6db502f8baf"></script>
+<script defer src="../../_static/scripts/pydata-sphinx-theme.js?digest=8878045cc6db502f8baf"></script>
+
+  <footer class="bd-footer">
+<div class="bd-footer__inner bd-page-width">
+  
+    <div class="footer-items__start">
+      
+        <div class="footer-item">
+
+  <p class="copyright">
+    
+      © Copyright 2025 Scipp contributors.
+      <br/>
+    
+  </p>
+</div>
+      
+        <div class="footer-item">
+
+  <p class="sphinx-version">
+    Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 8.1.3.
+    <br/>
+  </p>
+</div>
+      
+    </div>
+  
+  
+  
+    <div class="footer-items__end">
+      
+        <div class="footer-item"><!-- This will display the version of the docs -->
+Current Sciline version: 25.11.1 (<a href="https://github.com/scipp/sciline/releases">older versions</a>).</div>
+      
+        <div class="footer-item">
+<p class="theme-version">
+  <!-- # L10n: Setting the PST URL as an argument as this does not need to be localized -->
+  Built with the <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a> 0.16.1.
+</p></div>
+      
+    </div>
+  
+</div>
+
+  </footer>
+  </body>
+</html>
