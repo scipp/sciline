@@ -1,8 +1,6 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright (c) 2025 Scipp contributors (https://github.com/scipp)
-from typing import Any, Generic, TypeVar, get_args, get_origin
-
-from typing_extensions import TypeVarTuple
+from typing import Any, Generic, TypeVar, TypeVarTuple, get_args, get_origin
 
 PARAM = TypeVar("PARAM")
 PARAMS = TypeVarTuple("PARAMS")
