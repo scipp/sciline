@@ -9,5 +9,6 @@ graphviz
 jsonschema
 numpy
 pandas
+pydantic
 rich
 cyclebane @ git+https://github.com/scipp/cyclebane@main

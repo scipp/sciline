@@ -261,6 +261,10 @@ def _bind_free_typevars(tp: TypeVar | Key, bound: dict[TypeVar, Key]) -> Key:
         if result is None:
             raise ValueError(f'Binding type variables in {tp} resulted in `None`')
         return result  # type: ignore[no-any-return]
+    elif params := getattr(tp, '__parameters__', ()):
+        # A parametrized type that does not have an 'origin'.
+        # E.g., a generic pydantic Model.
+        return tp[tuple(_bind_free_typevars(param, bound) for param in params)]  # type: ignore[index, no-any-return]
     else:
         return tp
 

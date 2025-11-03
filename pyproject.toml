@@ -45,6 +45,7 @@ test = [
     "jsonschema",
     "numpy",
     "pandas",
+    "pydantic",
     "rich",
 ]
 progress = [
