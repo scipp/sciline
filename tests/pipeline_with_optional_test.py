@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright (c) 2023 Scipp contributors (https://github.com/scipp)
-from typing import Optional, Union
+from typing import Union
 
 import pytest
 
@@ -96,5 +96,5 @@ def test_optional_dependency_can_be_set_to_None() -> None:
         return f'{x or 123}'
 
     pipeline = sl.Pipeline([use_optional])
-    pipeline[Optional[int]] = None  # type: ignore[index] # noqa: UP007
+    pipeline[int | None] = None  # type: ignore[index]
     assert pipeline.compute(str) == '123'
