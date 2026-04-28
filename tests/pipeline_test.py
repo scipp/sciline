@@ -1746,6 +1746,11 @@ def test_not_in_graph_error(get_method: str) -> None:
 
 
 def test_errors_are_annotated(scheduler: sl.scheduler.Scheduler) -> None:
+    if 'distributed' in repr(scheduler):
+        # This test does not work with the distributed scheduler because
+        # `func` cannot be pickled because `G` and `H` are local to this function.
+        return
+
     A = NewType('A', int)
     B = NewType('B', int)
     T = TypeVar('T', A, B)
