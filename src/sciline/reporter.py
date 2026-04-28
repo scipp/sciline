@@ -84,13 +84,13 @@ class Reporter(ABC):
     def reporting_provider_func(self, provider: Provider) -> Callable[..., Any]:
         """Wrap a provider's function to report progress with this reporter."""
         if provider.kind != "function":
-            return provider.func
+            return provider
 
-        @functools.wraps(provider.func)
+        @functools.wraps(provider)
         def reporting_func(*args: Any, **kwargs: Any) -> Any:
             provider_id = self.on_provider_start(provider)
             try:
-                result = provider.func(*args, **kwargs)
+                result = provider(*args, **kwargs)
             finally:
                 self.on_provider_end(provider_id)
             return result
@@ -102,11 +102,11 @@ class Reporter(ABC):
     ) -> Any:
         """Call a provider and report its progress with this reporter."""
         if provider.kind != "function":
-            return provider.call(values)
+            return provider.call_arg_dict(values)
 
         provider_id = self.on_provider_start(provider)
         try:
-            result = provider.call(values)
+            result = provider.call_arg_dict(values)
         finally:
             self.on_provider_end(provider_id)
         return result
@@ -388,14 +388,14 @@ class NullReporter(Reporter):
     def reporting_provider_func(self, provider: Provider) -> Callable[..., Any]:
         """Call a provider and report its progress with this reporter."""
         # Override base method to avoid overhead.
-        return provider.func
+        return provider
 
     def call_provider_with_reporting(
         self, provider: Provider, values: dict[Hashable, Any]
     ) -> Any:
         """Call a provider and report its progress with this reporter."""
         # Override base method to avoid overhead.
-        return provider.call(values)
+        return provider.call_arg_dict(values)
 
 
 class _ProviderList:

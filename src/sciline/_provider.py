@@ -139,9 +139,18 @@ class Provider:
             f"func={self._func})"
         )
 
-    def call(self, values: dict[Hashable, Any]) -> Any:
+    def __call__(self, *args: Any, **kwargs: Any) -> Any:
+        """Call the provider."""
+        try:
+            return self._func(*args, **kwargs)
+        except Exception as e:
+            name = f"{self.location.module}.{self.location.name}"
+            e.add_note(f"In provider {self._arg_spec.format_signature(name)}")
+            raise
+
+    def call_arg_dict(self, values: dict[Hashable, Any]) -> Any:
         """Call the provider with arguments extracted from ``values``."""
-        return self._func(
+        return self(
             *(values[arg] for arg in self._arg_spec.args),
             **{key: values[arg] for key, arg in self._arg_spec.kwargs},
         )
@@ -215,13 +224,37 @@ class ArgSpec:
         """Bind concrete types to TypeVars."""
         return self.map_keys(lambda arg: _bind_free_typevars(arg, bound=bound))
 
-    def map_keys(self, transform: Callable[[Key], Key]) -> ArgSpec:
+    def map_keys(
+        self, transform: Callable[[Key], Key], *, map_return: bool = True
+    ) -> ArgSpec:
         """Return a new ArgSpec with the keys mapped by ``callback``."""
+        return_ = (
+            self._return
+            if self._return is None or not map_return
+            else transform(self._return)
+        )
         return ArgSpec(
             args={name: transform(arg) for name, arg in self._args.items()},
             kwargs={name: transform(arg) for name, arg in self._kwargs.items()},
-            return_=self._return if self._return is None else transform(self._return),
+            return_=return_,
         )
+
+    def format_signature(self, fn_name: str) -> str:
+        """Format self as a function signature."""
+        args = ",\n    ".join(f"{name}: {arg}" for name, arg in self._args.items())
+        kwargs = ",\n    ".join(f"{name}: {arg}" for name, arg in self._kwargs.items())
+
+        full_args = args
+        if kwargs:
+            if full_args:
+                full_args += ",\n    "
+            full_args += f"*,\n    {kwargs},"
+
+        if full_args:
+            return f"""{fn_name}(
+    {full_args},
+) -> {self._return}"""
+        return f"{fn_name}() -> {self._return}"
 
 
 @dataclass

@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright (c) 2023 Scipp contributors (https://github.com/scipp)
 import functools
+import re
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, Generic, NewType, TypeVar
@@ -1742,3 +1743,32 @@ def test_not_in_graph_error(get_method: str) -> None:
         sl.handler.UnsatisfiedRequirement, match="Requested node not in graph"
     ):
         getattr(pl, get_method)(bool)
+
+
+def test_errors_are_annotated(scheduler: sl.scheduler.Scheduler) -> None:
+    A = NewType('A', int)
+    B = NewType('B', int)
+    T = TypeVar('T', A, B)
+
+    class G(sl.Scope[T, int], int): ...
+
+    class H(sl.Scope[T, int], int): ...
+
+    def foo(g: G[T]) -> H[T]:
+        raise RuntimeError("provider failed")
+        return H[T](g)
+
+    pl = sl.Pipeline([foo], params={G[A]: G[A](2), G[B]: G[B](3)})
+    with pytest.raises(RuntimeError) as err:
+        pl.compute(H[B], scheduler=scheduler)
+    assert "provider failed" in err.value.args
+
+    [note] = err.value.__notes__
+    # The regex is not sensitive to indentation and the module name this test is in.
+    assert re.search(
+        r"""foo\(
+.*test_errors_are_annotated\.<locals>\.G\[.*pipeline_test\.B],
+\) -> .*test_errors_are_annotated\.<locals>\.H\[.*pipeline_test\.B]""",
+        note,
+        flags=re.MULTILINE,
+    )

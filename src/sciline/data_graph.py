@@ -279,7 +279,7 @@ def to_task_graph(
             new_key = dict(zip(orig_keys, input_nodes, strict=True))
             # By using map_keys (instead of creating an ArgSpec from scratch),
             # we automatically preserve what args and kwargs are.
-            spec = provider.arg_spec.map_keys(new_key.get)
+            spec = provider.arg_spec.map_keys(new_key.get, map_return=False)
             if len(spec) != len(input_nodes):
                 # This should be caught by __setitem__, but we check here to be safe.
                 raise ValueError("Corrupted graph")
