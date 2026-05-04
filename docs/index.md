@@ -73,7 +73,7 @@ Your existing Python code can remain generic and can still be used without Scili
 ## At a glance
 
 :::{include} user-guide/installation.md
-:heading-offset: 3
+:heading-offset: 2
 :::
 
 ### Use
