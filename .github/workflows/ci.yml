@@ -40,7 +40,7 @@ jobs:
         os: ['ubuntu-24.04']
         # Need to be careful while running copier here as it assumes that
         # there is one tox-env per python version.
-        tox-env: ['${{needs.formatting.outputs.min_tox_env}}', dask, mypy]
+        tox-env: ['${{needs.formatting.outputs.min_tox_env}}', dask, mypy, 'package-test']
         python:
           - version: '${{needs.formatting.outputs.min_python}}'
     uses: ./.github/workflows/test.yml
