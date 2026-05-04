@@ -7,5 +7,5 @@
 #
 cyclebane==24.10.0
     # via -r base.in
-networkx==3.5
+networkx==3.6.1
     # via cyclebane

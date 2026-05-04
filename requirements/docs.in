@@ -7,7 +7,7 @@ myst-parser
 nbsphinx
 pandas
 pydata-sphinx-theme>=0.14
-sphinx
+sphinx<9.0.0
 sphinx-autodoc-typehints
 sphinx-copybutton
 sphinx-design
