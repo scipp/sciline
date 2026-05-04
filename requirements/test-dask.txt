@@ -6,12 +6,12 @@
 #    requirements upgrade
 #
 -r test.txt
-dask[distributed]==2026.1.2
+dask[distributed]==2026.3.0
     # via
     #   -r basetest.in
     #   -r test-dask.in
     #   distributed
-distributed==2026.1.2
+distributed==2026.3.0
     # via dask
 jinja2==3.1.6
     # via distributed
@@ -25,7 +25,7 @@ sortedcontainers==2.4.0
     # via distributed
 tblib==3.2.2
     # via distributed
-tornado==6.5.4
+tornado==6.5.5
     # via distributed
 urllib3==2.6.3
     # via distributed
