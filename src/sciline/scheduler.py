@@ -1,11 +1,13 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright (c) 2025 Scipp contributors (https://github.com/scipp)
 import inspect
+from collections import Counter
 from collections.abc import Callable, Hashable
 from typing import Any, Protocol, runtime_checkable
 
 from sciline.typing import Graph
 
+from ._provider import Provider
 from ._utils import key_full_qualname
 from .reporter import NullReporter, Reporter
 
@@ -58,14 +60,33 @@ class NaiveScheduler:
         except graphlib.CycleError as e:
             raise CycleError from e
 
+        dependents = _count_dependents(dependencies)
         results: dict[Hashable, Any] = {}
         with reporter.run_computation(graph.values()):
             for t in tasks:
                 results[t] = reporter.call_provider_with_reporting(graph[t], results)
+                _consume_arguments(graph[t], dependents, results)
+
         return tuple(results[key] for key in keys)
 
     def __repr__(self) -> str:
         return f'{self.__class__.__name__}()'
+
+
+def _count_dependents(dependencies: dict[type, tuple[type, ...]]) -> Counter[type]:
+    dependents: Counter[type] = Counter()
+    for deps in dependencies.values():
+        dependents.update(deps)
+    return dependents
+
+
+def _consume_arguments(
+    provider: Provider, counts: Counter[type], results: dict[Hashable, object]
+) -> None:
+    for arg in provider.arg_spec.keys():
+        counts[arg] -= 1
+        if counts[arg] == 0:
+            del results[arg]
 
 
 class DaskScheduler:
