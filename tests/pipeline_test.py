@@ -7,7 +7,6 @@ from dataclasses import dataclass
 from typing import Any, Generic, NewType, TypeVar
 
 import numpy as np
-import numpy.typing as npt
 import pydantic
 import pytest
 
@@ -254,7 +253,7 @@ def test_subclasses_of_generic_array_provider_defined_with_Scope_work() -> None:
     # int is unused, but a single constraint is not allowed by Python
     Param = TypeVar('Param', str, int)
 
-    class ArrayT(sl.Scope[Param, npt.NDArray[np.int64]], npt.NDArray[np.int64]): ...
+    class ArrayT(sl.Scope[Param, np.ndarray], np.ndarray): ...
 
     class Array1(ArrayT[Param]): ...
 
