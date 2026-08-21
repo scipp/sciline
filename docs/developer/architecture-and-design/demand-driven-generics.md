@@ -246,6 +246,41 @@ Coupling with Q3: without forward chaining, the unseeded forward pass behind
 `output_keys()` / no-arg `visualize()` loses its engine, which strengthens the
 case for rule-graph-first inspection.
 
+**Spike results (2026-08-21;
+[scipp/cyclebane#32](https://github.com/scipp/cyclebane/pull/32) and sciline
+branch `235-deferred-mapped-labels`): the proposal works.** Cyclebane keeps
+plain node names and derives all mapped labeling inside `to_networkx()`; all
+143 cyclebane tests pass with identical compiled output, and all 245 sciline
+tests passed *without modification* against it. Sciline then dropped the
+`map()`-time forward hook and the whole seed-restriction machinery — forward
+chaining now exists only behind `output_keys()`, pending Q3. Resolution of the
+open points:
+
+- *Shadowing idioms are the irreducible core of the old labeling.*
+  `reduce(name=C, index='x')` and the documented
+  `pipeline[C] = pipeline[C].map(...).reduce(func=merge)` pattern give the
+  reduce result the same public name as the mapped node it reduces; the old
+  global relabeling made that work implicitly (plain `C` vs `MappedNode(C)`).
+  With plain names this is a genuine collision. The dual identity is kept
+  exactly at these seams and nowhere else: when a reduce result or an assigned
+  branch shadows a mapped node, cyclebane relabels the mapped node to an
+  explicit `MappedNode` alias. `get_mapped_node_names` reads derived indices
+  via a new `named_indices` accessor instead of scanning labels.
+- *`reduce(key=None)`*: the sink is resolved among nodes present in the graph;
+  reducing a sink that would come from a rule requires an explicit `key`,
+  which sciline treats as a demand (backward instantiation). Two tests were
+  updated to pass an explicit key.
+- *Mapped roots* are treated as satisfied keys; backward instantiation never
+  provides them.
+- *Index-order compatibility* held: the derivation reproduces the per-node
+  index tuple order of incremental relabeling (later maps first, intra-map
+  order preserved, groupby extras appended), pinned by the existing tests.
+- *Bug found on cyclebane `main`*: `graph1['c'] = graph2['d']` merges the
+  branch's own `'c'` with the destination during sink-renaming, creating a
+  self-loop (reproducible on `main`, invisible because nothing topologically
+  sorts the stored graph). The derivation tolerates self-loops for now; the
+  `__setitem__` issue needs a separate fix.
+
 ### Q2: Coherence instead of last-wins among rules — decided, implemented
 
 The prototype initially resolved multiple matching rules by "latest registered
@@ -310,7 +345,8 @@ affects `visualize()`'s no-argument default via `tp=self.output_keys()`.
 | 2026-08-21 | Specialized-provider-shadows-generic accepted as a semantic change; generic-replaces-specialized not worth preserving. | #237, this doc |
 | 2026-08-21 | Q2 decided: three-tier coherence (replace equal patterns, most-specific wins, incomparable overlap errors) instead of last-wins. Implemented. | #237 |
 | open | Single mechanism (#237) vs. coexistence (#236) vs. separate class. | discussion |
-| open | Q1 (forward chaining vs. deferred mapped-labeling in cyclebane), Q3 (rule-graph inspection). | this doc |
+| 2026-08-21 | Q1 spike validates deferred mapped-labeling: both suites green, sciline `map()` hook and seeding removed. Shadowing idioms need scoped `MappedNode` aliases; rule-derived reduce sinks need an explicit `key`. | scipp/cyclebane#32, branch `235-deferred-mapped-labels` |
+| open | Q1: adopt the spike (pending review of the alias mechanism and the reduce-key rule); Q3 (rule-graph inspection). | this doc |
 
 ## References
 
