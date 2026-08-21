@@ -230,7 +230,10 @@ class DataGraph:
 
     def _satisfied(self, key: Key) -> bool:
         graph = self.underlying_graph
-        return key in graph and bool(graph.nodes[key].keys() & _providing_attrs)
+        if key in graph and bool(graph.nodes[key].keys() & _providing_attrs):
+            return True
+        # Mapped roots receive their values from the mapping.
+        return key in self._cbgraph.value_keys
 
     def _instantiate_backward(self, keys: Iterable[Key]) -> None:
         """Instantiate templates for demanded keys and their dependencies."""
@@ -250,36 +253,30 @@ class DataGraph:
             if key in self.underlying_graph:
                 stack.extend(self.underlying_graph.predecessors(key))
 
-    def _instantiate_forward(self, seeds: Iterable[Key] | None = None) -> None:
+    def _instantiate_forward(self) -> None:
         """Instantiate templates whose arguments unify with concrete keys.
 
-        If ``seeds`` is given, only instantiations consuming a seed key or a
-        key derived from one are created; other keys may still contribute to
-        bindings. Otherwise all complete bindings from the present concrete
-        keys are instantiated. Runs to a fixed point since instantiated
-        providers introduce new keys.
+        All complete bindings from the present concrete keys are instantiated.
+        Runs to a fixed point since instantiated providers introduce new keys.
+        Only used for :py:meth:`Pipeline.output_keys`; computation uses
+        demand-driven backward instantiation.
         """
-        derived = None if seeds is None else set(seeds)
         done: set[Key] = set()
         while True:
             known = set(self.underlying_graph.nodes)
-            if derived is not None:
-                known |= derived
             candidates: list[Key] = []
             for template in self._templates:
                 if not isinstance(template, Provider):
                     continue
-                for bound, used in forward_bindings(template, known):
-                    if derived is not None and not (used & derived):
-                        continue
+                for bound in forward_bindings(template, known):
                     candidates.append(_bind_free_typevars(template.deduce_key(), bound))
             progressed = False
             for key in candidates:
                 if key in done or self._satisfied(key):
                     continue
                 done.add(key)
-                # Resolve via _matching_template so that the latest-registered
-                # template wins, which may differ from the candidate's origin.
+                # Resolve via _matching_template, which may pick a more
+                # specific template than the candidate's origin.
                 resolved = self._matching_template(key)
                 if isinstance(resolved, _TemplateValue):
                     self[key] = resolved.value
@@ -288,8 +285,6 @@ class DataGraph:
                 else:
                     continue
                 progressed = True
-                if derived is not None:
-                    derived.add(key)
             if not progressed:
                 # Values for dangling inputs of instantiated providers. Only
                 # applied where the latest matching template is a value;
@@ -349,13 +344,10 @@ class DataGraph:
         :
             A new graph with mapped nodes.
         """
-        graph = self
-        if self._has_templates:
-            # Mapping duplicates dependents of the mapped nodes, so generic
-            # providers must be instantiated first.
-            graph = self.copy()
-            graph._instantiate_forward(node_values.keys())
-        return graph._from_cyclebane(graph._cbgraph.map(node_values))
+        # Note that dependents of the mapped nodes need not exist yet: which
+        # nodes carry which indices is derived at task-graph build time, so
+        # providers instantiated on demand after mapping are handled correctly.
+        return self._from_cyclebane(self._cbgraph.map(node_values))
 
     def reduce(self: T, *, func: Callable[..., Any], **kwargs: Any) -> T:
         """Reduce the outputs of a mapped graph into a single value and provider.
@@ -377,8 +369,15 @@ class DataGraph:
         # Note that the type hints of `func` are not checked here. As we are explicit
         # about the modification, this is in line with __setitem__ which does not
         # perform such checks and allows for using generic reduction functions.
-        return self._from_cyclebane(
-            self._cbgraph.reduce(attrs={'reduce': func}, **kwargs)
+        graph = self
+        if (key := kwargs.get('key')) is not None and self._has_templates:
+            # The reduced key is a demand; instantiate providers for it. Without
+            # an explicit key, only nodes present in the graph are considered
+            # when determining the sink to reduce.
+            graph = self.copy()
+            graph._instantiate_backward((key,))
+        return graph._from_cyclebane(
+            graph._cbgraph.reduce(attrs={'reduce': func}, **kwargs)
         )
 
     def to_networkx(self) -> nx.DiGraph:

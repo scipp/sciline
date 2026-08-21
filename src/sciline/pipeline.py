@@ -400,25 +400,23 @@ def get_mapped_node_names(
         The series of node names corresponding to the mapped node.
     """
     pd = _import_pandas("sciline.get_mapped_node_names")
-    from cyclebane.graph import IndexValues, MappedNode, NodeName
+    from cyclebane.graph import IndexValues, NodeName
 
-    candidates = [
-        node
-        for node in graph.underlying_graph.nodes
-        if isinstance(node, MappedNode) and node.name == base_name
-    ]
+    candidates = graph._cbgraph.named_indices(base_name)
+    if index_names is not None:
+        candidates = {
+            node: indices
+            for node, indices in candidates.items()
+            if set(indices) == set(index_names)
+        }
     if len(candidates) == 0:
         raise ValueError(f"'{base_name}' is not a mapped node.")
-    if index_names is not None:
-        candidates = [
-            node for node in candidates if set(node.indices) == set(index_names)
-        ]
     if len(candidates) > 1:
         raise ValueError(
-            f"Multiple mapped nodes with name '{base_name}' found: {candidates}"
+            f"Multiple mapped nodes with name '{base_name}' found: {list(candidates)}"
         )
 
-    index_names = tuple(reversed(candidates[0].indices))
+    index_names = tuple(reversed(next(iter(candidates.values()))))
     indices = {name: idx for name, idx in graph.indices.items() if name in index_names}
 
     index = pd.MultiIndex.from_product(indices.values(), names=index_names)

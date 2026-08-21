@@ -163,7 +163,7 @@ def test_map_over_generic_pipeline() -> None:
     pl = sl.Pipeline([process])
     result = (
         pl.map({Raw[A]: [Raw[A](1.0), Raw[A](2.0)]})
-        .reduce(func=lambda *v: sum(v), name='total')
+        .reduce(func=lambda *v: sum(v), name='total', key=Processed[A])
         .compute('total')
     )
     assert result == 6.0
@@ -200,7 +200,7 @@ def test_generic_param_used_by_mapped_pipeline() -> None:
     pl = sl.Pipeline([process, combine], params={Raw: Raw(1.0)})
     result = (
         pl.map({Raw[A]: [Raw[A](1.0), Raw[A](2.0)]})
-        .reduce(func=lambda *v: sum(v), name='total')
+        .reduce(func=lambda *v: sum(v), name='total', key=float)
         .compute('total')
     )
     assert result == 8.0
