@@ -246,7 +246,7 @@ def test_compute_mapped_index_names_validates_indices() -> None:
     assert result['a', 'bb'] == C(1)
     assert result['b', 'aa'] == C(10)
     assert result['c', 'aa'] == C(20)
-    with pytest.raises(ValueError, match='is not a mapped node'):
+    with pytest.raises(ValueError, match='has indices'):
         sl.compute_mapped(mapped, C, index_names=('y',))
 
 

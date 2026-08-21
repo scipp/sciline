@@ -264,13 +264,9 @@ class Pipeline(DataGraph):
             graph = to_task_graph(self, targets=targets, handler=handler)  # type: ignore[arg-type]
         except UnsatisfiedRequirement as e:
             missing = e.args[1]
-            source = self
-            if self._has_templates:
-                # Instantiate generic providers so that the error message reflects
-                # the graph that was actually built.
-                source = self.copy()
-                source._instantiate_backward(targets)  # type: ignore[arg-type]
-            nx_graph = source.underlying_graph
+            # Instantiate generic providers so that the error message reflects
+            # the graph that was actually built.
+            nx_graph = self._demanded(targets).underlying_graph  # type: ignore[arg-type]
             if missing in nx_graph:
                 paths = _find_paths_to_targets(nx_graph, missing, targets)
                 info = _format_paths_msg(nx_graph, paths)
@@ -403,10 +399,12 @@ def get_mapped_node_names(
     from cyclebane.graph import IndexValues, NodeName
 
     node_indices = graph._cbgraph.node_indices(base_name)
-    if not node_indices or (
-        index_names is not None and set(index_names) != set(node_indices)
-    ):
+    if not node_indices:
         raise ValueError(f"'{base_name}' is not a mapped node.")
+    if index_names is not None and set(index_names) != set(node_indices):
+        raise ValueError(
+            f"'{base_name}' has indices {node_indices}, not {tuple(index_names)}."
+        )
 
     index_names = tuple(reversed(node_indices))
     indices = {name: idx for name, idx in graph.indices.items() if name in index_names}

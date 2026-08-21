@@ -61,7 +61,22 @@ def parameterize(key: Key) -> Key:
     return key
 
 
-def _pattern_origin_and_args(pattern: Any) -> tuple[Any, tuple[Any, ...]]:
+def _within_bound(key: Any, bound: Any) -> bool:
+    """Best-effort check of a TypeVar bound; keys that are not classes never
+    satisfy a bound."""
+    try:
+        return isinstance(key, type) and issubclass(key, bound)
+    except TypeError:
+        return False
+
+
+def key_depth(key: Key) -> int:
+    """Nesting depth of a type expression."""
+    _, args = origin_and_args(key)
+    return 1 + max((key_depth(arg) for arg in args), default=0)
+
+
+def pattern_origin_and_args(pattern: Any) -> tuple[Any, tuple[Any, ...]]:
     """Like :py:func:`origin_and_args`, but treats an unparametrized generic
     class whose subscription does not produce an inspectable alias (e.g. a
     pydantic model) as its own origin with its type parameters as args."""
@@ -80,11 +95,15 @@ def unify(pattern: Key | TypeVar, concrete: Key, bound: dict[TypeVar, Key]) -> b
     if isinstance(pattern, TypeVar):
         if pattern.__constraints__ and concrete not in pattern.__constraints__:
             return False
+        if pattern.__bound__ is not None and not _within_bound(
+            concrete, pattern.__bound__
+        ):
+            return False
         if pattern in bound:
             return bound[pattern] == concrete
         bound[pattern] = concrete
         return True
-    pattern_origin, pattern_args = _pattern_origin_and_args(pattern)
+    pattern_origin, pattern_args = pattern_origin_and_args(pattern)
     if pattern_origin is None:
         return pattern == concrete
     concrete_origin, concrete_args = origin_and_args(concrete)
@@ -122,14 +141,22 @@ def _subsumes(
                     return False
             elif specific not in general.__constraints__:
                 return False
+        if general.__bound__ is not None:
+            if isinstance(specific, TypeVar):
+                if specific.__bound__ is None or not _within_bound(
+                    specific.__bound__, general.__bound__
+                ):
+                    return False
+            elif not _within_bound(specific, general.__bound__):
+                return False
         if general in bound:
             return bool(bound[general] == specific)
         bound[general] = specific
         return True
-    general_origin, general_args = _pattern_origin_and_args(general)
+    general_origin, general_args = pattern_origin_and_args(general)
     if general_origin is None:
         return general == specific
-    specific_origin, specific_args = _pattern_origin_and_args(specific)
+    specific_origin, specific_args = pattern_origin_and_args(specific)
     if specific_origin != general_origin:
         return False
     if len(general_args) != len(specific_args):

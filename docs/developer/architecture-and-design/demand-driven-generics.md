@@ -199,9 +199,10 @@ over-engineered; the minimal change is:
   error at map time).
 - `to_networkx()` first derives each node's index set by reachability from the
   mapped roots, then proceeds with the existing per-index cloning.
-- `reduce()` stores a plain node whose attrs record what is reduced
-  (`index`/`axis`/all); the reduce node's remaining indices are derived at
-  compile (incoming indices minus reduced).
+- `reduce()` resolves what is reduced into a concrete set of index names at
+  call time and records it; the reduce node's remaining indices are derived at
+  compile (incoming indices minus the recorded set), so indices added by later
+  `map` calls flow through, exactly as with eager relabeling.
 - `_from_orig_key` — the lookup-by-original-name convenience whose own
   code comment questions its worth — largely disappears; `__getitem__`,
   `__delitem__`, `__setitem__` lose their `MappedNode` special cases.
@@ -274,8 +275,9 @@ open points:
   validation), and turns the pre-existing silent self-loop bug into an error.
 - *`reduce(key=None)`*: the sink is resolved among nodes present in the graph;
   reducing a sink that would come from a rule requires an explicit `key`,
-  which sciline treats as a demand (backward instantiation). Two tests were
-  updated to pass an explicit key.
+  which sciline treats as a demand (backward instantiation). Enforced with a
+  clear error; a unique sink not matched by any rule argument is still
+  accepted without `key`, so fully concrete (mapped) pipelines are unaffected.
 - *Mapped roots* are treated as satisfied keys; backward instantiation never
   provides them.
 - *Index-order compatibility* held: the derivation reproduces the per-node
@@ -365,6 +367,7 @@ the concrete part of the graph, since patterns cannot be demanded. Rule-graph
 | 2026-08-21 | Explicit `key` required in `reduce` when the reduced sink would come from a rule; concrete pipelines are unaffected. | #238 |
 | 2026-08-21 | Q3 resolved for the prototype via the simplest path: forward chaining deleted, `output_keys()` lists unconsumed rule patterns, no-arg `visualize()` shows the concrete part. Rule-graph rendering is future work. | #238 |
 | 2026-08-21 | #238 merged into #237, which is retargeted to `main` as the consolidated end-state proposal; #236 remains the coexistence alternative. | #237 |
+| 2026-08-21 | Independent review (fresh-eyes agent) found three silent-wrong-answer holes where eager semantics were made lazy without pinning; all fixed with regression tests: `reduce` without `key` now raises when the sink may come from a rule; cyclebane reduce specs resolve eagerly into index-name sets (map-after-reduce keeps `main` semantics); stale reduce specs are dropped on branch replacement. Also: TypeVar `bound=` honored as a unification filter, depth guard against non-terminating rule chains, `CycleError` carries the cycle, instantiation hooks unified behind `_demanded`. | #237, scipp/cyclebane#32 |
 | open | Review of the end state; land scipp/cyclebane#32; user-guide rewrite; `Scope` deprecation (#233). | #237, scipp/cyclebane#32 |
 
 ## References

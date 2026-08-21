@@ -13,6 +13,7 @@ import pytest
 
 import sciline as sl
 from sciline.handler import UnsatisfiedRequirement
+from sciline.scheduler import CycleError
 
 type A = int
 type B = int
@@ -214,3 +215,48 @@ def test_output_keys_include_unconsumed_generic_patterns() -> None:
     assert Reduced in origins
     # Consumed by reduce_run, so not an output.
     assert Processed not in origins
+
+
+def test_reduce_without_key_raises_when_sink_may_come_from_generic() -> None:
+    pl = sl.Pipeline([process]).map({Raw[A]: [Raw[A](1.0)]})
+    with pytest.raises(ValueError, match="explicit 'key'"):
+        pl.reduce(func=lambda *v: sum(v), name='total')
+
+
+def test_reduce_without_key_works_when_sink_not_consumed_by_generic() -> None:
+    pl = sl.Pipeline([reduce_run]).map({Raw[A]: [Raw[A](1.0), Raw[A](2.0)]})
+    assert pl.reduce(func=lambda *v: sum(v), name='total').compute('total') == 3.0
+
+
+def test_bounded_typevar_restricts_instantiation() -> None:
+    class Base(float): ...
+
+    class Special(Base): ...
+
+    def process2[R: Base](x: Raw[R]) -> Processed[R]:
+        return Processed[R](x * 2)
+
+    pl = sl.Pipeline(
+        [process2], params={Raw[Special]: Raw[Special](1.0), Raw[int]: Raw[int](2.0)}
+    )
+    assert pl.compute(Processed[Special]) == 2.0
+    with pytest.raises(UnsatisfiedRequirement):
+        pl.compute(Processed[int])
+
+
+def test_non_terminating_generic_chain_raises_clear_error() -> None:
+    def unwrap[T](x: Processed[list[T]]) -> Processed[T]:
+        return Processed[T](x)
+
+    pl = sl.Pipeline([unwrap])
+    with pytest.raises(RuntimeError, match='Nesting depth'):
+        pl.get(Processed[A])
+
+
+def test_self_consuming_generic_raises_cycle_error_with_message() -> None:
+    def identity[T](x: Processed[T]) -> Processed[T]:
+        return x
+
+    pl = sl.Pipeline([identity])
+    with pytest.raises(CycleError, match='[Cc]ycle'):
+        pl.compute(Processed[A])

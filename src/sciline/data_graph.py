@@ -20,8 +20,9 @@ from ._provider import (
     _bind_free_typevars,
 )
 from ._unification import (
-    _pattern_origin_and_args,
     find_all_typevars,
+    key_depth,
+    pattern_origin_and_args,
     match_return,
     parameterize,
     subsumes,
@@ -47,6 +48,8 @@ T = TypeVar('T', bound='DataGraph')
 _providing_attrs = frozenset(('value', 'provider', 'reduce'))
 
 _no_value = object()
+
+_max_key_depth = 32
 
 
 @dataclass
@@ -205,15 +208,14 @@ class DataGraph:
         if len(matches) < 2:
             return matches[0][1] if matches else None
 
-        def is_dominated(pattern: Key) -> bool:
+        def is_dominated(index: int) -> bool:
+            pattern = matches[index][0]
             return any(
-                other is not pattern
-                and subsumes(pattern, other)
-                and not subsumes(other, pattern)
-                for other, _ in matches
+                i != index and subsumes(pattern, other) and not subsumes(other, pattern)
+                for i, (other, _) in enumerate(matches)
             )
 
-        remaining = [m for m in matches if not is_dominated(m[0])]
+        remaining = [m for i, m in enumerate(matches) if not is_dominated(i)]
         if len(remaining) == 1:
             return remaining[0][1]
         names = ', '.join(
@@ -235,6 +237,25 @@ class DataGraph:
         # Mapped roots receive their values from the mapping.
         return key in self._cbgraph.value_keys
 
+    def _consumed_by_template(self, key: Key) -> bool:
+        """Whether any generic provider has an argument matching ``key``."""
+        for template in self._templates:
+            if not isinstance(template, Provider):
+                continue
+            for arg in template.arg_spec.keys():
+                bound: dict[TypeVar, Key] = {}
+                if unify(arg, key, bound):
+                    return True
+        return False
+
+    def _demanded(self: T, targets: Iterable[Key]) -> T:
+        """Return self, or a copy with templates instantiated for the targets."""
+        if not self._has_templates:
+            return self
+        out = self.copy()
+        out._instantiate_backward(targets)
+        return out
+
     def _instantiate_backward(self, keys: Iterable[Key]) -> None:
         """Instantiate templates for demanded keys and their dependencies."""
         stack = list(keys)
@@ -244,6 +265,12 @@ class DataGraph:
             if key in seen:
                 continue
             seen.add(key)
+            if key_depth(key) > _max_key_depth:
+                raise RuntimeError(
+                    f"Nesting depth of demanded key '{key_name(key)}' exceeds "
+                    f"{_max_key_depth}; this usually indicates a non-terminating "
+                    "chain of generic providers."
+                )
             if not self._satisfied(key):
                 template = self._matching_template(key)
                 if isinstance(template, _TemplateValue):
@@ -266,12 +293,12 @@ class DataGraph:
             for template in providers
             for arg in template.arg_spec.keys()
             if find_all_typevars(arg)
-            and (origin := _pattern_origin_and_args(arg)[0]) is not None
+            and (origin := pattern_origin_and_args(arg)[0]) is not None
         }
         return [
             pattern
             for template in providers
-            if _pattern_origin_and_args(pattern := template.deduce_key())[0]
+            if pattern_origin_and_args(pattern := template.deduce_key())[0]
             not in consumed
         ]
 
@@ -300,11 +327,12 @@ class DataGraph:
         )
 
     def __getitem__(self: T, key: Key) -> T:
-        """Return the subgraph that computes the given key."""
-        graph = self
-        if self._has_templates:
-            graph = self.copy()
-            graph._instantiate_backward((key,))
+        """Return the subgraph that computes the given key.
+
+        All generic providers are retained in the subgraph; they are only
+        instantiated on demand.
+        """
+        graph = self._demanded((key,))
         return graph._from_cyclebane(graph._cbgraph[key])
 
     def map(self: T, node_values: dict[Key, Any]) -> T:
@@ -328,7 +356,9 @@ class DataGraph:
         # providers instantiated on demand after mapping are handled correctly.
         return self._from_cyclebane(self._cbgraph.map(node_values))
 
-    def reduce(self: T, *, func: Callable[..., Any], **kwargs: Any) -> T:
+    def reduce(
+        self: T, *, func: Callable[..., Any], key: Key | None = None, **kwargs: Any
+    ) -> T:
         """Reduce the outputs of a mapped graph into a single value and provider.
 
         Parameters
@@ -336,6 +366,10 @@ class DataGraph:
         func:
             Function that takes the values to reduce and returns a single value.
             This function is passed as many arguments as there are values to reduce.
+        key:
+            The node to reduce. If not given, the unique sink of the graph is
+            used; this requires that the sink cannot come from a generic
+            provider that has not been instantiated yet.
         kwargs:
             Forwarded to :meth:`cyclebane.Graph.reduce`.
 
@@ -349,14 +383,25 @@ class DataGraph:
         # about the modification, this is in line with __setitem__ which does not
         # perform such checks and allows for using generic reduction functions.
         graph = self
-        if (key := kwargs.get('key')) is not None and self._has_templates:
-            # The reduced key is a demand; instantiate providers for it. Without
-            # an explicit key, only nodes present in the graph are considered
-            # when determining the sink to reduce.
-            graph = self.copy()
-            graph._instantiate_backward((key,))
+        if self._has_templates:
+            if key is None:
+                sinks = [
+                    node
+                    for node, degree in self.underlying_graph.out_degree
+                    if degree == 0
+                ]
+                if len(sinks) != 1 or self._consumed_by_template(sinks[0]):
+                    raise ValueError(
+                        "Cannot determine which node to reduce: the pipeline "
+                        "contains generic providers, so the reduced node may "
+                        "not have been instantiated yet. Pass an explicit "
+                        "'key'."
+                    )
+            else:
+                # The reduced key is a demand; instantiate providers for it.
+                graph = self._demanded((key,))
         return graph._from_cyclebane(
-            graph._cbgraph.reduce(attrs={'reduce': func}, **kwargs)
+            graph._cbgraph.reduce(key=key, attrs={'reduce': func}, **kwargs)
         )
 
     def to_networkx(self) -> nx.DiGraph:
@@ -381,9 +426,7 @@ class DataGraph:
 def to_task_graph(
     data_graph: DataGraph, targets: tuple[Key, ...], handler: ErrorHandler | None = None
 ) -> Graph:
-    if data_graph._has_templates:
-        data_graph = data_graph.copy()
-        data_graph._instantiate_backward(targets)
+    data_graph = data_graph._demanded(targets)
     graph = data_graph.to_networkx()
     handler = handler or HandleAsBuildTimeException()
     ancestors = list(targets)

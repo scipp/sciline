@@ -58,7 +58,7 @@ class NaiveScheduler:
             # Create list from generator to force early exception if there is a cycle
             tasks = list(ts.static_order())
         except graphlib.CycleError as e:
-            raise CycleError from e
+            raise CycleError(*e.args) from e
 
         dependents = _count_dependents(dependencies)
         results: dict[Hashable, Any] = {}
@@ -140,7 +140,7 @@ class DaskScheduler:
                 return self._dask_get(dsk, list(map(_to_dask_key, keys)))
             except RuntimeError as e:
                 if str(e).startswith("Cycle detected"):
-                    raise CycleError from e
+                    raise CycleError(str(e)) from e
                 raise
 
     def __repr__(self) -> str:
