@@ -218,9 +218,7 @@ class Pipeline(DataGraph):
         if tp is None:
             # Generic return-type patterns cannot be demanded, only their
             # instantiations can; visualize the concrete part of the graph.
-            tp = tuple(
-                key for key in self.output_keys() if not find_all_typevars(key)
-            )
+            tp = tuple(key for key in self.output_keys() if not find_all_typevars(key))
         return self.get(tp, handler=HandleAsComputeTimeException()).visualize(
             compact=compact,
             mode=mode,
