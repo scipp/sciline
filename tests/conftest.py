@@ -1,10 +1,16 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright (c) 2023 Scipp contributors (https://github.com/scipp)
+import sys
 from typing import Any
 
 import pytest
 
 from sciline.scheduler import DaskScheduler, NaiveScheduler, Scheduler
+
+collect_ignore: list[str] = []
+if sys.version_info < (3, 12):
+    # Uses PEP 695 syntax, which would be a SyntaxError.
+    collect_ignore.append("pep695_test.py")
 
 
 @pytest.fixture

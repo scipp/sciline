@@ -269,7 +269,13 @@ class Pipeline(DataGraph):
             graph = to_task_graph(self, targets=targets, handler=handler)  # type: ignore[arg-type]
         except UnsatisfiedRequirement as e:
             missing = e.args[1]
-            nx_graph = self.underlying_graph
+            source = self
+            if self._templates:
+                # Instantiate generic providers so that the error message reflects
+                # the graph that was actually built.
+                source = self.copy()
+                source._instantiate_backward(targets)  # type: ignore[arg-type]
+            nx_graph = source.underlying_graph
             if missing in nx_graph:
                 paths = _find_paths_to_targets(nx_graph, missing, targets)
                 info = _format_paths_msg(nx_graph, paths)
@@ -345,8 +351,14 @@ class Pipeline(DataGraph):
 
     def output_keys(self) -> tuple[Key, ...]:
         """Returns the keys that are not inputs to any other providers."""
+        graph = self
+        if self._templates:
+            # Instantiate generic providers derivable from the present concrete
+            # keys so that their outputs are included.
+            graph = self.copy()
+            graph._instantiate_forward()
         sink_nodes = [
-            node for node, degree in self.underlying_graph.out_degree if degree == 0
+            node for node, degree in graph.underlying_graph.out_degree if degree == 0
         ]
         return tuple(sorted(sink_nodes, key=key_name))
 

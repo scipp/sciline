@@ -1,0 +1,142 @@
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright (c) 2025 Scipp contributors (https://github.com/scipp)
+"""Tests for generic providers using PEP 695 syntax (Python >= 3.12).
+
+The type variables have no constraints; instantiations are inferred from the
+concrete keys appearing in the pipeline. This file is excluded from collection
+on Python < 3.12 via ``collect_ignore`` in ``conftest.py``.
+"""
+
+import pytest
+
+import sciline as sl
+from sciline.handler import UnsatisfiedRequirement
+
+type A = int
+type B = int
+
+
+class Raw[Run](float): ...
+
+
+class Processed[Run](float): ...
+
+
+class Reduced[Run](float): ...
+
+
+def process[Run](x: Raw[Run]) -> Processed[Run]:
+    return Processed[Run](x * 2)
+
+
+def reduce_run[Run](x: Processed[Run]) -> Reduced[Run]:
+    return Reduced[Run](x + 1)
+
+
+def test_generic_provider_instantiated_from_param() -> None:
+    pl = sl.Pipeline([process], params={Raw[A]: Raw[A](1.5)})
+    assert pl.compute(Processed[A]) == 3.0
+
+
+def test_generic_provider_instantiated_per_requested_key() -> None:
+    pl = sl.Pipeline([process], params={Raw[A]: Raw[A](1.0), Raw[B]: Raw[B](2.0)})
+    assert pl.compute(Processed[A]) == 2.0
+    assert pl.compute(Processed[B]) == 4.0
+
+
+def test_chain_of_generic_providers() -> None:
+    pl = sl.Pipeline([process, reduce_run], params={Raw[A]: Raw[A](2.0)})
+    assert pl.compute(Reduced[A]) == 5.0
+
+
+def test_generic_source_provider_instantiated_from_target() -> None:
+    def make[Run]() -> Raw[Run]:
+        return Raw[Run](7.0)
+
+    pl = sl.Pipeline([make, process])
+    assert pl.compute(Processed[A]) == 14.0
+
+
+def test_concrete_provider_shadows_generic() -> None:
+    def special() -> Processed[A]:
+        return Processed[A](0.5)
+
+    pl = sl.Pipeline([process, special], params={Raw[B]: Raw[B](1.0)})
+    assert pl.compute(Processed[A]) == 0.5
+    assert pl.compute(Processed[B]) == 2.0
+
+
+def test_param_shadows_generic_provider() -> None:
+    pl = sl.Pipeline(
+        [process], params={Raw[A]: Raw[A](1.0), Processed[A]: Processed[A](5.0)}
+    )
+    assert pl.compute(Processed[A]) == 5.0
+
+
+def test_later_generic_provider_wins() -> None:
+    def process2[Run](x: Raw[Run]) -> Processed[Run]:
+        return Processed[Run](x * 10)
+
+    pl = sl.Pipeline([process, process2], params={Raw[A]: Raw[A](1.0)})
+    assert pl.compute(Processed[A]) == 10.0
+
+
+def test_multiple_typevars_bound_from_target() -> None:
+    class Combined[R1, R2](float): ...
+
+    def combine[R1, R2](x: Raw[R1], y: Processed[R2]) -> Combined[R1, R2]:
+        return Combined[R1, R2](x + y)
+
+    pl = sl.Pipeline(
+        [combine, process], params={Raw[A]: Raw[A](1.0), Raw[B]: Raw[B](2.0)}
+    )
+    assert pl.compute(Combined[A, B]) == 5.0
+    assert pl.compute(Combined[A, A]) == 3.0
+
+
+def test_generic_type_alias() -> None:
+    type RawImage[Run] = float
+    type CleanImage[Run] = float
+
+    def clean[Run](x: RawImage[Run]) -> CleanImage[Run]:
+        return x + 1.0
+
+    pl = sl.Pipeline([clean], params={RawImage[A]: 1.0})
+    assert pl.compute(CleanImage[A]) == 2.0
+
+
+def test_constrained_pep695_typevar_expanded_eagerly() -> None:
+    def process2[Run: (A, B)](x: Raw[Run]) -> Processed[Run]:
+        return Processed[Run](x * 3)
+
+    pl = sl.Pipeline([process2], params={Raw[A]: Raw[A](1.0), Raw[B]: Raw[B](2.0)})
+    assert pl.compute(Processed[A]) == 3.0
+    assert pl.compute(Processed[B]) == 6.0
+
+
+def test_map_over_generic_pipeline() -> None:
+    pl = sl.Pipeline([process])
+    result = (
+        pl.map({Raw[A]: [Raw[A](1.0), Raw[A](2.0)]})
+        .reduce(func=lambda *v: sum(v), name='total')
+        .compute('total')
+    )
+    assert result == 6.0
+
+
+def test_getitem_returns_subgraph_with_instantiated_generics() -> None:
+    pl = sl.Pipeline([process, reduce_run], params={Raw[A]: Raw[A](2.0)})
+    sub = pl[Processed[A]]
+    assert sub.compute(Processed[A]) == 4.0
+
+
+def test_missing_dependency_of_instantiated_generic_raises() -> None:
+    pl = sl.Pipeline([process])
+    with pytest.raises(UnsatisfiedRequirement, match='Raw'):
+        pl.compute(Processed[A])
+
+
+def test_output_keys_include_derivable_generic_outputs() -> None:
+    pl = sl.Pipeline([process, reduce_run], params={Raw[A]: Raw[A](1.0)})
+    assert Reduced[A] in pl.output_keys()
+    assert Reduced[B] not in pl.output_keys()

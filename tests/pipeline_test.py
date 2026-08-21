@@ -1513,7 +1513,7 @@ def test_can_constrain_type_to_nothing() -> None:
         pipeline.get(B[int])
 
 
-def test_type_vars_must_be_constrained() -> None:
+def test_unconstrained_type_vars_are_instantiated_on_demand() -> None:
     T = TypeVar('T')
 
     @dataclass
@@ -1527,8 +1527,10 @@ def test_type_vars_must_be_constrained() -> None:
     def foo(x: A[T]) -> B[T]:
         return B[T](x.v)
 
-    with pytest.raises(ValueError, match="no constraint"):
-        sl.Pipeline([foo])
+    pipeline = sl.Pipeline([foo], params={A[int]: A[int](3)})
+    assert pipeline.compute(B[int]) == B[int](3)
+    with pytest.raises(sl.handler.UnsatisfiedRequirement):
+        pipeline.get(B[float])
 
 
 def test_custom_constraint_is_sufficient() -> None:

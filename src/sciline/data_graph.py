@@ -6,13 +6,14 @@ from __future__ import annotations
 import itertools
 from collections.abc import Callable, Generator, Iterable, Mapping
 from types import NoneType
-from typing import TYPE_CHECKING, Any, TypeVar, get_args
+from typing import TYPE_CHECKING, Any, TypeVar
 
 import cyclebane as cb
 import networkx as nx
 from cyclebane.node_values import IndexName, IndexValue
 
-from ._provider import ArgSpec, Provider, ToProvider, _bind_free_typevars
+from ._provider import ArgSpec, Provider, ToProvider, UnboundTypeVar, _bind_free_typevars
+from ._unification import find_all_typevars, forward_bindings, match_return
 from ._utils import key_full_qualname
 from .handler import ErrorHandler, HandleAsBuildTimeException
 from .typing import Graph, Key
@@ -26,15 +27,6 @@ def _as_graph(key: Key, value: Any) -> cb.Graph:
     graph = nx.DiGraph()
     graph.add_node(key, value=value)
     return cb.Graph(graph)
-
-
-def _find_all_typevars(t: type | TypeVar) -> set[TypeVar]:
-    """Returns the set of all TypeVars in a type expression."""
-    if isinstance(t, TypeVar):
-        return {t}
-    if params := getattr(t, '__parameters__', ()):
-        return set(params)
-    return set(itertools.chain(*map(_find_all_typevars, get_args(t))))
 
 
 def _get_typevar_constraints(
@@ -81,6 +73,8 @@ def _normalize_custom_constraints(
 
 T = TypeVar('T', bound='DataGraph')
 
+_providing_attrs = frozenset(('value', 'provider', 'reduce'))
+
 
 class DataGraph:
     def __init__(
@@ -90,20 +84,20 @@ class DataGraph:
         constraints: Mapping[TypeVar, Iterable[Key]] | None = None,
     ) -> None:
         self._constraints = _normalize_custom_constraints(constraints)
+        self._templates: list[Provider] = []
         self._cbgraph = cb.Graph(nx.DiGraph())
         for provider in providers or []:
             self.insert(provider)
 
-    @classmethod
-    def _from_cyclebane(cls: type[T], graph: cb.Graph) -> T:
-        out = cls([])
+    def _from_cyclebane(self: T, graph: cb.Graph) -> T:
+        out = type(self)([])
         out._cbgraph = graph
+        out._constraints = self._constraints
+        out._templates = list(self._templates)
         return out
 
     def copy(self: T) -> T:
-        cpy = self._from_cyclebane(self._cbgraph.copy())
-        cpy._constraints = self._constraints
-        return cpy
+        return self._from_cyclebane(self._cbgraph.copy())
 
     def __copy__(self: T) -> T:
         return self.copy()
@@ -152,15 +146,91 @@ class DataGraph:
         if not isinstance(provider, Provider):
             provider = Provider.from_function(provider)
         return_type = provider.deduce_key()
-        if typevars := _find_all_typevars(return_type):
-            for bound in _mapping_to_constrained(typevars, self._constraints):
-                self.insert(provider.bind_type_vars(bound))
+        if typevars := find_all_typevars(return_type):
+            if all(t.__constraints__ or t in self._constraints for t in typevars):
+                for bound in _mapping_to_constrained(typevars, self._constraints):
+                    self.insert(provider.bind_type_vars(bound))
+            else:
+                self._register_template(provider, typevars)
             return
         # Trigger UnboundTypeVar error if any input typevars are not bound
         provider = provider.bind_type_vars({})
         self._get_clean_node(return_type)['provider'] = provider
         for dep in provider.arg_spec.keys():
             self.underlying_graph.add_edge(dep, return_type, key=dep)
+
+    def _register_template(self, provider: Provider, typevars: set[TypeVar]) -> None:
+        """Store a generic provider for on-demand instantiation.
+
+        Providers with unconstrained type variables cannot be expanded eagerly.
+        They are instantiated later by unifying their type patterns with the
+        concrete keys that appear in the graph, see :py:meth:`_instantiate_backward`
+        and :py:meth:`_instantiate_forward`.
+        """
+        return_type = provider.deduce_key()
+        if isinstance(return_type, TypeVar):
+            raise ValueError(
+                f"Provider {provider} returns a bare unconstrained type variable "
+                f"{return_type!r}, which would match any requested key. Use a "
+                "generic class as return type or constrain the type variable."
+            )
+        arg_typevars: set[TypeVar] = set()
+        for arg in provider.arg_spec.keys():
+            arg_typevars |= find_all_typevars(arg)
+        if unbound := arg_typevars - typevars:
+            raise UnboundTypeVar(
+                f"Provider {provider} has type variables {unbound} in its "
+                "arguments that do not appear in its return type."
+            )
+        # Mirror the replacement semantics of inserting a concrete provider twice.
+        self._templates = [t for t in self._templates if t != provider]
+        self._templates.append(provider)
+
+    def _satisfied(self, key: Key) -> bool:
+        graph = self.underlying_graph
+        return key in graph and bool(graph.nodes[key].keys() & _providing_attrs)
+
+    def _instantiate_backward(self, keys: Iterable[Key]) -> None:
+        """Instantiate templates for demanded keys and their dependencies."""
+        stack = list(keys)
+        seen = set()
+        while stack:
+            key = stack.pop()
+            if key in seen:
+                continue
+            seen.add(key)
+            if not self._satisfied(key):
+                # Iterate in reverse so that the latest matching template wins,
+                # mirroring the replacement semantics of concrete providers.
+                for template in reversed(self._templates):
+                    if (provider := match_return(template, key)) is not None:
+                        self.insert(provider)
+                        break
+            if key in self.underlying_graph:
+                stack.extend(self.underlying_graph.predecessors(key))
+
+    def _instantiate_forward(self, extra_keys: Iterable[Key] = ()) -> None:
+        """Instantiate templates whose arguments unify with concrete keys.
+
+        Runs to a fixed point since instantiated providers introduce new keys.
+        """
+        extra = set(extra_keys)
+        instantiated: set[Key] = set()
+        while True:
+            known = set(self.underlying_graph.nodes) | extra
+            providers: dict[Key, Provider] = {}
+            for template in self._templates:
+                for bound in forward_bindings(template, known):
+                    provider = template.bind_type_vars(bound)
+                    providers[provider.deduce_key()] = provider
+            inserted = False
+            for key, provider in providers.items():
+                if key not in instantiated and not self._satisfied(key):
+                    self.insert(provider)
+                    instantiated.add(key)
+                    inserted = True
+            if not inserted:
+                return
 
     def __setitem__(self, key: Key, value: DataGraph | Any) -> None:
         """
@@ -176,7 +246,7 @@ class DataGraph:
         # This is a questionable approach: Using MyGeneric[T] as a key will actually
         # not pass mypy [valid-type] checks. What we do on our side is ok, but the
         # calling code is not.
-        if typevars := _find_all_typevars(key):
+        if typevars := find_all_typevars(key):
             for bound in _mapping_to_constrained(typevars, self._constraints):
                 self[_bind_free_typevars(key, bound)] = value
             return
@@ -189,7 +259,11 @@ class DataGraph:
 
     def __getitem__(self: T, key: Key) -> T:
         """Return the subgraph that computes the given key."""
-        return self._from_cyclebane(self._cbgraph[key])
+        graph = self
+        if self._templates:
+            graph = self.copy()
+            graph._instantiate_backward((key,))
+        return graph._from_cyclebane(graph._cbgraph[key])
 
     def map(self: T, node_values: dict[Key, Any]) -> T:
         """Map the graph over given node values.
@@ -207,7 +281,13 @@ class DataGraph:
         :
             A new graph with mapped nodes.
         """
-        return self._from_cyclebane(self._cbgraph.map(node_values))
+        graph = self
+        if self._templates:
+            # Mapping duplicates dependents of the mapped nodes, so generic
+            # providers must be instantiated first.
+            graph = self.copy()
+            graph._instantiate_forward(node_values.keys())
+        return graph._from_cyclebane(graph._cbgraph.map(node_values))
 
     def reduce(self: T, *, func: Callable[..., Any], **kwargs: Any) -> T:
         """Reduce the outputs of a mapped graph into a single value and provider.
@@ -258,6 +338,9 @@ _no_value = object()
 def to_task_graph(
     data_graph: DataGraph, targets: tuple[Key, ...], handler: ErrorHandler | None = None
 ) -> Graph:
+    if data_graph._templates:
+        data_graph = data_graph.copy()
+        data_graph._instantiate_backward(targets)
     graph = data_graph.to_networkx()
     handler = handler or HandleAsBuildTimeException()
     ancestors = list(targets)
