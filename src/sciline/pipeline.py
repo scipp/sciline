@@ -19,6 +19,7 @@ import networkx as nx
 from networkx.algorithms.simple_paths import all_simple_paths
 
 from ._provider import Provider, ToProvider
+from ._unification import find_all_typevars
 from ._utils import key_name
 from .data_graph import DataGraph, to_task_graph
 from .display import pipeline_html_repr
@@ -215,7 +216,11 @@ class Pipeline(DataGraph):
             Keyword arguments passed to :py:class:`graphviz.Digraph`.
         """
         if tp is None:
-            tp = self.output_keys()
+            # Generic return-type patterns cannot be demanded, only their
+            # instantiations can; visualize the concrete part of the graph.
+            tp = tuple(
+                key for key in self.output_keys() if not find_all_typevars(key)
+            )
         return self.get(tp, handler=HandleAsComputeTimeException()).visualize(
             compact=compact,
             mode=mode,
@@ -342,16 +347,15 @@ class Pipeline(DataGraph):
         return pipeline_html_repr(nodes)
 
     def output_keys(self) -> tuple[Key, ...]:
-        """Returns the keys that are not inputs to any other providers."""
-        graph = self
-        if self._has_templates:
-            # Instantiate generic providers derivable from the present concrete
-            # keys so that their outputs are included.
-            graph = self.copy()
-            graph._instantiate_forward()
+        """Returns the keys that are not inputs to any other providers.
+
+        For generic providers the (uninstantiated) return-type pattern is
+        included, unless another generic provider consumes it.
+        """
         sink_nodes = [
-            node for node, degree in graph.underlying_graph.out_degree if degree == 0
+            node for node, degree in self.underlying_graph.out_degree if degree == 0
         ]
+        sink_nodes += self._template_output_patterns()
         return tuple(sorted(sink_nodes, key=key_name))
 
 
@@ -390,9 +394,7 @@ def get_mapped_node_names(
     base_name:
         The base name of the mapped node to get the names for.
     index_names:
-        Specifies the names of the indices of the mapped node. If not given this is
-        inferred from the graph, but the argument may be required to disambiguate
-        multiple mapped nodes with the same name.
+        If given, must match the index names of the mapped node.
 
     Returns
     -------
@@ -402,21 +404,13 @@ def get_mapped_node_names(
     pd = _import_pandas("sciline.get_mapped_node_names")
     from cyclebane.graph import IndexValues, NodeName
 
-    candidates = graph._cbgraph.named_indices(base_name)
-    if index_names is not None:
-        candidates = {
-            node: indices
-            for node, indices in candidates.items()
-            if set(indices) == set(index_names)
-        }
-    if len(candidates) == 0:
+    node_indices = graph._cbgraph.node_indices(base_name)
+    if not node_indices or (
+        index_names is not None and set(index_names) != set(node_indices)
+    ):
         raise ValueError(f"'{base_name}' is not a mapped node.")
-    if len(candidates) > 1:
-        raise ValueError(
-            f"Multiple mapped nodes with name '{base_name}' found: {list(candidates)}"
-        )
 
-    index_names = tuple(reversed(next(iter(candidates.values()))))
+    index_names = tuple(reversed(node_indices))
     indices = {name: idx for name, idx in graph.indices.items() if name in index_names}
 
     index = pd.MultiIndex.from_product(indices.values(), names=index_names)
@@ -452,9 +446,7 @@ def compute_mapped(
     base_name:
         The base name of the mapped node to get the names for.
     index_names:
-        Specifies the names of the indices of the mapped node. If not given this is
-        inferred from the graph, but the argument may be required to disambiguate
-        multiple mapped nodes with the same name.
+        If given, must match the index names of the mapped node.
 
     Returns
     -------

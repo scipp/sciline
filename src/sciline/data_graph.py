@@ -20,8 +20,8 @@ from ._provider import (
     _bind_free_typevars,
 )
 from ._unification import (
+    _pattern_origin_and_args,
     find_all_typevars,
-    forward_bindings,
     match_return,
     parameterize,
     subsumes,
@@ -149,7 +149,7 @@ class DataGraph:
 
         Generic providers are instantiated by unifying their type patterns
         with the concrete keys demanded from the graph, see
-        :py:meth:`_instantiate_backward` and :py:meth:`_instantiate_forward`.
+        :py:meth:`_instantiate_backward`.
         """
         spec = provider.arg_spec.map_keys(parameterize)
         provider = Provider(func=provider.func, arg_spec=spec, kind=provider.kind)
@@ -253,48 +253,27 @@ class DataGraph:
             if key in self.underlying_graph:
                 stack.extend(self.underlying_graph.predecessors(key))
 
-    def _instantiate_forward(self) -> None:
-        """Instantiate templates whose arguments unify with concrete keys.
+    def _template_output_patterns(self) -> list[Key]:
+        """Return-type patterns of generic providers not consumed by templates.
 
-        All complete bindings from the present concrete keys are instantiated.
-        Runs to a fixed point since instantiated providers introduce new keys.
-        Only used for :py:meth:`Pipeline.output_keys`; computation uses
-        demand-driven backward instantiation.
+        Whether one generic provider consumes another's output cannot be
+        decided exactly without instantiation; consumption is approximated by
+        comparing pattern origins.
         """
-        done: set[Key] = set()
-        while True:
-            known = set(self.underlying_graph.nodes)
-            candidates: list[Key] = []
-            for template in self._templates:
-                if not isinstance(template, Provider):
-                    continue
-                for bound in forward_bindings(template, known):
-                    candidates.append(_bind_free_typevars(template.deduce_key(), bound))
-            progressed = False
-            for key in candidates:
-                if key in done or self._satisfied(key):
-                    continue
-                done.add(key)
-                # Resolve via _matching_template, which may pick a more
-                # specific template than the candidate's origin.
-                resolved = self._matching_template(key)
-                if isinstance(resolved, _TemplateValue):
-                    self[key] = resolved.value
-                elif resolved is not None:
-                    self.insert(resolved)
-                else:
-                    continue
-                progressed = True
-            if not progressed:
-                # Values for dangling inputs of instantiated providers. Only
-                # applied where the latest matching template is a value;
-                # provider matches are left for backward instantiation.
-                for key in list(self.underlying_graph.nodes):
-                    if not self._satisfied(key) and isinstance(
-                        resolved := self._matching_template(key), _TemplateValue
-                    ):
-                        self[key] = resolved.value
-                return
+        providers = [t for t in self._templates if isinstance(t, Provider)]
+        consumed = {
+            origin
+            for template in providers
+            for arg in template.arg_spec.keys()
+            if find_all_typevars(arg)
+            and (origin := _pattern_origin_and_args(arg)[0]) is not None
+        }
+        return [
+            pattern
+            for template in providers
+            if _pattern_origin_and_args(pattern := template.deduce_key())[0]
+            not in consumed
+        ]
 
     def __setitem__(self, key: Key, value: DataGraph | Any) -> None:
         """

@@ -7,6 +7,8 @@ concrete keys appearing in the pipeline. This file is excluded from collection
 on Python < 3.12 via ``collect_ignore`` in ``conftest.py``.
 """
 
+from typing import get_origin
+
 import pytest
 
 import sciline as sl
@@ -206,7 +208,9 @@ def test_generic_param_used_by_mapped_pipeline() -> None:
     assert result == 8.0
 
 
-def test_output_keys_include_derivable_generic_outputs() -> None:
+def test_output_keys_include_unconsumed_generic_patterns() -> None:
     pl = sl.Pipeline([process, reduce_run], params={Raw[A]: Raw[A](1.0)})
-    assert Reduced[A] in pl.output_keys()
-    assert Reduced[B] not in pl.output_keys()
+    origins = [get_origin(key) for key in pl.output_keys()]
+    assert Reduced in origins
+    # Consumed by reduce_run, so not an output.
+    assert Processed not in origins

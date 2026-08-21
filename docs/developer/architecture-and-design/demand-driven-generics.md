@@ -261,11 +261,17 @@ open points:
   `pipeline[C] = pipeline[C].map(...).reduce(func=merge)` pattern give the
   reduce result the same public name as the mapped node it reduces; the old
   global relabeling made that work implicitly (plain `C` vs `MappedNode(C)`).
-  With plain names this is a genuine collision. The dual identity is kept
-  exactly at these seams and nowhere else: when a reduce result or an assigned
-  branch shadows a mapped node, cyclebane relabels the mapped node to an
-  explicit `MappedNode` alias. `get_mapped_node_names` reads derived indices
-  via a new `named_indices` accessor instead of scanning labels.
+  With plain names this is a genuine collision. A first iteration kept the
+  dual identity at exactly these seams via scoped `MappedNode` aliases;
+  **decision (SH, 2026-08-21): forbid the shadowing idioms instead** — node
+  names are strictly unique, `reduce` and branch assignment raise clear errors
+  on collisions, and callers use distinct names (e.g. a `MaskPerFile`-style
+  name for the mapped node, distinct from the merged result). The
+  subgraph-reuse requirement that motivated the graft idiom should be
+  addressed explicitly, e.g. via a future `Graph.rename`. This removes the
+  alias mechanism, the `named_indices` accessor and the multiple-candidates
+  disambiguation in `get_mapped_node_names` (`index_names=` is now pure
+  validation), and turns the pre-existing silent self-loop bug into an error.
 - *`reduce(key=None)`*: the sink is resolved among nodes present in the graph;
   reducing a sink that would come from a rule requires an explicit `key`,
   which sciline treats as a demand (backward instantiation). Two tests were
@@ -278,8 +284,10 @@ open points:
 - *Bug found on cyclebane `main`*: `graph1['c'] = graph2['d']` merges the
   branch's own `'c'` with the destination during sink-renaming, creating a
   self-loop (reproducible on `main`, invisible because nothing topologically
-  sorts the stored graph). The derivation tolerates self-loops for now; the
-  `__setitem__` issue needs a separate fix.
+  sorts the stored graph). Fixed by the strict collision error above.
+  Relatedly, `__setitem__` now permits grafting a mapped branch at a *new*
+  node name (previously impossible); the mapped/unmapped consistency check
+  only applies when replacing an existing branch.
 
 ### Q2: Coherence instead of last-wins among rules — decided, implemented
 
@@ -333,8 +341,15 @@ This is likely the easiest of the three (rendering code plus changed
 defaults). The one genuinely breaking decision is `output_keys()`: does it
 return concrete keys (forward-expanded, status quo), patterns for rules plus
 concrete sinks (breaking for `compute(pl.output_keys())`), or does the rule
-view get a separate accessor while `output_keys()` keeps its meaning? Open;
-affects `visualize()`'s no-argument default via `tp=self.output_keys()`.
+view get a separate accessor while `output_keys()` keeps its meaning?
+
+**Prototype decision (SH, 2026-08-21): take the choice that simplifies most.**
+Forward chaining (`_instantiate_forward`, `forward_bindings`) is deleted; the
+engine is backward-only. `output_keys()` returns concrete graph sinks plus the
+return-type *patterns* of rules not consumed by other rules (consumption
+approximated by pattern-origin comparison). No-argument `visualize()` shows
+the concrete part of the graph, since patterns cannot be demanded. Rule-graph
+*rendering* remains future work.
 
 ## Decision log
 
@@ -345,8 +360,11 @@ affects `visualize()`'s no-argument default via `tp=self.output_keys()`.
 | 2026-08-21 | Specialized-provider-shadows-generic accepted as a semantic change; generic-replaces-specialized not worth preserving. | #237, this doc |
 | 2026-08-21 | Q2 decided: three-tier coherence (replace equal patterns, most-specific wins, incomparable overlap errors) instead of last-wins. Implemented. | #237 |
 | open | Single mechanism (#237) vs. coexistence (#236) vs. separate class. | discussion |
-| 2026-08-21 | Q1 spike validates deferred mapped-labeling: both suites green, sciline `map()` hook and seeding removed. Shadowing idioms need scoped `MappedNode` aliases; rule-derived reduce sinks need an explicit `key`. | scipp/cyclebane#32, branch `235-deferred-mapped-labels` |
-| open | Q1: adopt the spike (pending review of the alias mechanism and the reduce-key rule); Q3 (rule-graph inspection). | this doc |
+| 2026-08-21 | Q1 spike validates deferred mapped-labeling: both suites green, sciline `map()` hook and seeding removed. | scipp/cyclebane#32, branch `235-deferred-mapped-labels` |
+| 2026-08-21 | Shadowing idioms (`reduce(name=<reduced node>)`, `pipeline[C] = pipeline[C].map(...).reduce(...)`) are forbidden instead of alias-supported; node names are strictly unique. Subgraph-reuse to be addressed explicitly (e.g. future `Graph.rename`). | scipp/cyclebane#32 |
+| 2026-08-21 | Explicit `key` required in `reduce` when the reduced sink would come from a rule; concrete pipelines are unaffected. | #238 |
+| 2026-08-21 | Q3 resolved for the prototype via the simplest path: forward chaining deleted, `output_keys()` lists unconsumed rule patterns, no-arg `visualize()` shows the concrete part. Rule-graph rendering is future work. | #238 |
+| open | Adopt the Q1/Q3 end state into #237 and land scipp/cyclebane#32. | discussion |
 
 ## References
 

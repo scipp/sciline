@@ -155,14 +155,21 @@ def test_compute_mapped_raises_if_node_is_not_mapped() -> None:
         sl.compute_mapped(mapped, B)
 
 
+Merged = NewType('Merged', int)
+
+
+def merged_to_d(c: Merged) -> D:
+    return D(2 * c)
+
+
 def test_compute_mapped_raises_if_node_depends_on_but_is_not_mapped() -> None:
     def ab_to_c(a: A, b: B) -> C:
         return C(a + b)
 
     pl = sl.Pipeline((ab_to_c,))
     pl[B] = B(7)
-    pl = pl.map({A: [A(10 * i) for i in range(3)]}).reduce(func=max, name=C)
-    pl.insert(c_to_d)
+    pl = pl.map({A: [A(10 * i) for i in range(3)]}).reduce(func=max, name=Merged)
+    pl.insert(merged_to_d)
     # Slightly different failure case from above: The relevant subgraph *does* have
     # indices, but the node does not.
     with pytest.raises(ValueError, match='is not a mapped node'):
@@ -186,7 +193,7 @@ def test_can_compute_subset_of_get_mapped_node_names() -> None:
     assert mapped.compute(result.loc['b']) == A(17)
 
 
-def test_compute_mapped_raises_if_multiple_mapped_nodes_with_given_name() -> None:
+def test_reduce_cannot_shadow_mapped_node() -> None:
     def ab_to_c(a: A, b: B) -> C:
         return C(a + b)
 
@@ -197,9 +204,10 @@ def test_compute_mapped_raises_if_multiple_mapped_nodes_with_given_name() -> Non
     paramsB = pd.DataFrame(
         {B: [B(i) for i in range(2)]}, index=['aa', 'bb']
     ).rename_axis('y')
-    pl = pl.map(paramsA).map(paramsB).reduce(func=max, name=C, index='x')
-    with pytest.raises(ValueError, match='Multiple mapped nodes with name'):
-        sl.compute_mapped(pl, C)
+    mapped = pl.map(paramsA).map(paramsB)
+    # The reduce result must not reuse the name of the mapped node it reduces.
+    with pytest.raises(ValueError, match='already exists'):
+        mapped.reduce(func=max, name=C, index='x')
 
 
 def test_compute_mapped_with_partial_reduction_identifies_correct_index() -> None:
@@ -221,7 +229,7 @@ def test_compute_mapped_with_partial_reduction_identifies_correct_index() -> Non
     assert result['bb'] == C(21)
 
 
-def test_compute_mapped_index_names_selects_between_multiple_candidates() -> None:
+def test_compute_mapped_index_names_validates_indices() -> None:
     def ab_to_c(a: A, b: B) -> C:
         return C(a + b)
 
@@ -233,21 +241,16 @@ def test_compute_mapped_index_names_selects_between_multiple_candidates() -> Non
         {B: [B(i) for i in range(2)]}, index=['aa', 'bb']
     ).rename_axis('y')
     mapped = pl.map(paramsA).map(paramsB)
-    pl = mapped.reduce(func=max, name=C, index='x')
-    result_y = sl.compute_mapped(pl, C, index_names=('y',))
-    assert result_y['aa'] == C(20)
-    assert result_y['bb'] == C(21)
-    for index_names in [('x', 'y'), ('y', 'x')]:
-        result_xy = sl.compute_mapped(pl, C, index_names=index_names)
-        assert result_xy['a', 'aa'] == C(0)
-        assert result_xy['a', 'bb'] == C(1)
-        assert result_xy['b', 'aa'] == C(10)
-        assert result_xy['b', 'bb'] == C(11)
-        assert result_xy['c', 'aa'] == C(20)
-        assert result_xy['c', 'bb'] == C(21)
+    result = sl.compute_mapped(mapped, C, index_names=('x', 'y'))
+    assert result['a', 'aa'] == C(0)
+    assert result['a', 'bb'] == C(1)
+    assert result['b', 'aa'] == C(10)
+    assert result['c', 'aa'] == C(20)
+    with pytest.raises(ValueError, match='is not a mapped node'):
+        sl.compute_mapped(mapped, C, index_names=('y',))
 
 
-def test_compute_mapped_error_message_is_correct() -> None:
+def test_compute_error_message_is_correct_in_mapped_graph() -> None:
     def a_to_b(a: A, i: int) -> B:
         return B(a + i)
 
@@ -256,7 +259,7 @@ def test_compute_mapped_error_message_is_correct() -> None:
         {A: [A(10 * i) for i in range(3)]}, index=['a', 'b', 'c']
     ).rename_axis('x')
 
-    reduced = pl.map(paramsA).reduce(func=max, name=B, index='x')
+    reduced = pl.map(paramsA).reduce(func=max, name=Merged, index='x')
 
     with pytest.raises(sl.UnsatisfiedRequirement, match="Missing input node 'int'"):
-        reduced.compute(B)
+        reduced.compute(Merged)

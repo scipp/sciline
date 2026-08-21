@@ -78,8 +78,8 @@ def test_reporter_records_all_function_providers() -> None:
 def test_reporter_records_all_function_providers_map_reduce() -> None:
     reporter = RecordingReporter()
     pipeline = Pipeline((f1, f2, f3), params={})
-    pipeline[C] = pipeline[C].map({A: [2, 3]}).reduce(func=merge)
-    result = pipeline.compute(C, reporter=reporter)
+    reduced = pipeline[C].map({A: [2, 3]}).reduce(func=merge, name='merged')
+    result = reduced.compute('merged', reporter=reporter)
 
     assert result == 18
     assert reporter.n_steps == 5
@@ -130,8 +130,8 @@ def test_reporter_records_all_function_providers_generic() -> None:
 def test_timing_reporter_tracks_all_calls() -> None:
     reporter = TimingReporter()
     pipeline = Pipeline((f1, f2, f3), params={})
-    pipeline[C] = pipeline[C].map({A: [2, 3]}).reduce(func=merge)
-    result = pipeline.compute(C, reporter=reporter)
+    reduced = pipeline[C].map({A: [2, 3]}).reduce(func=merge, name='merged')
+    result = reduced.compute('merged', reporter=reporter)
 
     assert result == 18
     timings = reporter.as_pandas()
