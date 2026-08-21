@@ -14,6 +14,10 @@ class UnsatisfiedRequirement(Exception):
     """Raised when a type cannot be provided."""
 
 
+class AmbiguousProvider(Exception):
+    """Raised when multiple incomparable generic providers match a requested key."""
+
+
 class ErrorHandler(Protocol):
     """Error handling protocol for pipelines."""
 

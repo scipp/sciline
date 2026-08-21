@@ -206,13 +206,13 @@ Options:
 Open. Option 2 is the principled end state; option 1 is livable and proven;
 option 3 is a cheaper approximation of 2 with worse ergonomics.
 
-### Q2: Coherence instead of last-wins among rules
+### Q2: Coherence instead of last-wins among rules — decided, implemented
 
-The prototype resolves multiple matching rules by "latest registered wins",
-inherited from concrete-key replacement semantics. This makes resolution
-order-dependent global state — the classic source of unreproducible
-workflow-composition bugs. Trait/instance systems solve this with coherence
-rules. Proposed refinement:
+The prototype initially resolved multiple matching rules by "latest registered
+wins", inherited from concrete-key replacement semantics. This makes
+resolution order-dependent global state — the classic source of
+unreproducible workflow-composition bugs. Trait/instance systems solve this
+with coherence rules. The agreed three-tier rule (implemented in #237):
 
 1. **Equal patterns** (identical up to renaming of type variables): the later
    registration *replaces* the earlier one. This is the explicit-override
@@ -227,9 +227,15 @@ rules. Proposed refinement:
    at demand time, naming both providers.
 
 This preserves the two override idioms users actually rely on (replace same
-pattern; specialize) and turns the silent order-dependence into a loud error.
-Breaking only in edge cases the test suite does not exercise. Current lean
-(SH + prototype author): an outright improvement, worth doing.
+pattern; specialize) and turns the silent order-dependence into a loud
+`AmbiguousProvider` error. Tier 1 replacement applies across kinds: a generic
+value with the same pattern replaces a generic provider and vice versa,
+restoring last-write-wins where patterns are genuinely interchangeable.
+Subsumption also orders constrained against unconstrained type variables: a
+constrained pattern is strictly more specific than its unconstrained
+counterpart. One existing test broke, and it was one that *documented* the
+order-dependence (`test_multiple_matching_partial_providers_uses_latest`,
+overlapping `A[int, T1]` vs `A[T2, float]`); it now asserts the error.
 
 ### Q3: Rule-graph-first inspection
 
@@ -262,8 +268,9 @@ affects `visualize()`'s no-argument default via `tp=self.output_keys()`.
 | 2026-08-21 | Demand-driven instantiation is viable; PEP 695 needs no constraints mechanism. Prototyped. | #236 |
 | 2026-08-21 | Generic params (`params={Raw: value}`) supported as rules matched on demand. | #236 (review), commit 2fc0461 |
 | 2026-08-21 | Specialized-provider-shadows-generic accepted as a semantic change; generic-replaces-specialized not worth preserving. | #237, this doc |
+| 2026-08-21 | Q2 decided: three-tier coherence (replace equal patterns, most-specific wins, incomparable overlap errors) instead of last-wins. Implemented. | #237 |
 | open | Single mechanism (#237) vs. coexistence (#236) vs. separate class. | discussion |
-| open | Q1 (forward chaining vs. deferred map), Q2 (coherence), Q3 (rule-graph inspection). | this doc |
+| open | Q1 (forward chaining vs. deferred map), Q3 (rule-graph inspection). | this doc |
 
 ## References
 

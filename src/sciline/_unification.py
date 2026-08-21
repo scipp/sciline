@@ -61,6 +61,16 @@ def parameterize(key: Key) -> Key:
     return key
 
 
+def _pattern_origin_and_args(pattern: Any) -> tuple[Any, tuple[Any, ...]]:
+    """Like :py:func:`origin_and_args`, but treats an unparametrized generic
+    class whose subscription does not produce an inspectable alias (e.g. a
+    pydantic model) as its own origin with its type parameters as args."""
+    origin, args = origin_and_args(pattern)
+    if origin is None and (params := getattr(pattern, '__parameters__', ())):
+        return pattern, params
+    return origin, args
+
+
 def unify(pattern: Key | TypeVar, concrete: Key, bound: dict[TypeVar, Key]) -> bool:
     """Match ``concrete`` against ``pattern``, extending ``bound`` in place.
 
@@ -74,15 +84,9 @@ def unify(pattern: Key | TypeVar, concrete: Key, bound: dict[TypeVar, Key]) -> b
             return bound[pattern] == concrete
         bound[pattern] = concrete
         return True
-    pattern_origin, pattern_args = origin_and_args(pattern)
+    pattern_origin, pattern_args = _pattern_origin_and_args(pattern)
     if pattern_origin is None:
-        if params := getattr(pattern, '__parameters__', ()):
-            # An unparametrized generic class whose subscription does not
-            # produce an inspectable alias, e.g. a pydantic model: treat the
-            # class itself as origin and its type parameters as args.
-            pattern_origin, pattern_args = pattern, params
-        else:
-            return pattern == concrete
+        return pattern == concrete
     concrete_origin, concrete_args = origin_and_args(concrete)
     if concrete_origin != pattern_origin:
         return False
@@ -90,6 +94,49 @@ def unify(pattern: Key | TypeVar, concrete: Key, bound: dict[TypeVar, Key]) -> b
         return False
     return all(
         unify(p, c, bound) for p, c in zip(pattern_args, concrete_args, strict=True)
+    )
+
+
+def subsumes(general: Key | TypeVar, specific: Key | TypeVar) -> bool:
+    """Return whether every key matched by ``specific`` is matched by ``general``.
+
+    One-sided unification: type variables of ``general`` may bind to
+    sub-patterns of ``specific``, whose type variables are treated as opaque.
+    Mutual subsumption means the patterns are equivalent up to renaming;
+    one-sided subsumption means ``specific`` is strictly more specific.
+    """
+    return _subsumes(general, specific, {})
+
+
+def _subsumes(
+    general: Key | TypeVar, specific: Key | TypeVar, bound: dict[TypeVar, Any]
+) -> bool:
+    if isinstance(general, TypeVar):
+        if general.__constraints__:
+            if isinstance(specific, TypeVar):
+                # ``specific`` matches keys in its own constraint set; all of
+                # them must be admissible for ``general``.
+                if not specific.__constraints__ or not set(
+                    specific.__constraints__
+                ) <= set(general.__constraints__):
+                    return False
+            elif specific not in general.__constraints__:
+                return False
+        if general in bound:
+            return bool(bound[general] == specific)
+        bound[general] = specific
+        return True
+    general_origin, general_args = _pattern_origin_and_args(general)
+    if general_origin is None:
+        return general == specific
+    specific_origin, specific_args = _pattern_origin_and_args(specific)
+    if specific_origin != general_origin:
+        return False
+    if len(general_args) != len(specific_args):
+        return False
+    return all(
+        _subsumes(g, s, bound)
+        for g, s in zip(general_args, specific_args, strict=True)
     )
 
 

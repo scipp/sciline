@@ -24,9 +24,11 @@ from ._unification import (
     forward_bindings,
     match_return,
     parameterize,
+    subsumes,
     unify,
 )
-from .handler import ErrorHandler, HandleAsBuildTimeException
+from ._utils import key_name
+from .handler import AmbiguousProvider, ErrorHandler, HandleAsBuildTimeException
 from .typing import Graph, Key
 
 if TYPE_CHECKING:
@@ -53,6 +55,17 @@ class _TemplateValue:
 
     pattern: Key
     value: Any
+
+
+def _template_pattern(template: Provider | _TemplateValue) -> Key:
+    if isinstance(template, _TemplateValue):
+        return template.pattern
+    return template.deduce_key()  # type: ignore[no-any-return]
+
+
+def _equivalent(a: Key, b: Key) -> bool:
+    """Whether two patterns match the same keys (equal up to renaming)."""
+    return subsumes(a, b) and subsumes(b, a)
 
 
 class DataGraph:
@@ -156,38 +169,64 @@ class DataGraph:
                 f"Provider {provider} has type variables {unbound} in its "
                 "arguments that do not appear in its return type."
             )
-        # Mirror the replacement semantics of inserting a concrete provider twice.
-        self._templates = [
-            t for t in self._templates if isinstance(t, _TemplateValue) or t != provider
-        ]
-        self._templates.append(provider)
+        self._add_template(provider)
 
     def _register_template_value(self, key: Key, value: Any) -> None:
         """Store a value for a generic key, applied to all demanded specializations."""
         pattern = parameterize(key)
-        # Mirror the replacement semantics of setting a concrete key twice.
+        self._add_template(_TemplateValue(pattern=pattern, value=value))
+
+    def _add_template(self, template: Provider | _TemplateValue) -> None:
+        # A template with an equivalent pattern is replaced, mirroring the
+        # replacement semantics of concrete keys.
+        pattern = _template_pattern(template)
         self._templates = [
-            t
-            for t in self._templates
-            if isinstance(t, Provider) or t.pattern != pattern
+            t for t in self._templates if not _equivalent(_template_pattern(t), pattern)
         ]
-        self._templates.append(_TemplateValue(pattern=pattern, value=value))
+        self._templates.append(template)
 
     def _matching_template(self, key: Key) -> Provider | _TemplateValue | None:
-        """Return the latest-registered template matching ``key``.
+        """Return the template that provides ``key``, or None.
 
-        Iterates in reverse so that among matching templates the latest wins,
-        mirroring the replacement semantics of concrete keys. A returned
-        provider is already bound to ``key``.
+        Resolution is order-independent: registration already replaced
+        templates with equivalent patterns, and among the remaining matches the
+        strictly most specific pattern wins. Incomparable overlapping matches
+        raise :py:class:`AmbiguousProvider`. A returned provider is already
+        bound to ``key``.
         """
-        for template in reversed(self._templates):
+        matches: list[tuple[Key, Provider | _TemplateValue]] = []
+        for template in self._templates:
             if isinstance(template, _TemplateValue):
                 bound: dict[TypeVar, Key] = {}
                 if unify(template.pattern, key, bound):
-                    return template
+                    matches.append((template.pattern, template))
             elif (provider := match_return(template, key)) is not None:
-                return provider
-        return None
+                matches.append((template.deduce_key(), provider))
+        if len(matches) < 2:
+            return matches[0][1] if matches else None
+
+        def is_dominated(pattern: Key) -> bool:
+            return any(
+                other is not pattern
+                and subsumes(pattern, other)
+                and not subsumes(other, pattern)
+                for other, _ in matches
+            )
+
+        remaining = [m for m in matches if not is_dominated(m[0])]
+        if len(remaining) == 1:
+            return remaining[0][1]
+        names = ', '.join(
+            resolved.location.qualname
+            if isinstance(resolved, Provider)
+            else f"value for '{key_name(pattern)}'"
+            for pattern, resolved in remaining
+        )
+        raise AmbiguousProvider(
+            f"Multiple incomparable generic providers match '{key_name(key)}': "
+            f"{names}. Insert a provider with this exact return pattern, or a "
+            "more specific one, to disambiguate."
+        )
 
     def _satisfied(self, key: Key) -> bool:
         graph = self.underlying_graph

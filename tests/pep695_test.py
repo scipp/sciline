@@ -73,12 +73,50 @@ def test_param_shadows_generic_provider() -> None:
     assert pl.compute(Processed[A]) == 5.0
 
 
-def test_later_generic_provider_wins() -> None:
+def test_later_generic_provider_with_equal_pattern_replaces_earlier() -> None:
     def process2[Run](x: Raw[Run]) -> Processed[Run]:
         return Processed[Run](x * 10)
 
     pl = sl.Pipeline([process, process2], params={Raw[A]: Raw[A](1.0)})
     assert pl.compute(Processed[A]) == 10.0
+
+
+def test_more_specific_generic_provider_wins_regardless_of_order() -> None:
+    def nested[Run](x: Raw[Run]) -> Processed[list[Run]]:
+        return Processed[list[Run]](x * 100)
+
+    for providers in ([process, nested], [nested, process]):
+        pl = sl.Pipeline(providers, params={Raw[A]: Raw[A](1.0)})
+        assert pl.compute(Processed[list[A]]) == 100.0
+        assert pl.compute(Processed[A]) == 2.0
+
+
+def test_constrained_generic_provider_is_more_specific_than_unconstrained() -> None:
+    type C = int
+
+    def special[Run: (A, B)](x: Raw[Run]) -> Processed[Run]:
+        return Processed[Run](x * 10)
+
+    for providers in ([process, special], [special, process]):
+        pl = sl.Pipeline(providers, params={Raw[A]: Raw[A](1.0), Raw[C]: Raw[C](1.0)})
+        assert pl.compute(Processed[A]) == 10.0
+        assert pl.compute(Processed[C]) == 2.0
+
+
+def test_incomparable_overlapping_generic_providers_raise() -> None:
+    class Pair[T1, T2](float): ...
+
+    def left[R]() -> Pair[A, R]:
+        return Pair[A, R](1.0)
+
+    def right[R]() -> Pair[R, B]:
+        return Pair[R, B](2.0)
+
+    pl = sl.Pipeline([left, right])
+    assert pl.compute(Pair[A, A]) == 1.0
+    assert pl.compute(Pair[B, B]) == 2.0
+    with pytest.raises(sl.AmbiguousProvider, match='left|right'):
+        pl.compute(Pair[A, B])
 
 
 def test_multiple_typevars_bound_from_target() -> None:

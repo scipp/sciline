@@ -461,7 +461,7 @@ def test_distinct_partially_bound_instances_yield_distinct_results() -> None:
     assert pipeline.compute(A[float, str]) == A[float, str](2.0, 'a')
 
 
-def test_multiple_matching_partial_providers_uses_latest() -> None:
+def test_incomparable_overlapping_partial_providers_raise() -> None:
     T1 = TypeVar('T1', int, float)
     T2 = TypeVar('T2', int, float)
 
@@ -485,8 +485,9 @@ def test_multiple_matching_partial_providers_uses_latest() -> None:
     pipeline = sl.Pipeline([int_source, float_source, provider1, provider2])
     assert pipeline.compute(A[int, int]) == A[int, int](1, 1)
     assert pipeline.compute(A[float, float]) == A[float, float](1.0, 2.0)
-    # Multiple matches, but the latest one (provider2) is used
-    assert pipeline.compute(A[int, float]) == A[int, float](1, 2.0)
+    # Both providers match and neither pattern is more specific.
+    with pytest.raises(sl.AmbiguousProvider, match='provider1'):
+        pipeline.compute(A[int, float])
 
 
 def test_TypeVar_params_track_to_multiple_sources() -> None:

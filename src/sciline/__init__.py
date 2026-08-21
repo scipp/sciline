@@ -13,6 +13,7 @@ from . import scheduler
 from ._provider import Provider, UnboundTypeVar
 from .domain import Scope
 from .handler import (
+    AmbiguousProvider,
     HandleAsBuildTimeException,
     HandleAsComputeTimeException,
     UnsatisfiedRequirement,
@@ -21,6 +22,7 @@ from .pipeline import Pipeline, compute_mapped, get_mapped_node_names
 from .task_graph import TaskGraph
 
 __all__ = [
+    "AmbiguousProvider",
     "HandleAsBuildTimeException",
     "HandleAsComputeTimeException",
     "Pipeline",
