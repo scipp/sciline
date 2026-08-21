@@ -128,7 +128,6 @@ class Pipeline(DataGraph):
         providers: Iterable[ToProvider | Provider] | None = None,
         *,
         params: dict[type[Any], Any] | None = None,
-        constraints: Mapping[TypeVar, Iterable[Key]] | None = None,
     ):
         """
         Setup a Pipeline from a list providers
@@ -140,15 +139,8 @@ class Pipeline(DataGraph):
             Their arguments and return value must be annotated with type hints.
         params:
             Dictionary of concrete values to provide for types.
-        constraints:
-            Mapping of type variables to constraints for those type variables.
-            For each entry, the corresponding type variable will be constrained
-            to the given types.
-            This overrides the constraints from the definition of the type variable.
-            The new constraints must be a subset of the constraints in
-            the type variable definition.
         """
-        super().__init__(providers, constraints=constraints)
+        super().__init__(providers)
         for tp, param in (params or {}).items():
             self[tp] = param
 

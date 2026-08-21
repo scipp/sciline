@@ -775,7 +775,7 @@ def test_insert_generic_pydantic_model() -> None:
     def b_to_c(b: B[T]) -> C[T]:
         return C[T](value=2 * b.value)
 
-    pl = sl.Pipeline(constraints={T: (int, float)})
+    pl = sl.Pipeline()
     pl.insert(a_to_b)
     pl.insert(b_to_c)
     pl[A[int]] = A[int](value=3)
@@ -1034,7 +1034,7 @@ def test_bind_and_call_function_runs_at_end() -> None:
     assert calls.index('d') in (2, 3)
 
 
-def test_inserting_generic_provider_replaces_specialized_provider() -> None:
+def test_specialized_provider_shadows_generic_provider() -> None:
     A = NewType('A', str)
     B = NewType('B', str)
     V = TypeVar('V', A, B)
@@ -1048,11 +1048,11 @@ def test_inserting_generic_provider_replaces_specialized_provider() -> None:
     def p2(x: B) -> H[B]:
         return H[B]("Special")
 
-    # p2 will be replaced immediately by p1.
+    # The specialized provider wins for H[B] regardless of insertion order.
     pl = sl.Pipeline([p2, p1], params={A: 'A', B: 'B'})
 
     assert str(pl.compute(H[A])) == "Generic"
-    assert str(pl.compute(H[B])) == "Generic"
+    assert str(pl.compute(H[B])) == "Special"
 
 
 def test_compute_time_handler_allows_for_building_but_not_computing() -> None:
@@ -1104,7 +1104,7 @@ def test_pipeline_copy_after_setitem() -> None:
     assert b.compute(float) == 49.5
 
 
-def test_pipeline_copy_with_constraints() -> None:
+def test_pipeline_copy_with_unconstrained_type_var() -> None:
     Param = TypeVar('Param')
 
     class Str(sl.Scope[Param, str], str): ...
@@ -1112,9 +1112,9 @@ def test_pipeline_copy_with_constraints() -> None:
     def parametrized(x: Param) -> Str[Param]:
         return Str(f'{x}')
 
-    a = sl.Pipeline([], params={int: 99}, constraints={Param: [int, float]})
+    a = sl.Pipeline([], params={int: 99})
     b = a.copy()
-    b.insert(parametrized)  # constraints are applied to Param
+    b.insert(parametrized)
     assert b.compute(Str[int]) == Str[int]('99')
 
 
@@ -1404,115 +1404,6 @@ def test_constraints_nested_multiple_typevars() -> None:
         pipeline.get(N[M[str], float])
 
 
-def test_over_constrained_type_works() -> None:
-    T = TypeVar('T', int, float, str)
-
-    @dataclass
-    class A(Generic[T]):
-        v: T
-
-    @dataclass
-    class B(Generic[T]):
-        v: T
-
-    def f(x: A[T]) -> B[T]:
-        return B[T](2 * x.v)
-
-    pipeline = sl.Pipeline(
-        [f],
-        params={A[int]: A[int](4), A[float]: A[float](5.2)},
-        constraints={T: [int, float]},
-    )
-
-    assert pipeline.compute(B[int]) == B[int](8)
-    assert pipeline.compute(B[float]) == B[float](10.4)
-
-
-def test_over_constrained_type_removes_types() -> None:
-    T = TypeVar('T', int, float, str)
-
-    @dataclass
-    class A(Generic[T]):
-        v: T
-
-    @dataclass
-    class B(Generic[T]):
-        v: T
-
-    def f(x: A[T]) -> B[T]:
-        return B[T](2 * x.v)
-
-    pipeline = sl.Pipeline(
-        [f],
-        params={A[int]: A[int](4), A[float]: A[float](5.2), A[str]: A[str]("abc")},
-        constraints={T: [int, float]},
-    )
-
-    with pytest.raises(sl.handler.UnsatisfiedRequirement):
-        pipeline.get(B[str])  # str not given in constraints
-
-
-def test_over_constrained_type_does_not_affect_other_type_var() -> None:
-    T1 = TypeVar('T1', int, float, str)
-    T2 = TypeVar('T2', int, float, str)
-
-    @dataclass
-    class A(Generic[T1]):
-        v: T1
-
-    @dataclass
-    class B(Generic[T2]):
-        v: T2
-
-    pipeline = sl.Pipeline(
-        [],
-        params={
-            A[int]: A[int](2),
-            A[float]: A[float](3.1),
-            B[int]: B[int](-2),
-            B[float]: B[float](-3.1),
-            B[str]: B[str]("abc"),
-        },
-        constraints={T1: [int, float]},
-    )
-
-    assert pipeline.compute(B[str]) == B[str]("abc")
-
-
-def test_over_constrained_type_rejects_bad_constraint() -> None:
-    T = TypeVar('T', int, str)
-
-    with pytest.raises(ValueError, match="float"):
-        sl.Pipeline(
-            [],
-            constraints={T: [int, float]},
-        )
-
-
-def test_can_constrain_type_to_nothing() -> None:
-    T = TypeVar('T', int, float, str)
-
-    @dataclass
-    class A(Generic[T]):
-        v: T
-
-    @dataclass
-    class B(Generic[T]):
-        v: T
-
-    def f(x: A[T]) -> B[T]:
-        return B[T](2 * x.v)
-
-    pipeline = sl.Pipeline(
-        [f],
-        params={A[int]: A[int](4)},
-        constraints={T: []},
-    )
-
-    with pytest.raises(sl.handler.UnsatisfiedRequirement, match='node not in graph'):
-        pipeline.get(B[int])
-
-
 def test_unconstrained_type_vars_are_instantiated_on_demand() -> None:
     T = TypeVar('T')
 
@@ -1529,28 +1420,6 @@ def test_unconstrained_type_vars_are_instantiated_on_demand() -> None:
 
     pipeline = sl.Pipeline([foo], params={A[int]: A[int](3)})
     assert pipeline.compute(B[int]) == B[int](3)
-    with pytest.raises(sl.handler.UnsatisfiedRequirement):
-        pipeline.get(B[float])
-
-
-def test_custom_constraint_is_sufficient() -> None:
-    T = TypeVar('T')  # unconstrained here
-
-    @dataclass
-    class A(Generic[T]):
-        v: T
-
-    @dataclass
-    class B(Generic[T]):
-        v: T
-
-    def foo(x: A[T]) -> B[T]:
-        return B[T](2 * x.v)  # type: ignore[arg-type, operator]
-
-    pipeline = sl.Pipeline(
-        [foo], params={A[int]: A[int](2)}, constraints={T: [int, float]}
-    )
-    assert pipeline.compute(B[int]) == B[int](4)
     with pytest.raises(sl.handler.UnsatisfiedRequirement):
         pipeline.get(B[float])
 

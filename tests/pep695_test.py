@@ -105,13 +105,20 @@ def test_generic_type_alias() -> None:
     assert pl.compute(CleanImage[A]) == 2.0
 
 
-def test_constrained_pep695_typevar_expanded_eagerly() -> None:
+def test_constrained_pep695_typevar_respects_declared_constraints() -> None:
+    type C = int
+
     def process2[Run: (A, B)](x: Raw[Run]) -> Processed[Run]:
         return Processed[Run](x * 3)
 
-    pl = sl.Pipeline([process2], params={Raw[A]: Raw[A](1.0), Raw[B]: Raw[B](2.0)})
+    pl = sl.Pipeline(
+        [process2],
+        params={Raw[A]: Raw[A](1.0), Raw[B]: Raw[B](2.0), Raw[C]: Raw[C](3.0)},
+    )
     assert pl.compute(Processed[A]) == 3.0
     assert pl.compute(Processed[B]) == 6.0
+    with pytest.raises(UnsatisfiedRequirement):
+        pl.compute(Processed[C])
 
 
 def test_map_over_generic_pipeline() -> None:

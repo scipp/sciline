@@ -3,10 +3,10 @@
 # ruff: noqa: PYI019
 from __future__ import annotations
 
-import itertools
-from collections.abc import Callable, Generator, Iterable, Mapping
+from collections.abc import Callable, Iterable
+from dataclasses import dataclass
 from types import NoneType
-from typing import TYPE_CHECKING, Any, TypeVar, get_origin
+from typing import TYPE_CHECKING, Any, TypeVar
 
 import cyclebane as cb
 import networkx as nx
@@ -19,8 +19,13 @@ from ._provider import (
     UnboundTypeVar,
     _bind_free_typevars,
 )
-from ._unification import find_all_typevars, forward_bindings, match_return, unify
-from ._utils import key_full_qualname
+from ._unification import (
+    find_all_typevars,
+    forward_bindings,
+    match_return,
+    parameterize,
+    unify,
+)
 from .handler import ErrorHandler, HandleAsBuildTimeException
 from .typing import Graph, Key
 
@@ -35,63 +40,24 @@ def _as_graph(key: Key, value: Any) -> cb.Graph:
     return cb.Graph(graph)
 
 
-def _get_typevar_constraints(
-    t: TypeVar, over_constraints: dict[TypeVar, frozenset[Key]]
-) -> frozenset[Key]:
-    """Returns the set of constraints of a TypeVar."""
-    if (override := over_constraints.get(t, None)) is not None:
-        return override
-    if not (constraints := t.__constraints__):
-        raise ValueError(
-            f"Type variable {t!r} has no constraints. Either constrain the type "
-            f"variable in its definition or via the 'constraints' argument of Pipeline."
-        )
-    return frozenset(constraints)
-
-
-def _mapping_to_constrained(
-    type_vars: set[TypeVar], over_constraints: dict[TypeVar, frozenset[Key]]
-) -> Generator[dict[TypeVar, Key], None, None]:
-    constraints = [_get_typevar_constraints(t, over_constraints) for t in type_vars]
-    for combination in itertools.product(*constraints):
-        yield dict(zip(type_vars, combination, strict=True))
-
-
-def _normalize_custom_constraints(
-    constraints: Mapping[TypeVar, Iterable[Key]] | None,
-) -> dict[TypeVar, frozenset[Key]]:
-    if constraints is None:
-        return {}
-
-    normalized = {}
-    for key, value in constraints.items():
-        types = frozenset(value)
-        for ty in types:
-            if key.__constraints__ and ty not in key.__constraints__:
-                raise ValueError(
-                    f"Constraint '{key_full_qualname(ty)}' is not valid for type var "
-                    f"'{key_full_qualname(key)}' which supports constraints "
-                    f"{tuple(map(key_full_qualname, key.__constraints__))}."
-                )
-        normalized[key] = types
-    return normalized
-
-
 T = TypeVar('T', bound='DataGraph')
 
 _providing_attrs = frozenset(('value', 'provider', 'reduce'))
 
+_no_value = object()
+
+
+@dataclass
+class _TemplateValue:
+    """A value set for a generic key, applied to demanded specializations."""
+
+    pattern: Key
+    value: Any
+
 
 class DataGraph:
-    def __init__(
-        self,
-        providers: None | Iterable[ToProvider | Provider],
-        *,
-        constraints: Mapping[TypeVar, Iterable[Key]] | None = None,
-    ) -> None:
-        self._constraints = _normalize_custom_constraints(constraints)
-        self._templates: list[Provider] = []
-        self._template_values: dict[Key, Any] = {}
+    def __init__(self, providers: None | Iterable[ToProvider | Provider]) -> None:
+        self._templates: list[Provider | _TemplateValue] = []
         self._cbgraph = cb.Graph(nx.DiGraph())
         for provider in providers or []:
             self.insert(provider)
@@ -99,14 +65,12 @@ class DataGraph:
     def _from_cyclebane(self: T, graph: cb.Graph) -> T:
         out = type(self)([])
         out._cbgraph = graph
-        out._constraints = self._constraints
         out._templates = list(self._templates)
-        out._template_values = dict(self._template_values)
         return out
 
     @property
     def _has_templates(self) -> bool:
-        return bool(self._templates or self._template_values)
+        return bool(self._templates)
 
     def copy(self: T) -> T:
         return self._from_cyclebane(self._cbgraph.copy())
@@ -158,12 +122,8 @@ class DataGraph:
         if not isinstance(provider, Provider):
             provider = Provider.from_function(provider)
         return_type = provider.deduce_key()
-        if typevars := find_all_typevars(return_type):
-            if all(t.__constraints__ or t in self._constraints for t in typevars):
-                for bound in _mapping_to_constrained(typevars, self._constraints):
-                    self.insert(provider.bind_type_vars(bound))
-            else:
-                self._register_template(provider, typevars)
+        if find_all_typevars(return_type):
+            self._register_template(provider)
             return
         # Trigger UnboundTypeVar error if any input typevars are not bound
         provider = provider.bind_type_vars({})
@@ -171,21 +131,23 @@ class DataGraph:
         for dep in provider.arg_spec.keys():
             self.underlying_graph.add_edge(dep, return_type, key=dep)
 
-    def _register_template(self, provider: Provider, typevars: set[TypeVar]) -> None:
+    def _register_template(self, provider: Provider) -> None:
         """Store a generic provider for on-demand instantiation.
 
-        Providers with unconstrained type variables cannot be expanded eagerly.
-        They are instantiated later by unifying their type patterns with the
-        concrete keys that appear in the graph, see :py:meth:`_instantiate_backward`
-        and :py:meth:`_instantiate_forward`.
+        Generic providers are instantiated by unifying their type patterns
+        with the concrete keys demanded from the graph, see
+        :py:meth:`_instantiate_backward` and :py:meth:`_instantiate_forward`.
         """
+        spec = provider.arg_spec.map_keys(parameterize)
+        provider = Provider(func=provider.func, arg_spec=spec, kind=provider.kind)
         return_type = provider.deduce_key()
-        if isinstance(return_type, TypeVar):
+        if isinstance(return_type, TypeVar) and not return_type.__constraints__:
             raise ValueError(
                 f"Provider {provider} returns a bare unconstrained type variable "
                 f"{return_type!r}, which would match any requested key. Use a "
                 "generic class as return type or constrain the type variable."
             )
+        typevars = find_all_typevars(return_type)
         arg_typevars: set[TypeVar] = set()
         for arg in provider.arg_spec.keys():
             arg_typevars |= find_all_typevars(arg)
@@ -195,24 +157,35 @@ class DataGraph:
                 "arguments that do not appear in its return type."
             )
         # Mirror the replacement semantics of inserting a concrete provider twice.
-        self._templates = [t for t in self._templates if t != provider]
+        self._templates = [
+            t for t in self._templates if isinstance(t, _TemplateValue) or t != provider
+        ]
         self._templates.append(provider)
 
     def _register_template_value(self, key: Key, value: Any) -> None:
         """Store a value for a generic key, applied to all demanded specializations."""
-        if get_origin(key) is None and (params := getattr(key, '__parameters__', ())):
-            # Normalize a bare generic class to a subscripted pattern.
-            key = key[params]  # type: ignore[index]
+        pattern = parameterize(key)
         # Mirror the replacement semantics of setting a concrete key twice.
-        self._template_values.pop(key, None)
-        self._template_values[key] = value
+        self._templates = [
+            t for t in self._templates if isinstance(t, Provider) or t.pattern != pattern
+        ]
+        self._templates.append(_TemplateValue(pattern=pattern, value=value))
 
-    def _match_template_value(self, key: Key) -> Any:
-        for pattern, value in reversed(self._template_values.items()):
-            bound: dict[TypeVar, Key] = {}
-            if unify(pattern, key, bound):
-                return value
-        return _no_value
+    def _matching_template(self, key: Key) -> Provider | _TemplateValue | None:
+        """Return the latest-registered template matching ``key``.
+
+        Iterates in reverse so that among matching templates the latest wins,
+        mirroring the replacement semantics of concrete keys. A returned
+        provider is already bound to ``key``.
+        """
+        for template in reversed(self._templates):
+            if isinstance(template, _TemplateValue):
+                bound: dict[TypeVar, Key] = {}
+                if unify(template.pattern, key, bound):
+                    return template
+            elif (provider := match_return(template, key)) is not None:
+                return provider
+        return None
 
     def _satisfied(self, key: Key) -> bool:
         graph = self.underlying_graph
@@ -228,15 +201,11 @@ class DataGraph:
                 continue
             seen.add(key)
             if not self._satisfied(key):
-                if (value := self._match_template_value(key)) is not _no_value:
-                    self[key] = value
-                else:
-                    # Iterate in reverse so that the latest matching template wins,
-                    # mirroring the replacement semantics of concrete providers.
-                    for template in reversed(self._templates):
-                        if (provider := match_return(template, key)) is not None:
-                            self.insert(provider)
-                            break
+                template = self._matching_template(key)
+                if isinstance(template, _TemplateValue):
+                    self[key] = template.value
+                elif template is not None:
+                    self.insert(template)
             if key in self.underlying_graph:
                 stack.extend(self.underlying_graph.predecessors(key))
 
@@ -250,32 +219,45 @@ class DataGraph:
         providers introduce new keys.
         """
         derived = None if seeds is None else set(seeds)
-        instantiated: set[Key] = set()
+        done: set[Key] = set()
         while True:
             known = set(self.underlying_graph.nodes)
             if derived is not None:
                 known |= derived
-            providers: dict[Key, Provider] = {}
+            candidates: list[Key] = []
             for template in self._templates:
+                if not isinstance(template, Provider):
+                    continue
                 for bound, used in forward_bindings(template, known):
                     if derived is not None and not (used & derived):
                         continue
-                    provider = template.bind_type_vars(bound)
-                    providers[provider.deduce_key()] = provider
-            inserted = False
-            for key, provider in providers.items():
-                if key not in instantiated and not self._satisfied(key):
-                    self.insert(provider)
-                    instantiated.add(key)
-                    if derived is not None:
-                        derived.add(key)
-                    inserted = True
-            if not inserted:
+                    candidates.append(_bind_free_typevars(template.deduce_key(), bound))
+            progressed = False
+            for key in candidates:
+                if key in done or self._satisfied(key):
+                    continue
+                done.add(key)
+                # Resolve via _matching_template so that the latest-registered
+                # template wins, which may differ from the candidate's origin.
+                resolved = self._matching_template(key)
+                if isinstance(resolved, _TemplateValue):
+                    self[key] = resolved.value
+                elif resolved is not None:
+                    self.insert(resolved)
+                else:
+                    continue
+                progressed = True
+                if derived is not None:
+                    derived.add(key)
+            if not progressed:
+                # Values for dangling inputs of instantiated providers. Only
+                # applied where the latest matching template is a value;
+                # provider matches are left for backward instantiation.
                 for key in list(self.underlying_graph.nodes):
-                    if not self._satisfied(key) and (
-                        (value := self._match_template_value(key)) is not _no_value
+                    if not self._satisfied(key) and isinstance(
+                        resolved := self._matching_template(key), _TemplateValue
                     ):
-                        self[key] = value
+                        self[key] = resolved.value
                 return
 
     def __setitem__(self, key: Key, value: DataGraph | Any) -> None:
@@ -292,12 +274,8 @@ class DataGraph:
         # This is a questionable approach: Using MyGeneric[T] as a key will actually
         # not pass mypy [valid-type] checks. What we do on our side is ok, but the
         # calling code is not.
-        if typevars := find_all_typevars(key):
-            if all(t.__constraints__ or t in self._constraints for t in typevars):
-                for bound in _mapping_to_constrained(typevars, self._constraints):
-                    self[_bind_free_typevars(key, bound)] = value
-            else:
-                self._register_template_value(key, value)
+        if find_all_typevars(key):
+            self._register_template_value(key, value)
             return
 
         # TODO If key is generic, should we support multi-sink case and update all?
@@ -379,9 +357,6 @@ class DataGraph:
             label = str(key) if key is not None else ''
             dot.edge(str(edge[0]), str(edge[1]), label=label)
         return dot
-
-
-_no_value = object()
 
 
 def to_task_graph(

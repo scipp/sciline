@@ -2,17 +2,19 @@
 # Copyright (c) 2025 Scipp contributors (https://github.com/scipp)
 """Unification of generic type patterns with concrete keys.
 
-Generic providers whose type variables lack constraints are not expanded
-eagerly. They are kept as templates and instantiated on demand by unifying
-their argument and return-type patterns with the concrete keys that appear in
-the pipeline (parameters, requested targets, mapped keys).
+Generic providers are not expanded eagerly. They are kept as templates and
+instantiated on demand by unifying their argument and return-type patterns
+with the concrete keys that appear in the pipeline (parameters, requested
+targets, mapped keys). Constraints declared on type variables restrict which
+concrete types they unify with.
 """
 
 from __future__ import annotations
 
 import itertools
 from collections.abc import Generator, Iterable
-from typing import TYPE_CHECKING, TypeVar, get_args, get_origin
+from types import UnionType
+from typing import TYPE_CHECKING, Any, TypeVar, get_args, get_origin
 
 if TYPE_CHECKING:
     from ._provider import Provider
@@ -28,6 +30,37 @@ def find_all_typevars(t: type | TypeVar) -> set[TypeVar]:
     return set(itertools.chain(*map(find_all_typevars, get_args(t))))
 
 
+def origin_and_args(t: Any) -> tuple[Any, tuple[Any, ...]]:
+    """Return the generic origin and args of ``t``, or ``(None, ())``.
+
+    Supports regular typing generics as well as pydantic generic models, whose
+    metaclass hides type parameters from :py:func:`typing.get_origin`.
+    """
+    if (origin := get_origin(t)) is not None:
+        return origin, get_args(t)
+    if (meta := getattr(t, '__pydantic_generic_metadata__', None)) is not None:
+        if meta['origin'] is not None:
+            return meta['origin'], meta['args']
+    return None, ()
+
+
+def parameterize(key: Key) -> Key:
+    """Subscript bare generic classes with their own type parameters, recursively.
+
+    E.g., for ``class A(Generic[T])``, turns ``A`` into ``A[T]`` and
+    ``list[A]`` into ``list[A[T]]``, so that patterns have a uniform
+    subscripted shape for unification.
+    """
+    origin, args = origin_and_args(key)
+    if origin is not None:
+        if origin is UnionType:
+            return key
+        return origin[tuple(parameterize(arg) for arg in args)]  # type: ignore[no-any-return]
+    if params := getattr(key, '__parameters__', ()):
+        return key[params]  # type: ignore[index, no-any-return]
+    return key
+
+
 def unify(pattern: Key | TypeVar, concrete: Key, bound: dict[TypeVar, Key]) -> bool:
     """Match ``concrete`` against ``pattern``, extending ``bound`` in place.
 
@@ -41,12 +74,18 @@ def unify(pattern: Key | TypeVar, concrete: Key, bound: dict[TypeVar, Key]) -> b
             return bound[pattern] == concrete
         bound[pattern] = concrete
         return True
-    if (origin := get_origin(pattern)) is None:
-        return pattern == concrete
-    if get_origin(concrete) != origin:
+    pattern_origin, pattern_args = origin_and_args(pattern)
+    if pattern_origin is None:
+        if params := getattr(pattern, '__parameters__', ()):
+            # An unparametrized generic class whose subscription does not
+            # produce an inspectable alias, e.g. a pydantic model: treat the
+            # class itself as origin and its type parameters as args.
+            pattern_origin, pattern_args = pattern, params
+        else:
+            return pattern == concrete
+    concrete_origin, concrete_args = origin_and_args(concrete)
+    if concrete_origin != pattern_origin:
         return False
-    pattern_args = get_args(pattern)
-    concrete_args = get_args(concrete)
     if len(pattern_args) != len(concrete_args):
         return False
     return all(
