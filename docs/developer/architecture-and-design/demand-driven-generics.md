@@ -364,7 +364,8 @@ the concrete part of the graph, since patterns cannot be demanded. Rule-graph
 | 2026-08-21 | Shadowing idioms (`reduce(name=<reduced node>)`, `pipeline[C] = pipeline[C].map(...).reduce(...)`) are forbidden instead of alias-supported; node names are strictly unique. Subgraph-reuse to be addressed explicitly (e.g. future `Graph.rename`). | scipp/cyclebane#32 |
 | 2026-08-21 | Explicit `key` required in `reduce` when the reduced sink would come from a rule; concrete pipelines are unaffected. | #238 |
 | 2026-08-21 | Q3 resolved for the prototype via the simplest path: forward chaining deleted, `output_keys()` lists unconsumed rule patterns, no-arg `visualize()` shows the concrete part. Rule-graph rendering is future work. | #238 |
-| open | Adopt the Q1/Q3 end state into #237 and land scipp/cyclebane#32. | discussion |
+| 2026-08-21 | #238 merged into #237, which is retargeted to `main` as the consolidated end-state proposal; #236 remains the coexistence alternative. | #237 |
+| open | Review of the end state; land scipp/cyclebane#32; user-guide rewrite; `Scope` deprecation (#233). | #237, scipp/cyclebane#32 |
 
 ## References
 
