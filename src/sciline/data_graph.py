@@ -22,9 +22,9 @@ from ._provider import (
 from ._unification import (
     find_all_typevars,
     key_depth,
-    pattern_origin_and_args,
     match_return,
     parameterize,
+    pattern_origin_and_args,
     subsumes,
     unify,
 )
