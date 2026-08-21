@@ -136,6 +136,31 @@ def test_missing_dependency_of_instantiated_generic_raises() -> None:
         pl.compute(Processed[A])
 
 
+def test_generic_param_applies_to_all_specializations() -> None:
+    pl = sl.Pipeline([process], params={Raw: Raw(1.2)})
+    assert pl.compute(Processed[A]) == pytest.approx(2.4)
+    assert pl.compute(Processed[B]) == pytest.approx(2.4)
+
+
+def test_concrete_param_shadows_generic_param() -> None:
+    pl = sl.Pipeline([process], params={Raw: Raw(1.0), Raw[A]: Raw[A](5.0)})
+    assert pl.compute(Processed[A]) == 10.0
+    assert pl.compute(Processed[B]) == 2.0
+
+
+def test_generic_param_used_by_mapped_pipeline() -> None:
+    def combine(x: Processed[A], y: Raw[B]) -> float:
+        return x + y
+
+    pl = sl.Pipeline([process, combine], params={Raw: Raw(1.0)})
+    result = (
+        pl.map({Raw[A]: [Raw[A](1.0), Raw[A](2.0)]})
+        .reduce(func=lambda *v: sum(v), name='total')
+        .compute('total')
+    )
+    assert result == 8.0
+
+
 def test_output_keys_include_derivable_generic_outputs() -> None:
     pl = sl.Pipeline([process, reduce_run], params={Raw[A]: Raw[A](1.0)})
     assert Reduced[A] in pl.output_keys()

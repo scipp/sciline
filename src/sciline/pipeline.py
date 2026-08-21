@@ -270,7 +270,7 @@ class Pipeline(DataGraph):
         except UnsatisfiedRequirement as e:
             missing = e.args[1]
             source = self
-            if self._templates:
+            if self._has_templates:
                 # Instantiate generic providers so that the error message reflects
                 # the graph that was actually built.
                 source = self.copy()
@@ -352,7 +352,7 @@ class Pipeline(DataGraph):
     def output_keys(self) -> tuple[Key, ...]:
         """Returns the keys that are not inputs to any other providers."""
         graph = self
-        if self._templates:
+        if self._has_templates:
             # Instantiate generic providers derivable from the present concrete
             # keys so that their outputs are included.
             graph = self.copy()

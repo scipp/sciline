@@ -6,7 +6,7 @@ from __future__ import annotations
 import itertools
 from collections.abc import Callable, Generator, Iterable, Mapping
 from types import NoneType
-from typing import TYPE_CHECKING, Any, TypeVar
+from typing import TYPE_CHECKING, Any, TypeVar, get_origin
 
 import cyclebane as cb
 import networkx as nx
@@ -19,7 +19,7 @@ from ._provider import (
     UnboundTypeVar,
     _bind_free_typevars,
 )
-from ._unification import find_all_typevars, forward_bindings, match_return
+from ._unification import find_all_typevars, forward_bindings, match_return, unify
 from ._utils import key_full_qualname
 from .handler import ErrorHandler, HandleAsBuildTimeException
 from .typing import Graph, Key
@@ -91,6 +91,7 @@ class DataGraph:
     ) -> None:
         self._constraints = _normalize_custom_constraints(constraints)
         self._templates: list[Provider] = []
+        self._template_values: dict[Key, Any] = {}
         self._cbgraph = cb.Graph(nx.DiGraph())
         for provider in providers or []:
             self.insert(provider)
@@ -100,7 +101,12 @@ class DataGraph:
         out._cbgraph = graph
         out._constraints = self._constraints
         out._templates = list(self._templates)
+        out._template_values = dict(self._template_values)
         return out
+
+    @property
+    def _has_templates(self) -> bool:
+        return bool(self._templates or self._template_values)
 
     def copy(self: T) -> T:
         return self._from_cyclebane(self._cbgraph.copy())
@@ -192,6 +198,22 @@ class DataGraph:
         self._templates = [t for t in self._templates if t != provider]
         self._templates.append(provider)
 
+    def _register_template_value(self, key: Key, value: Any) -> None:
+        """Store a value for a generic key, applied to all demanded specializations."""
+        if get_origin(key) is None and (params := getattr(key, '__parameters__', ())):
+            # Normalize a bare generic class to a subscripted pattern.
+            key = key[params]  # type: ignore[index]
+        # Mirror the replacement semantics of setting a concrete key twice.
+        self._template_values.pop(key, None)
+        self._template_values[key] = value
+
+    def _match_template_value(self, key: Key) -> Any:
+        for pattern, value in reversed(self._template_values.items()):
+            bound: dict[TypeVar, Key] = {}
+            if unify(pattern, key, bound):
+                return value
+        return _no_value
+
     def _satisfied(self, key: Key) -> bool:
         graph = self.underlying_graph
         return key in graph and bool(graph.nodes[key].keys() & _providing_attrs)
@@ -206,27 +228,38 @@ class DataGraph:
                 continue
             seen.add(key)
             if not self._satisfied(key):
-                # Iterate in reverse so that the latest matching template wins,
-                # mirroring the replacement semantics of concrete providers.
-                for template in reversed(self._templates):
-                    if (provider := match_return(template, key)) is not None:
-                        self.insert(provider)
-                        break
+                if (value := self._match_template_value(key)) is not _no_value:
+                    self[key] = value
+                else:
+                    # Iterate in reverse so that the latest matching template wins,
+                    # mirroring the replacement semantics of concrete providers.
+                    for template in reversed(self._templates):
+                        if (provider := match_return(template, key)) is not None:
+                            self.insert(provider)
+                            break
             if key in self.underlying_graph:
                 stack.extend(self.underlying_graph.predecessors(key))
 
-    def _instantiate_forward(self, extra_keys: Iterable[Key] = ()) -> None:
+    def _instantiate_forward(self, seeds: Iterable[Key] | None = None) -> None:
         """Instantiate templates whose arguments unify with concrete keys.
 
-        Runs to a fixed point since instantiated providers introduce new keys.
+        If ``seeds`` is given, only instantiations consuming a seed key or a
+        key derived from one are created; other keys may still contribute to
+        bindings. Otherwise all complete bindings from the present concrete
+        keys are instantiated. Runs to a fixed point since instantiated
+        providers introduce new keys.
         """
-        extra = set(extra_keys)
+        derived = None if seeds is None else set(seeds)
         instantiated: set[Key] = set()
         while True:
-            known = set(self.underlying_graph.nodes) | extra
+            known = set(self.underlying_graph.nodes)
+            if derived is not None:
+                known |= derived
             providers: dict[Key, Provider] = {}
             for template in self._templates:
-                for bound in forward_bindings(template, known):
+                for bound, used in forward_bindings(template, known):
+                    if derived is not None and not (used & derived):
+                        continue
                     provider = template.bind_type_vars(bound)
                     providers[provider.deduce_key()] = provider
             inserted = False
@@ -234,8 +267,15 @@ class DataGraph:
                 if key not in instantiated and not self._satisfied(key):
                     self.insert(provider)
                     instantiated.add(key)
+                    if derived is not None:
+                        derived.add(key)
                     inserted = True
             if not inserted:
+                for key in list(self.underlying_graph.nodes):
+                    if not self._satisfied(key) and (
+                        (value := self._match_template_value(key)) is not _no_value
+                    ):
+                        self[key] = value
                 return
 
     def __setitem__(self, key: Key, value: DataGraph | Any) -> None:
@@ -253,8 +293,11 @@ class DataGraph:
         # not pass mypy [valid-type] checks. What we do on our side is ok, but the
         # calling code is not.
         if typevars := find_all_typevars(key):
-            for bound in _mapping_to_constrained(typevars, self._constraints):
-                self[_bind_free_typevars(key, bound)] = value
+            if all(t.__constraints__ or t in self._constraints for t in typevars):
+                for bound in _mapping_to_constrained(typevars, self._constraints):
+                    self[_bind_free_typevars(key, bound)] = value
+            else:
+                self._register_template_value(key, value)
             return
 
         # TODO If key is generic, should we support multi-sink case and update all?
@@ -266,7 +309,7 @@ class DataGraph:
     def __getitem__(self: T, key: Key) -> T:
         """Return the subgraph that computes the given key."""
         graph = self
-        if self._templates:
+        if self._has_templates:
             graph = self.copy()
             graph._instantiate_backward((key,))
         return graph._from_cyclebane(graph._cbgraph[key])
@@ -288,7 +331,7 @@ class DataGraph:
             A new graph with mapped nodes.
         """
         graph = self
-        if self._templates:
+        if self._has_templates:
             # Mapping duplicates dependents of the mapped nodes, so generic
             # providers must be instantiated first.
             graph = self.copy()
@@ -344,7 +387,7 @@ _no_value = object()
 def to_task_graph(
     data_graph: DataGraph, targets: tuple[Key, ...], handler: ErrorHandler | None = None
 ) -> Graph:
-    if data_graph._templates:
+    if data_graph._has_templates:
         data_graph = data_graph.copy()
         data_graph._instantiate_backward(targets)
     graph = data_graph.to_networkx()

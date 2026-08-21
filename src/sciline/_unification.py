@@ -64,35 +64,37 @@ def match_return(template: Provider, key: Key) -> Provider | None:
 
 def forward_bindings(
     template: Provider, known_keys: Iterable[Key]
-) -> Generator[dict[TypeVar, Key], None, None]:
+) -> Generator[tuple[dict[TypeVar, Key], frozenset[Key]], None, None]:
     """Enumerate complete bindings of a template's TypeVars from known keys.
 
     Each generic argument of the template is unified with each known key;
     consistent combinations of the resulting bindings that bind all type
-    variables of the template are yielded. Arguments that match no known key
-    are left unmatched, i.e., a binding is complete as long as the *other*
-    arguments determine all type variables.
+    variables of the template are yielded, together with the set of known keys
+    that produced them. Arguments that match no known key are left unmatched,
+    i.e., a binding is complete as long as the *other* arguments determine all
+    type variables.
     """
     typevars = find_all_typevars(template.deduce_key())
     patterns = [p for p in template.arg_spec.keys() if find_all_typevars(p)]
     options = []
     for pattern in patterns:
-        matches: list[dict[TypeVar, Key]] = [{}]
+        matches: list[tuple[dict[TypeVar, Key], Key | None]] = [({}, None)]
         for key in known_keys:
             bound: dict[TypeVar, Key] = {}
             if unify(pattern, key, bound):
-                matches.append(bound)
+                matches.append((bound, key))
         options.append(matches)
     seen = set()
     for combo in itertools.product(*options):
         merged: dict[TypeVar, Key] = {}
-        if not all(_merge(merged, bound) for bound in combo):
+        if not all(_merge(merged, bound) for bound, _ in combo):
             continue
         if set(merged) != typevars:
             continue
-        if (fingerprint := frozenset(merged.items())) not in seen:
+        used = frozenset(key for _, key in combo if key is not None)
+        if (fingerprint := (frozenset(merged.items()), used)) not in seen:
             seen.add(fingerprint)
-            yield merged
+            yield merged, used
 
 
 def _merge(target: dict[TypeVar, Key], bound: dict[TypeVar, Key]) -> bool:
