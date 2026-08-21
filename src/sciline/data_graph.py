@@ -167,7 +167,9 @@ class DataGraph:
         pattern = parameterize(key)
         # Mirror the replacement semantics of setting a concrete key twice.
         self._templates = [
-            t for t in self._templates if isinstance(t, Provider) or t.pattern != pattern
+            t
+            for t in self._templates
+            if isinstance(t, Provider) or t.pattern != pattern
         ]
         self._templates.append(_TemplateValue(pattern=pattern, value=value))
 
