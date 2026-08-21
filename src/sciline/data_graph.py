@@ -12,7 +12,13 @@ import cyclebane as cb
 import networkx as nx
 from cyclebane.node_values import IndexName, IndexValue
 
-from ._provider import ArgSpec, Provider, ToProvider, UnboundTypeVar, _bind_free_typevars
+from ._provider import (
+    ArgSpec,
+    Provider,
+    ToProvider,
+    UnboundTypeVar,
+    _bind_free_typevars,
+)
 from ._unification import find_all_typevars, forward_bindings, match_return
 from ._utils import key_full_qualname
 from .handler import ErrorHandler, HandleAsBuildTimeException

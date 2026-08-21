@@ -50,8 +50,7 @@ def unify(pattern: Key | TypeVar, concrete: Key, bound: dict[TypeVar, Key]) -> b
     if len(pattern_args) != len(concrete_args):
         return False
     return all(
-        unify(p, c, bound)
-        for p, c in zip(pattern_args, concrete_args, strict=True)
+        unify(p, c, bound) for p, c in zip(pattern_args, concrete_args, strict=True)
     )
 
 
