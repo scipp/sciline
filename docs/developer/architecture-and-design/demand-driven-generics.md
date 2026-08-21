@@ -75,21 +75,21 @@ demanded recursively. This alone is complete for all non-mapped computation,
 because sciline already requires a provider's argument type variables to be a
 subset of its return type variables.
 
-**Forward chaining** (the accommodation): `DataGraph.map` duplicates the
-*dependents* of the mapped nodes at map time, before any target is named.
-Dependents of a mapped generic key do not exist yet, so `map` first runs a
-forward pass: rules whose argument patterns unify with the mapped keys (or
-keys derived from such instantiations) are instantiated to a fixed point.
-The pass is *seeded* — restricted to instantiations that consume a mapped key
-or a key derived from one — because an unrestricted pass instantiates rules
-for unrelated keys and creates spurious graph sinks (this broke cyclebane's
-unique-sink requirement in `reduce()` during prototyping). `output_keys()` and
-no-argument `visualize()` use an unseeded forward pass to imitate the eager
-node set.
+**Forward chaining** (the accommodation): `cyclebane.Graph.map` *relabels* the
+dependents of the mapped nodes at map time (wrapping them in `MappedNode` to
+mark that they carry an index; per-index duplication happens later, see Q1),
+before any target is named. Dependents of a mapped generic key do not exist
+yet, so `map` first runs a forward pass: rules whose argument patterns unify
+with the mapped keys (or keys derived from such instantiations) are
+instantiated to a fixed point. The pass is *seeded* — restricted to
+instantiations that consume a mapped key or a key derived from one — because
+an unrestricted pass instantiates rules for unrelated keys and creates
+spurious graph sinks (this broke cyclebane's unique-sink requirement in
+`reduce()` during prototyping). `output_keys()` and no-argument `visualize()`
+use an unseeded forward pass to imitate the eager node set.
 
 **Precedence**: a satisfied fact always wins over any rule (specialization
-priority). Among rules, the latest registered wins, mirroring the replacement
-semantics of concrete keys. See the coherence question below.
+priority). Among rules, the three-tier coherence rule applies, see Q2 below.
 
 **Declared constraints** (`TypeVar('T', int, float)`, `class Raw[Run: (A, B)]`)
 are honored as *filters* during unification — a constrained type variable
@@ -166,7 +166,7 @@ bolting generics onto a concrete-graph substrate, and constraints were its
 support structure. However, the prototype is not the minimal green-field
 design. Three deviations are on the table.
 
-### Q1: Forward chaining, or targets-before-map?
+### Q1: Forward chaining, or deferred mapped-labeling in cyclebane?
 
 Forward chaining plus seeding is the hairiest part of the engine — the
 fixed-point loop, the seed-derivation tracking, the union-semantics
@@ -174,37 +174,77 @@ over-instantiation risk (where the only real bug so far lived), and the
 special final pass for generic values. It exists for exactly one reason:
 `map()` transforms the graph before any target is named.
 
-Observation: in practice the demand *is* always eventually named. Mapped
-workflows end in `reduce(...).compute(name)`, `compute_mapped(pipeline, base)`
-or `compute(get_mapped_node_names(...))` — a base target appears in every
-idiom. Forward chaining bridges the gap between when `map()` is called and
-when that demand becomes visible.
+**Corrected premise** (from reading cyclebane, 2026-08-21): cyclebane is
+already a record-and-compile design. `Graph.map` does *not* duplicate
+dependents; it (a) merges the array-like values and their indices into
+`Graph._node_values`, kept on the side, and (b) symbolically *relabels* the
+mapped roots' descendants as `MappedNode(name, indices)` — one node per
+original node. The per-index duplication ("spelling out") happens exclusively
+in `Graph.to_networkx()`, which sciline calls at task-graph build time — i.e.
+at demand time already. `reduce()` likewise only adds one node plus an edge,
+precomputing which indices the reduce consumes.
 
-Options:
+So the only thing `map()` does eagerly is the *labeling*, and the labeling is
+derivable: a node carries exactly the indices of the mapped roots that reach
+it (this is what `_find_successors` + `_node_with_indices` compute
+incrementally), and the roots and their indices are already stored in
+`_node_values`. The earlier "record and replay the whole map" idea is
+over-engineered; the minimal change is:
 
-1. **Keep seeded forward chaining** (status quo of #237). Measured compatible
-   with existing usage; costs the engine's subtlest ~40%.
-2. **Defer map/reduce to build time.** `map()` and `reduce()` record their
-   arguments; `get(targets)` compiles the query: backward-chain from targets,
-   producing a concrete graph, then apply the recorded maps and reduces, then
-   build the task graph. This deletes forward chaining wholesale and makes the
-   pipeline purely declarative (rules + facts + a recorded query plan).
-   Complications to work through:
-   - `get_mapped_node_names` inspects mapped-graph structure before any
-     compute. Its inputs (index names/values) are already determined by the
-     `map()` arguments alone, so the metadata could be served without
-     duplicating nodes, but the implementation touches cyclebane.
-   - Ordering semantics of recorded operations vs. later `__setitem__` /
-     `insert` calls need defining (currently: mutations after `map` apply to
-     the mapped graph).
-   - This is an API-shape change for `DataGraph`, likely needing cyclebane
-     involvement or a wrapper layer in sciline.
-3. **Require targets at map time** (`pl.map(values, targets=...)` or mapping a
-   demanded subgraph `pl[target].map(...)`). Semantically the same as option 2
-   but pushed onto the user; smaller implementation, larger idiom break.
+**Proposal: derive mapped-labeling at compile time.**
 
-Open. Option 2 is the principled end state; option 1 is livable and proven;
-option 3 is a cheaper approximation of 2 with worse ergonomics.
+- `Graph.graph` always keeps original node names; no `MappedNode` in the
+  stored graph. `map()` shrinks to: validate roots, add root nodes, merge
+  `node_values` (whose merge validation stays eager, so index conflicts still
+  error at map time).
+- `to_networkx()` first derives each node's index set by reachability from the
+  mapped roots, then proceeds with the existing per-index cloning.
+- `reduce()` stores a plain node whose attrs record what is reduced
+  (`index`/`axis`/all); the reduce node's remaining indices are derived at
+  compile (incoming indices minus reduced).
+- `_from_orig_key` — the lookup-by-original-name convenience whose own
+  code comment questions its worth — largely disappears; `__getitem__`,
+  `__delitem__`, `__setitem__` lose their `MappedNode` special cases.
+- Sciline's `get_mapped_node_names` scan for `MappedNode` is replaced by a
+  small cyclebane API (e.g. `Graph.node_indices(name)`).
+
+Consequence for sciline: the graph contains plain keys at all times, so
+backward chaining works identically before and after `map()` — nodes
+instantiated after mapping are indistinguishable from ones present before.
+`_instantiate_forward`, `forward_bindings`, and the seeding logic are deleted;
+the engine becomes backward-only (the green-field shape). Scope: roughly half
+of cyclebane's `graph.py` (611 lines), guarded by its 143-test suite; sciline
+is cyclebane's only user (SH, 2026-08-21), so this is in-house.
+
+Open points:
+
+- **`reduce(key=None)`**: today the unique sink is resolved when `reduce` is
+  called; with rules, the sink set may grow as instantiation proceeds. Resolve
+  at compile (unique sink of the demanded concrete graph, excluding reduce
+  nodes), or require an explicit `key` when rules exist. Existing usage
+  (`reduce(func=..., name=...)` without `key`) favors compile-time resolution.
+- **Mapped roots must remain sources**: backward chaining must treat keys
+  present in `node_values` as satisfied and never instantiate a rule for them.
+- **Index-order compatibility**: sciline's mapped node identities
+  (`NodeName(name, IndexValues(axes, values))`) depend on the per-node index
+  *tuple order* that today emerges from the relabeling sequence. The
+  compile-time derivation must reproduce this order deterministically (from
+  the stored per-array axis positions); cyclebane's tests pin `to_networkx`
+  output and must pass unchanged.
+- **Groupby**: grouping state already lives in `node_values`; the
+  `GroupbyGraph` path needs the same deferral treatment and is the least
+  explored corner.
+- Some errors move from `map()`/`reduce()` time to compile time (e.g.
+  reachability-dependent validation); value/index conflicts stay eager.
+
+Fallback remains option "keep seeded forward chaining" (status quo of #237,
+measured compatible). The targets-at-map-time API variant is superseded by the
+proposal — it bought the same ordering freedom at the cost of an idiom break,
+which the compile-time derivation gets for free.
+
+Coupling with Q3: without forward chaining, the unseeded forward pass behind
+`output_keys()` / no-arg `visualize()` loses its engine, which strengthens the
+case for rule-graph-first inspection.
 
 ### Q2: Coherence instead of last-wins among rules — decided, implemented
 
@@ -270,7 +310,7 @@ affects `visualize()`'s no-argument default via `tp=self.output_keys()`.
 | 2026-08-21 | Specialized-provider-shadows-generic accepted as a semantic change; generic-replaces-specialized not worth preserving. | #237, this doc |
 | 2026-08-21 | Q2 decided: three-tier coherence (replace equal patterns, most-specific wins, incomparable overlap errors) instead of last-wins. Implemented. | #237 |
 | open | Single mechanism (#237) vs. coexistence (#236) vs. separate class. | discussion |
-| open | Q1 (forward chaining vs. deferred map), Q3 (rule-graph inspection). | this doc |
+| open | Q1 (forward chaining vs. deferred mapped-labeling in cyclebane), Q3 (rule-graph inspection). | this doc |
 
 ## References
 
