@@ -135,8 +135,7 @@ def _subsumes(
     if len(general_args) != len(specific_args):
         return False
     return all(
-        _subsumes(g, s, bound)
-        for g, s in zip(general_args, specific_args, strict=True)
+        _subsumes(g, s, bound) for g, s in zip(general_args, specific_args, strict=True)
     )
 
 
