@@ -11,6 +11,7 @@
    :recursive:
 
    Pipeline
+   NativeScope
    Scope
    scheduler.Scheduler
    scheduler.DaskScheduler
@@ -29,6 +30,7 @@
 
    compute_mapped
    get_mapped_node_names
+   native_scope
 ```
 
 ## Exceptions
