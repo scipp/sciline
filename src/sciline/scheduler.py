@@ -2,7 +2,7 @@
 # Copyright (c) 2025 Scipp contributors (https://github.com/scipp)
 import inspect
 from collections import Counter
-from collections.abc import Callable, Hashable
+from collections.abc import Callable, Container, Hashable
 from typing import Any, Protocol, runtime_checkable
 
 from sciline.typing import Graph
@@ -61,11 +61,12 @@ class NaiveScheduler:
             raise CycleError from e
 
         dependents = _count_dependents(dependencies)
+        requested = set(keys)
         results: dict[Hashable, Any] = {}
         with reporter.run_computation(graph.values()):
             for t in tasks:
                 results[t] = reporter.call_provider_with_reporting(graph[t], results)
-                _consume_arguments(graph[t], dependents, results)
+                _consume_arguments(graph[t], dependents, results, requested)
 
         return tuple(results[key] for key in keys)
 
@@ -81,11 +82,19 @@ def _count_dependents(dependencies: dict[type, tuple[type, ...]]) -> Counter[typ
 
 
 def _consume_arguments(
-    provider: Provider, counts: Counter[type], results: dict[Hashable, object]
+    provider: Provider,
+    counts: Counter[type],
+    results: dict[Hashable, object],
+    requested: Container[Hashable],
 ) -> None:
+    """Discard results that no remaining provider needs.
+
+    Requested keys are kept: they are returned to the caller, so their consumer
+    count reaching zero does not mean they are no longer needed.
+    """
     for arg in provider.arg_spec.keys():
         counts[arg] -= 1
-        if counts[arg] == 0:
+        if counts[arg] == 0 and arg not in requested:
             del results[arg]
 
 

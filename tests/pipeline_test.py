@@ -879,6 +879,20 @@ def test_compute_with_NaiveScheduler() -> None:
     assert res == 1.5
 
 
+def test_compute_returns_requested_key_that_another_requested_key_depends_on(
+    scheduler: sl.scheduler.Scheduler,
+) -> None:
+    def make_int_local() -> int:
+        return 3
+
+    def int_to_float_local(x: int) -> float:
+        return 0.5 * x
+
+    pipeline = sl.Pipeline([int_to_float_local, make_int_local])
+    # int is both a requested key and an argument of the provider of float.
+    assert pipeline.compute((int, float), scheduler=scheduler) == {int: 3, float: 1.5}
+
+
 def test_bind_and_call_no_function() -> None:
     pipeline = sl.Pipeline([make_int])
     assert pipeline.bind_and_call(()) == ()
