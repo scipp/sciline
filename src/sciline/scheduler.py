@@ -2,7 +2,7 @@
 # Copyright (c) 2025 Scipp contributors (https://github.com/scipp)
 import inspect
 from collections import Counter
-from collections.abc import Callable, Container, Hashable
+from collections.abc import Callable, Hashable
 from typing import Any, Protocol, runtime_checkable
 
 from sciline.typing import Graph
@@ -85,7 +85,7 @@ def _consume_arguments(
     provider: Provider,
     counts: Counter[type],
     results: dict[Hashable, object],
-    requested: Container[Hashable],
+    requested: set[Hashable],
 ) -> None:
     """Discard results that no remaining provider needs.
 
