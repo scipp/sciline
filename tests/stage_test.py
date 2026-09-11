@@ -90,6 +90,8 @@ def test_stage_with_intermediate_input_cuts_its_ancestors(
 ) -> None:
     stage = Stage(pipeline, outputs=(IofQ,), inputs=(Numerator, Denominator, Scale))
     assert stage.frontier == ()
+    assert Filename not in stage.keys
+    assert Calibration not in stage.keys
     assert stage({Numerator: [2.0, 4.0], Denominator: 3.0, Scale: 2.0})[IofQ] == 4.0
     assert calls.counts == {'normalize': 1}
 

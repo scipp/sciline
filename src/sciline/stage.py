@@ -106,11 +106,11 @@ class Stage:
         self._frontier = tuple(frontier)
         self._dynamic = tuple(k for k in graph if k in dynamic)
         self._dynamic_outputs = tuple(o for o in self._outputs if o in dynamic)
-        self._keys = frozenset(graph)
         needed = set(self._frontier)
         for key in self._frontier:
             needed |= nx.ancestors(deps, key)
         self._static_graph = {k: p for k, p in graph.items() if k in needed}
+        self._keys = frozenset(self._static_graph) | frozenset(self._dynamic)
         self._static: dict[Key, Any] | None = None
 
     @property
@@ -125,7 +125,11 @@ class Stage:
 
     @property
     def keys(self) -> frozenset[Key]:
-        """All keys the outputs depend on, including the outputs themselves."""
+        """Keys the stage uses: those of the held part and of the per-call part.
+
+        Ancestors that an intermediate input cuts off are not included, so a
+        parameter is in ``keys`` exactly when changing it would change the stage.
+        """
         return self._keys
 
     @property
