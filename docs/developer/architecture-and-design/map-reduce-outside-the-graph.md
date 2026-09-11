@@ -9,10 +9,10 @@ That has been tried twice (parameter tables in 23.08, cyclebane in 24.06), is th
 
 The proposal is to make that operation the primitive and compose everything else from it outside the graph:
 
-- `sciline.v2.Pipeline`: the flat graph from type hints, with PEP 695 generics, without `map`, `reduce`, `groupby`, `constraints`, or cyclebane.
+- `Pipeline` (called v2 below, whether it ships as a namespace or a major release; see Migration): the flat graph from type hints, with PEP 695 generics, without `map`, `reduce`, `groupby`, `constraints`, or cyclebane.
 - `Stage`, in sciline: the part of a pipeline from a set of input keys to a set of output keys, with everything that does not depend on the inputs computed once and the inputs supplied per call. This is what `StreamProcessor` builds by hand today, what scipp/sciline#241 asks for, and what the essapps warm workflow (D8) and split workflows (phase 3) are.
 - Connectors, in ess.reduce: objects between stages with `push`, `value`, and `clear`. The type of the connector says why the graph is cut there: a reducer where members are combined, a forwarder where a context is held between changes. The accumulators of `ess.reduce.streaming` are reducers in this sense.
-- `Fold`, in ess.reduce: the table-fold shape as two stages of one pipeline, contribute and finalize, with the combine functions between them and the three entry points exposed. It holds nothing; parameters are set on the pipeline, and whoever loops over members owns the contributions.
+- `Fold`, in sciline: the table-fold shape as two stages of one pipeline, contribute and finalize, with the combine functions between them and the three entry points exposed. It holds nothing but its stages; parameters are set on the pipeline, and whoever loops over members owns the contributions.
 - `StreamProcessor`, in ess.reduce, as a loop over stages and connectors carrying only its policy.
 
 There is no drop-in replacement for the pipeline that `with_sample_runs` and its siblings return today.
@@ -27,12 +27,12 @@ A prototype on sciline `main` passes 21 tests covering the use-case shapes found
 `map` relabels every reachable node at call time, before the targets are known.
 The demand-driven generics work paid for that twice: first with forward chaining and its seeding, which the Q1 spike removed by deferring the labeling into cyclebane (scipp/cyclebane#32, unreleased, which is why the branch's CI is red), and then with what the deferral cost: the `reduce(key=)` sink guard, `_consumed_by_template`, the mapped-root case in `_satisfied`, the node-name uniqueness break that forbids the documented `pipeline[C] = pipeline[C].map(...).reduce(...)` idiom, and the `get_mapped_node_names` rework.
 Those are the breaking changes of scipp/sciline#237, and every one of them is map/reduce-attributable.
-Users cannot write a mapped key; they need `get_mapped_node_names` and `compute_mapped`, which depend on pandas and reach into `_cbgraph`.
+Users cannot write a mapped key; they need `get_mapped_node_names` and `compute_mapped`, which depend on pandas and on cyclebane's node-name classes.
 `groupby` was never exposed by sciline, and `index_names`/`indices` are unused downstream.
 
 ### In ess.reduce
 
-`StreamProcessor` is 1081 lines.
+`ess.reduce.streaming` is 1080 lines, about half of it `StreamProcessor`.
 Its core is a graph partition: the ancestors of the targets, the descendants of the dynamic keys, and the frontier between them, computed once.
 Sciline gives it no way to express that, so it assigns `None` to keys to prune branches, grafts subgraphs through `__setitem__`, and after scipp/ess#732 feeds values through providers whose `__annotations__` are patched at runtime.
 scipp/sciline#241 records the three requirements the mechanism must meet: no graph rebuild per value, explicit lifetime of supplied values, and culling of what a supplied key's ancestors would otherwise compute.
@@ -54,8 +54,8 @@ Every use in `/workspace/ess` and esslivedata, by shape:
 
 | Shape | Sites | What is combined |
 |---|---|---|
-| Fold: map over a table, reduce at one or more keys, result feeds further providers | esssans runs (4 cut keys from one map, `merge_contributions`), essreflectometry runs (up to 7 cut keys, concat and `_any_value`), isissans zoom monitors (concat along a new dim, assert-unique position), bifrost triplets (two cut keys at different depths), NMX panels and MTZ files, DREAM detectors with a two-column table | events by concat, dense by sum, metadata by pick-one, `DataGroup` by key |
-| Fold whose cut sits inside another fold's per-member work | pixel masks in esssans and esspowder: `DetectorMasks` reads the detector IDs of the sample run | dicts by union |
+| Fold: map over a table, reduce at one or more keys, result feeds further providers | esssans runs (four map/reduce pairs, one per cut key, `merge_contributions`), essreflectometry runs (up to 7 cut keys, concat and `_any_value`), isissans zoom monitors (concat along a new dim, assert-unique position), bifrost triplets (three folds across two workflow builders, `merge_triplets` and `concat_event_lists`), NMX panels and MTZ files, DREAM detectors with a two-column table | events by concat, dense by sum, metadata by pick-one, `DataGroup` by key |
+| Fold whose cut sits inside another fold's per-member work | pixel masks in esssans: `DetectorMasks` reads the detector IDs of the sample run. DREAM's mask fold is static (its reader takes only the filename) and no test exercises it | dicts by union |
 | Per-member results, no reduce | esssans `with_banks`, LoKI notebook, `BatchProcessor`, bifrost test | none; read with `compute_mapped` |
 | Several folds on one pipeline, one final stage | sample runs and background runs | as above |
 | Fold in the static part of a `StreamProcessor` | esslivedata bifrost `EmptyDetector` over banks | `_combine_banks` |
@@ -79,10 +79,11 @@ Dropped: `map`, `reduce`, `index_names`, `indices`, `get_mapped_node_names`, `co
 The graph is a plain `networkx.DiGraph`; `__getitem__`/`__setitem__` grafting is about a hundred lines of networkx.
 
 Added: `provide(key, callable)`, the entry point scipp/sciline#241 asks for, so that a provider for a key known only at runtime does not need patched annotations; and building the task graph for targets without values for some keys, which `HandleAsComputeTimeException` already does and `Stage` needs.
-One consequence of demand-driven generics to keep in mind: `underlying_graph` and `output_keys()` see only what has been demanded, so anything that derives a default from the pipeline's sinks, as `Fold` does below, must go through `output_keys()`, which on the branch includes the unconsumed rule patterns.
+One consequence of demand-driven generics to keep in mind: `underlying_graph` and `output_keys()` see only what has been demanded.
+`Stage` is built from the concrete task graph of its outputs and never derives a default from the pipeline's sinks, so this does not affect it; `stage.keys` is the concrete key set, which is what callers test membership against.
 
-Tests: 335 today; 16 are map/reduce and go, 4 PEP 695 tests are trimmed, the rest port.
-Docs: the parameter-tables guide is replaced by a guide on folds; the generic-providers guide loses `constraints=`.
+Tests: 238 today; 16 use map/reduce and go, the PEP 695 branch's map-related tests are trimmed, the rest port.
+Docs: the parameter-tables guide is replaced by a guide on stages and folds; the generic-providers guide loses `constraints=`.
 
 ### 2. `Stage`
 
@@ -112,7 +113,7 @@ Semantics:
 What it replaces: `_build_streaming_workflow`, `_FedWorkflow`, `_find_descendants`/`_find_parents`, and the pruning-by-assignment hack in `StreamProcessor`; the sciline wrapper of D8, whose cache is the frontier of `Stage(inputs=cheap_parameters)`; and each half of a split workflow.
 
 It belongs in sciline because it needs the concrete graph and `Provider` to do without private access, which is the argument scipp/sciline#241 makes.
-It is the only thing here that does.
+`Fold` needs nothing beyond `Stage`, but belongs in sciline too, because sciline documents map/reduce for all users and `Fold` is its replacement; see Migration.
 
 ### 3. Composition: stages and connectors
 
@@ -143,7 +144,7 @@ Two things were considered and deferred:
   A fold's cut is a declaration, not a derivation.
   Extract the function when a second caller appears.
 
-What is shared, then, is small: `Stage` and `warm` in sciline; `Fold`, a `Forwarder`, and the existing accumulators in ess.reduce; a visualize function over a list of stages and connectors, since `StreamProcessor`'s node classification is read off `Stage.frontier` and `dynamic`; and the drivers below.
+What is shared, then, is small: `Stage`, `warm`, and `Fold` in sciline; a `Forwarder` and the existing accumulators in ess.reduce, following the `push`/`value`/`clear` convention without a base class, since nothing in sciline consumes a connector; a visualize function over a list of stages and connectors, since `StreamProcessor`'s node classification is read off `Stage.frontier` and `dynamic`; and the drivers below.
 
 ### 4. `Fold`
 
@@ -239,7 +240,7 @@ The trap to keep out of stays: a provider written by hand that runs a pipeline.
 
 ## Evidence
 
-Prototype: `stage-prototype/stage.py`, tests in `stage-prototype/stage_test.py` and `stream_test.py`, run against sciline `main` (the pep695 branch needs an unreleased cyclebane for generics; on it all tests but the generics one pass as well).
+Prototype: `stage-prototype/stage.py`, tests in `stage-prototype/stage_test.py` and `stream_test.py`, run against sciline `main` (the pep695 branch needs an unreleased cyclebane for generics; on it all tests pass except the two that fold over a generic key, which fail in the branch's mapped-root check inside `map` and so go away with it).
 It reads `TaskGraph._graph` for the concrete graph and hardcodes the naive scheduler inside stages; both go away inside v2.
 
 Covered:
@@ -268,16 +269,18 @@ Not shown by the prototype: the `StreamProcessor` rewrite against its real tests
 
 ## Migration
 
-1. sciline: `Pipeline` without map/reduce, `Stage`, `warm`, `provide`.
+1. sciline: `Pipeline` without map/reduce, `Stage`, `warm`, `provide`, `Fold`, `compute_members`.
+   `Fold` is in sciline because it is mechanism, not policy: it holds no contributions, no member table, and no invalidation rule, needs nothing beyond `Stage`, and is the documented replacement for `map(...).reduce(...)` that users outside ESS need.
    Whether this is `sciline.v2` or the next major release is a real choice.
    The namespace lets esslivedata and external users pin through the change and keeps v1 importable next to v2; it also bundles two independent changes under one name, invites mixing v1 and v2 pipelines in one process with obscure failures, and guarantees a second rename.
-   Recommendation: one major release, with the ESS monorepo migrated in one PR and esslivedata pinning the previous version until it follows; the last minor release before it deprecates `map`, `reduce`, and `constraints=`.
-2. ess.reduce: `Fold`, `compute_members`, `Forwarder`, and the accumulators in one module of stage-derived tools; `StreamProcessor` rewritten on `Stage` against its existing tests; `BatchProcessor` loses its mapped/unmapped fallback.
+   Recommendation: one major release; the additive part (`Stage`, `warm`, `provide`, `Fold`, `compute_members`) ships in a minor release first so that the ESS packages migrate one at a time before removal; esslivedata pins the previous version until it follows; the last minor release before removal deprecates `map`, `reduce`, and `constraints=`.
+2. ess.reduce: `Forwarder` and the accumulators in one module, following the `push`/`value`/`clear` convention without a base class; `StreamProcessor` rewritten on `Stage` against its existing tests.
+   essreflectometry's `BatchProcessor` loses its mapped/unmapped fallback.
    `parameter_mappers`, which maps a list-valued parameter to a `with_*` helper returning a pipeline, goes.
    The UI needs one protocol across packages, set a parameter, set the members for a member key, compute; whether each package object implements it or one generic object is built from a registry of member key to cut is the "same thirty lines" question above, decided when the second package is migrated.
    `get_parameters` is unaffected because it runs on the flat pipeline.
 3. esssans, essreflectometry, essspectroscopy, essnmx, essdiffraction: the `with_*` helpers that fold are replaced by a package object on which users set runs and parameters and compute; notebooks and tests change accordingly.
-   `with_pixel_mask_filenames` in esssans and essdiffraction becomes a `PixelMaskFilenames` list parameter with two providers.
+   `with_pixel_mask_filenames` in esssans becomes a `PixelMaskFilenames` list parameter with two providers; essdiffraction's, whose cut is static, becomes the same for uniformity and loses its empty-list workaround for cyclebane.
    `with_banks`, which maps without reducing, becomes a loop setting `NeXusDetectorName` on the fold or the pipeline, which is what its callers do with `compute_mapped` anyway.
 4. esslivedata: the bifrost bank fold becomes a `Fold` computed before the `StreamProcessor` is built, its result set as a parameter of the processor's pipeline.
 5. essapps: D8 and D15 wording as above; the D3/D6 spike's fake workflow with two accumulation points is a `Fold`.

@@ -28,7 +28,7 @@ Working document; drop before the branch merges.
 
 - `Stage(pipeline, outputs, inputs)`: the graph from input keys to output keys; static part held at its frontier, dynamic part per call; snapshot of the pipeline. `warm(*stages)` computes several static parts in one run. Sciline.
 - Connectors between stages: `push`, `value`, `clear`. Reducers (accumulators, n-ary combine), `Forwarder` (held context), a dict by member label (held contributions). ess.reduce.
-- `Fold(pipeline, members, at, outputs=())`: contribute stage, optional finalize stage, combine per cut key; holds nothing; `contribute`/`combine`/`finalize`, `compute(table)`. ess.reduce.
+- `Fold(pipeline, members, at, outputs=())`: contribute stage, optional finalize stage, combine per cut key; holds nothing; `contribute`/`combine`/`finalize`, `compute(table)`. Sciline (decided 2026-09-11; mechanism, not policy).
 - Package objects own topology, state, and policy: pipeline, folds, shared finalize stage, contributions, and the rule for what a parameter change keeps (`key in fold.contribute_stage.keys`). `StreamProcessor` is the same kind of object for streams.
 - Non-goals: a drop-in replacement for the map/reduced pipeline; a generic network object; a boundary builder. Reasons in the ADR.
 

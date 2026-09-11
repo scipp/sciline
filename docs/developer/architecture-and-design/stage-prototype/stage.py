@@ -27,8 +27,9 @@ Fold
     processes with the contribution serialized between them.
 
 Nothing here adds nodes to the author's graph or hides a parameter: every object is
-derived from the flat pipeline at the time it is built.  ``Stage`` needs the graph
-and belongs in sciline; the rest is policy and belongs next to ``StreamProcessor``.
+derived from the flat pipeline at the time it is built.  ``Stage`` and ``Fold`` are
+mechanism and belong in sciline; the connectors are policy and belong next to
+``StreamProcessor``.
 Where several folds share a pipeline and a finalize, as sample and background runs
 in esssans do, the package's own object holds the pipeline, the folds, the shared
 finalize stage, and the contributions; see ``loki_validation.py``.
