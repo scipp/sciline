@@ -112,10 +112,12 @@ class Aggregation:
         members:
             The keys supplied per member, the columns of the table.
         accumulators:
-            Accumulation keys, each with a factory for its accumulator. A key that
-            does not depend on the members is not accumulated; ``finalize`` computes
-            it from the held part of the graph. ``accumulation_keys`` lists the keys
-            that are accumulated.
+            Accumulation keys, each with a factory for its accumulator. Factories
+            rather than instances, so that the aggregation holds no state between
+            calls and whoever asks for accumulators owns their lifetime; ``combine``
+            and ``compute`` use fresh ones. A key that does not depend on the members
+            is not accumulated; ``finalize`` computes it from the held part of the
+            graph. ``accumulation_keys`` lists the keys that are accumulated.
         outputs:
             Keys computed by ``finalize`` from the accumulation keys. Omit for an
             aggregation used only for its contributions, such as one of several

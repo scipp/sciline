@@ -180,6 +180,7 @@ Semantics:
   Parameters are set on the pipeline before the aggregation is built, and the aggregation is a snapshot; a changed parameter means a new aggregation, which costs a graph walk and no computation until the aggregation is warmed.
 - `accumulators` maps each accumulation key to a factory for its accumulator.
   `combine` and `compute` make fresh accumulators from the factories on every call, so nothing survives between calls.
+  Factories rather than instances with a `clear`: clearing inside the aggregation would either forbid combining in batches over several calls or silently add to stale state, and holding instances would make `combine` non-reentrant; with factories, whoever calls `accumulators()` owns the instances and their lifetime.
   `Buffered(func)` wraps an n-ary function, today's `reduce(func=)` signature, which every combine in the ESS packages already has; every existing combine migrates through it.
   An accumulator that keeps a running total is written by the workflow author, and the ess.reduce accumulators are such objects.
   A key in `accumulators` that does not depend on the members is not accumulated; finalize computes it from the fixed part of the graph.
