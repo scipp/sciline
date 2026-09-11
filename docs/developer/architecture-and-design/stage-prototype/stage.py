@@ -18,25 +18,25 @@ Connectors
     are reducers in this sense.
 
 Fold
-    A driver for the table-fold shape: per group of member keys, a table with one
-    row per member and a set of cut keys with an n-ary combine per key.  Members and
-    parameters can be changed after construction; contributions are held per member,
-    so adding a member costs one contribution.  Built from stages of one flat
-    pipeline: per group a member stage (member keys to the member frontier, the
-    nodes that read nothing but the members) and a contribute stage (member frontier
-    to the cut), and one finalize stage (all cuts to the outputs).  ``contribute``,
-    ``combine``, and ``finalize`` are also exposed separately, so that the three can
-    run in different processes with the contribution serialized between them.
+    The table-fold shape over one flat pipeline: member keys, cut keys with an n-ary
+    combine per key, outputs.  Two stages, ``contribute`` (member keys to cut) and
+    ``finalize`` (cut to outputs), and the combine functions between them.  A fold
+    holds nothing but its stages; parameters are set on the pipeline before the fold
+    is built, and whoever loops over members owns the contributions.  ``compute``
+    is that loop for a table.  The three entry points can run in different
+    processes with the contribution serialized between them.
 
 Nothing here adds nodes to the author's graph or hides a parameter: every object is
 derived from the flat pipeline at the time it is built.  ``Stage`` needs the graph
 and belongs in sciline; the rest is policy and belongs next to ``StreamProcessor``.
+Where several folds share a pipeline and a finalize, as sample and background runs
+in esssans do, the package's own object holds the pipeline, the folds, the shared
+finalize stage, and the contributions; see ``loki_validation.py``.
 """
 
 from __future__ import annotations
 
 from collections.abc import Callable, Hashable, Iterable, Mapping, Sequence
-from dataclasses import dataclass, field
 from typing import Any
 
 import networkx as nx
@@ -200,24 +200,7 @@ class Forwarder:
 
 Combine = Callable[..., Any]
 Contribution = dict[Key, Any]
-"""Values at the cut keys of one group, per member or combined."""
-
-
-@dataclass
-class _Stages:
-    cut: tuple[Key, ...]
-    member: Stage  # member keys -> member frontier; reads nothing but the members
-    contribute: Stage  # member frontier -> cut; its static part is the outer frontier
-
-
-@dataclass
-class _Group:
-    keys: tuple[Key, ...]
-    at: dict[Key, Combine]
-    members: dict[Hashable, dict[Key, Any]] = field(default_factory=dict)
-    stages: _Stages | None = None
-    member_values: dict[Hashable, dict[Key, Any]] = field(default_factory=dict)
-    contributions: dict[Hashable, Contribution] = field(default_factory=dict)
+"""Values at the cut keys, per member or combined."""
 
 
 class Fold:
@@ -225,221 +208,77 @@ class Fold:
         self,
         pipeline: sciline.Pipeline,
         *,
-        over: Mapping[Key | tuple[Key, ...], Mapping[Key, Combine]],
-        outputs: Iterable[Key] | None = None,
-        keep_members: bool = False,
+        members: Iterable[Key],
+        at: Mapping[Key, Combine],
+        outputs: Iterable[Key] = (),
         scheduler: Scheduler | None = None,
     ) -> None:
         """
         Parameters
         ----------
         pipeline:
-            The flat pipeline; a copy is taken, later changes go through ``fold[key]``.
-        over:
-            Per group of member keys, the cut keys with their n-ary combine function.
-            A group is identified by its member keys, which are the columns of its
-            member table.  A member key of one group is an ordinary parameter of the
-            others.  A cut key that does not depend on the group's member keys is not
-            folded; finalize computes it from the fixed part of the graph.
+            The flat pipeline with its parameters set; the fold is a snapshot of it.
+        members:
+            The keys supplied per member, the columns of a member table.
+        at:
+            The cut keys with their n-ary combine function.  A cut key that does not
+            depend on the members is not folded; finalize computes it from the fixed
+            part of the graph.
         outputs:
-            Keys computed by finalize; the pipeline's sinks if omitted.
-        keep_members:
-            Hold the member frontier, what the graph computes from a member alone
-            (for a run: the loaded data), across parameter changes, so that a change
-            upstream of the cut does not reload members.  Costs memory.
+            Keys computed by finalize from the cut.  Omit for a fold used only for
+            its contributions, such as one of several sharing a finalize stage.
         """
-        self._pipeline = pipeline.copy()
-        self._outputs = tuple(outputs) if outputs is not None else _sinks(pipeline)
-        self._keep_members = keep_members
-        self._scheduler = scheduler
-        self._groups = [
-            _Group(keys=k if isinstance(k, tuple) else (k,), at=dict(at))
-            for k, at in over.items()
-        ]
-        member_keys = [k for g in self._groups for k in g.keys]
-        if len(set(member_keys)) != len(member_keys):
-            raise ValueError('A key may be a member key of one group only')
-        self._finalize: Stage | None = None
-
-    # -- structure, derived from the graph ---------------------------------------
-
-    def _stages(self, group: _Group) -> _Stages:
-        if group.stages is None:
-            probe = Stage(self._pipeline, outputs=tuple(group.at), inputs=group.keys)
-            cut = probe.dynamic_outputs
-            whole = Stage(self._pipeline, outputs=cut, inputs=group.keys)
-            if whole.frontier:
-                # Nodes downstream of the outer frontier are computed per contribution;
-                # what they read that is not static is the member frontier.
-                outer = Stage(self._pipeline, outputs=cut, inputs=whole.frontier)
-                dynamic = set(whole.dynamic)
-                member_frontier = tuple(k for k in outer.frontier if k in dynamic)
-            else:
-                member_frontier = cut
-            group.stages = _Stages(
-                cut=cut,
-                member=self._stage(outputs=member_frontier, inputs=group.keys),
-                contribute=self._stage(outputs=cut, inputs=member_frontier),
-            )
-        return group.stages
-
-    def _stage(self, *, outputs: Iterable[Key], inputs: Iterable[Key]) -> Stage:
-        return Stage(self._pipeline, outputs=outputs, inputs=inputs, scheduler=self._scheduler)
+        members = tuple(members)
+        outputs = tuple(outputs)
+        probe = Stage(pipeline, outputs=tuple(at), inputs=members)
+        self.cut = probe.dynamic_outputs
+        self._at = {k: at[k] for k in self.cut}
+        self.contribute_stage = Stage(
+            pipeline, outputs=self.cut, inputs=members, scheduler=scheduler
+        )
+        self.finalize_stage = (
+            Stage(pipeline, outputs=outputs, inputs=self.cut, scheduler=scheduler)
+            if outputs
+            else None
+        )
 
     @property
-    def cut(self) -> tuple[Key, ...]:
-        """The cut keys of all groups that depend on their members."""
-        return tuple(k for g in self._groups for k in self._stages(g).cut)
-
-    def _finalize_stage(self) -> Stage:
-        if self._finalize is None:
-            self._finalize = self._stage(outputs=self._outputs, inputs=self.cut)
-        return self._finalize
-
-    def _all_stages(self) -> list[Stage]:
-        stages = [self._stages(g) for g in self._groups]
-        return [*(s.member for s in stages), *(s.contribute for s in stages), self._finalize_stage()]
-
-    def _group_of(self, keys: Iterable[Key]) -> _Group:
-        keys = frozenset(keys)
-        for group in self._groups:
-            if frozenset(group.keys) == keys:
-                return group
-        raise KeyError(f'No group with member keys {tuple(keys)}')
-
-    def _group_of_cut(self, keys: Iterable[Key]) -> _Group:
-        keys = frozenset(keys)
-        for group in self._groups:
-            if frozenset(self._stages(group).cut) == keys:
-                return group
-        raise KeyError(f'No group with cut keys {tuple(keys)}')
-
-    # -- parameters and members --------------------------------------------------
-
-    def __setitem__(self, key: Key, value: Any) -> None:
-        """Set a parameter; what depends on it is rebuilt, what does not is kept."""
-        for group in self._groups:
-            if key in group.keys:
-                raise ValueError(f'{key} is a member key; use set_members')
-        self._pipeline[key] = value
-        for group in self._groups:
-            if group.stages is None:
-                continue
-            if key in group.stages.member.keys:
-                group.member_values.clear()
-            if key in group.stages.contribute.keys:
-                group.contributions.clear()
-                group.stages = None
-        if self._finalize is not None and key in self._finalize.keys:
-            self._finalize = None
-
-    def set_members(self, table: Any) -> None:
-        """Set the member table of the group whose member keys are the columns.
-
-        A row is a member; the row index is the member label.  Held values of a
-        member whose label and row are unchanged are kept, so that adding a member
-        costs one contribution.
-        """
-        rows = _rows(table)
-        if not rows:
-            raise ValueError('The member table is empty')
-        group = self._group_of(next(iter(rows.values())))
-        kept = {
-            label
-            for label, row in rows.items()
-            if label in group.members and _same_row(group.members[label], row)
-        }
-        group.members = rows
-        for held in (group.member_values, group.contributions):
-            for label in list(held):
-                if label not in kept:
-                    del held[label]
-
-    @property
-    def members(self) -> dict[tuple[Key, ...], dict[Hashable, dict[Key, Any]]]:
-        return {g.keys: dict(g.members) for g in self._groups}
-
-    def clear(self) -> None:
-        """Drop held member values and contributions."""
-        for group in self._groups:
-            group.member_values.clear()
-            group.contributions.clear()
-
-    # -- the three entry points --------------------------------------------------
+    def stages(self) -> tuple[Stage, ...]:
+        """The stages to warm together."""
+        if self.finalize_stage is None:
+            return (self.contribute_stage,)
+        return (self.contribute_stage, self.finalize_stage)
 
     def contribute(self, row: Mapping[Key, Any]) -> Contribution:
-        """The contribution of one member, given as a row of its group's table."""
-        stages = self._stages(self._group_of(row))
-        warm(stages.member, stages.contribute)
-        return stages.contribute(stages.member(dict(row)))
+        return self.contribute_stage(row)
 
     def combine(self, contributions: Sequence[Contribution]) -> Contribution:
-        """Combine contributions of one group with the group's per-key functions."""
-        group = self._group_of_cut(contributions[0])
-        return {k: group.at[k](*(c[k] for c in contributions)) for k in self._stages(group).cut}
+        return {k: f(*(c[k] for c in contributions)) for k, f in self._at.items()}
 
-    def finalize(self, contributions: Iterable[Contribution]) -> dict[Key, Any]:
-        """The outputs, from one combined contribution per group."""
-        merged: Contribution = {}
-        for contribution in contributions:
-            merged |= contribution
-        return self._finalize_stage()(merged)
+    def finalize(self, contribution: Contribution) -> dict[Key, Any]:
+        if self.finalize_stage is None:
+            raise ValueError('This fold has no outputs')
+        return self.finalize_stage(contribution)
 
-    # -- driver ------------------------------------------------------------------
-
-    def _contribution(self, group: _Group, label: Hashable) -> Contribution:
-        stages = self._stages(group)
-        values = group.member_values.get(label)
-        if values is None:
-            values = stages.member(group.members[label])
-            if self._keep_members:
-                group.member_values[label] = values
-        return stages.contribute(values)
-
-    def compute(self, key: Key | None = None) -> Any:
-        """Contribute what is not held, combine per group, finalize."""
-        empty = [g.keys for g in self._groups if not g.members]
-        if empty:
-            raise ValueError(f'No members set for {empty}')
-        # Static work shared between stages, such as a file every group reads, once.
-        warm(*self._all_stages())
-        combined = []
-        for group in self._groups:
-            for label in group.members:
-                if label not in group.contributions:
-                    group.contributions[label] = self._contribution(group, label)
-            combined.append(self.combine(list(group.contributions.values())))
-        results = self.finalize(combined)
-        return results if key is None else results[key]
-
-    def compute_members(self, key: Key) -> dict[Hashable, Any]:
-        """Per-member value of a key that depends on one group's member keys."""
-        ancestors = Stage(self._pipeline, outputs=(key,), inputs=()).keys
-        groups = [g for g in self._groups if ancestors & set(g.keys)]
-        if len(groups) != 1:
-            raise ValueError(f'{key} depends on {len(groups)} groups, expected one')
-        (group,) = groups
-        stage = self._stage(outputs=(key,), inputs=group.keys)
-        return {label: stage(row)[key] for label, row in group.members.items()}
+    def compute(self, table: Any) -> dict[Key, Any]:
+        """Contribute per row, combine, finalize; nothing is held."""
+        warm(*self.stages)
+        rows = _rows(table)
+        return self.finalize(self.combine([self.contribute(row) for row in rows.values()]))
 
 
-def _sinks(pipeline: sciline.Pipeline) -> tuple[Key, ...]:
-    graph = pipeline.underlying_graph
-    return tuple(n for n, d in graph.out_degree() if d == 0)
+def compute_members(
+    pipeline: sciline.Pipeline, *, members: Iterable[Key], key: Key, table: Any
+) -> dict[Hashable, Any]:
+    """Per-member value of a key that depends on the member keys."""
+    stage = Stage(pipeline, outputs=(key,), inputs=tuple(members))
+    return {label: stage(row)[key] for label, row in _rows(table).items()}
 
 
 def _rows(table: Any) -> dict[Hashable, dict[Key, Any]]:
-    if hasattr(table, 'iterrows'):  # pandas.DataFrame, columns are keys
+    """A dict of columns, labeled by position, or a DataFrame, labeled by its index."""
+    if hasattr(table, 'iterrows'):
         return {idx: dict(row.items()) for idx, row in table.iterrows()}
     keys = list(table)
     n = len(table[keys[0]])
     return {i: {k: table[k][i] for k in keys} for i in range(n)}
-
-
-def _same_row(a: Mapping[Key, Any], b: Mapping[Key, Any]) -> bool:
-    # Identity, or equality for plain hashable values such as filenames; arrays
-    # compare elementwise and are never considered equal here.
-    return all(
-        x is y or (isinstance(x, Hashable) and type(x) is type(y) and x == y)
-        for x, y in ((a[k], b[k]) for k in a)
-    )

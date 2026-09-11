@@ -1,9 +1,11 @@
 """Validate the Fold prototype on the esssans LoKI multi-run reduction.
 
 Reference: with_pixel_mask_filenames + with_sample_runs + with_background_runs
-(sciline map/reduce). Prototype: one Fold with two groups, sample runs and
-background runs, on the flat pipeline; the pixel masks are a list parameter read by
-one provider instead of a fold, since their cut sits inside the per-run work.
+(sciline map/reduce). Prototype: SansReduction, the object esssans would return
+instead of a map/reduced pipeline, holding the flat pipeline, one Fold per run type,
+their shared finalize stage, and the contributions; the pixel masks are a list
+parameter read by one provider instead of a fold, since their cut sits inside the
+per-run work.
 
 Run from this directory with
     python loki_validation.py
@@ -53,7 +55,7 @@ from ess.sans.types import (
 from ess.sans.workflow import _merge, merge_contributions
 from scipp.testing import assert_allclose, assert_identical
 
-from stage import Fold
+from stage import Fold, Stage, compute_members, warm
 
 OUTPUTS = (BackgroundSubtractedIofQ, BackgroundSubtractedIofQxy)
 
@@ -154,6 +156,57 @@ def show(label: str, t0: float) -> dict[str, int]:
     return dict(calls)
 
 
+class SansReduction:
+    """What esssans would return instead of a map/reduced pipeline.
+
+    Holds the pipeline, one fold per run type, the finalize stage over both cuts,
+    and the contributions by filename.  This is the only place the "set runs, set
+    parameters, compute" experience lives, and the only place that decides what a
+    parameter change keeps.
+    """
+
+    run_types = (SampleRun, BackgroundRun)
+
+    def __init__(self, pipeline: sciline.Pipeline) -> None:
+        self._pipeline = pipeline.copy()
+        self._runs: dict[type, list[str]] = {rt: [] for rt in self.run_types}
+        self._contributions: dict[type, dict[str, Any]] = {rt: {} for rt in self.run_types}
+        self._folds = {rt: self._fold(rt) for rt in self.run_types}
+        self._finalize = self._finalize_stage()
+
+    def _fold(self, run_type: type) -> Fold:
+        return Fold(self._pipeline, members=(Filename[run_type],), at=cut_for(run_type))
+
+    def _finalize_stage(self) -> Stage:
+        cuts = tuple(k for fold in self._folds.values() for k in fold.cut)
+        return Stage(self._pipeline, outputs=OUTPUTS, inputs=cuts)
+
+    def __setitem__(self, key: Any, value: Any) -> None:
+        self._pipeline[key] = value
+        for run_type, fold in self._folds.items():
+            if key in fold.contribute_stage.keys:
+                self._folds[run_type] = self._fold(run_type)
+                self._contributions[run_type].clear()
+        if key in self._finalize.keys:
+            self._finalize = self._finalize_stage()
+
+    def set_runs(self, run_type: type, runs: list[str]) -> None:
+        self._runs[run_type] = list(runs)
+        held = self._contributions[run_type]
+        self._contributions[run_type] = {f: c for f, c in held.items() if f in runs}
+
+    def compute(self) -> dict[Any, Any]:
+        warm(*(fold.contribute_stage for fold in self._folds.values()), self._finalize)
+        combined: dict[Any, Any] = {}
+        for run_type, fold in self._folds.items():
+            held = self._contributions[run_type]
+            for run in self._runs[run_type]:
+                if run not in held:
+                    held[run] = fold.contribute({Filename[run_type]: run})
+            combined |= fold.combine(list(held.values()))
+        return self._finalize(combined)
+
+
 def main() -> None:
     masks = loki.data.loki_tutorial_mask_filenames()
     print(f'{len(masks)} mask file(s)')
@@ -186,30 +239,22 @@ def main() -> None:
     ref_calls = show('reference', t0)
     calls.clear()
 
-    # --- Prototype: one fold, two groups ---------------------------------------
+    # --- Prototype: the package object over two folds ----------------------------
     flat = base.copy()
     flat.insert(read_mask_files)
     flat.insert(detector_masks)
     flat[PixelMaskFilenames] = tuple(masks)
-    # Filename[SampleRun] stays set on the pipeline: it is a member key of the
-    # sample group, and an ordinary parameter for the background group, whose
+    # Filename[SampleRun] stays set on the pipeline: it is the member key of the
+    # sample fold, and an ordinary parameter for the background fold, whose
     # DetectorMasks read the detector IDs of that one run (as in the reference).
     t0 = time.perf_counter()
-    fold = Fold(
-        flat,
-        over={
-            Filename[SampleRun]: cut_for(SampleRun),
-            Filename[BackgroundRun]: cut_for(BackgroundRun),
-        },
-        outputs=OUTPUTS,
-        keep_members=True,
-    )
-    fold.set_members({Filename[SampleRun]: sample_runs[:1]})
-    fold.set_members({Filename[BackgroundRun]: background_runs})
-    fold.compute()
+    reduction = SansReduction(flat)
+    reduction.set_runs(SampleRun, sample_runs[:1])
+    reduction.set_runs(BackgroundRun, background_runs)
+    reduction.compute()
     show('one sample run', t0)
-    fold.set_members({Filename[SampleRun]: sample_runs})
-    results = fold.compute()
+    reduction.set_runs(SampleRun, sample_runs)
+    results = reduction.compute()
     t_proto = time.perf_counter() - t0
     proto_calls = show('second sample run added', t0)
 
@@ -220,20 +265,20 @@ def main() -> None:
     # --- Parameter changes ------------------------------------------------------
     calls.clear()
     t0 = time.perf_counter()
-    fold[QBins] = sc.linspace('Q', start=0.01, stop=0.3, num=51, unit='1/angstrom')
-    fold.compute()
-    show('QBins changed (before the cut; members held)', t0)
+    reduction[QBins] = sc.linspace('Q', start=0.01, stop=0.3, num=51, unit='1/angstrom')
+    reduction.compute()
+    show('QBins changed (before the cut)', t0)
     calls.clear()
     t0 = time.perf_counter()
-    fold[UncertaintyBroadcastMode] = UncertaintyBroadcastMode.drop
-    fold.compute()
+    reduction[UncertaintyBroadcastMode] = UncertaintyBroadcastMode.drop
+    reduction.compute()
     show('UncertaintyBroadcastMode changed (both sides of the cut)', t0)
 
     # --- Per-member intermediate ----------------------------------------------
     key = NormalizedQ[SampleRun, Numerator]
-    fold[QBins] = base.compute(QBins)
-    fold[UncertaintyBroadcastMode] = UncertaintyBroadcastMode.upper_bound
-    members = fold.compute_members(key)
+    members = compute_members(
+        flat, members=(Filename[SampleRun],), key=key, table={Filename[SampleRun]: sample_runs}
+    )
     single = sans.with_pixel_mask_filenames(base, masks)
     print('per-member NormalizedQ[SampleRun, Numerator] vs single-run compute:')
     for (m, value), filename in zip(members.items(), sample_runs, strict=True):
@@ -244,15 +289,18 @@ def main() -> None:
     for (m, value), (_, expected) in zip(members.items(), mapped.items(), strict=True):
         compare(f'member {m}', value, expected)
 
-    # --- Three-entry-point form --------------------------------------------------
+    # --- Three-entry-point form, as a framework would call it -------------------
     calls.clear()
-    sample = fold.contribute({Filename[SampleRun]: sample_runs[0]})
+    folds = {rt: Fold(flat, members=(Filename[rt],), at=cut_for(rt)) for rt in (SampleRun, BackgroundRun)}
+    finalize = Stage(flat, outputs=OUTPUTS, inputs=folds[SampleRun].cut + folds[BackgroundRun].cut)
+    warm(*(fold.contribute_stage for fold in folds.values()), finalize)
+    sample = folds[SampleRun].contribute({Filename[SampleRun]: sample_runs[0]})
     for run in sample_runs[1:]:
-        sample = fold.combine([sample, fold.contribute({Filename[SampleRun]: run})])
-    background = fold.combine(
-        [fold.contribute({Filename[BackgroundRun]: run}) for run in background_runs]
+        sample = folds[SampleRun].combine([sample, folds[SampleRun].contribute({Filename[SampleRun]: run})])
+    background = folds[BackgroundRun].combine(
+        [folds[BackgroundRun].contribute({Filename[BackgroundRun]: run}) for run in background_runs]
     )
-    staged = fold.finalize([sample, background])
+    staged = finalize({**sample, **background})
     print(f'three-entry-point form (calls {calls}):')
     for key in OUTPUTS:
         compare(key.__name__, staged[key], results[key])
