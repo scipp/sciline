@@ -392,7 +392,7 @@ Result = NewType('Result', float)
 
 
 def load(f: File[RunType]) -> Data[RunType]:
-    return Data[RunType](float(len(f)))  # type: ignore[return-value]
+    return Data[RunType](float(len(f)))
 
 
 def subtract(s: Data[SampleRun], b: Data[BackgroundRun]) -> Result:

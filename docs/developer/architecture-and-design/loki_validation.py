@@ -112,7 +112,7 @@ def counted_apply_pixel_masks(
 
 def make_workflow() -> sciline.Pipeline:
     # Same as the `larmor_workflow` fixture in tests/loki/conftest.py, no_masks=False.
-    wf = loki.LokiAtLarmorWorkflow()
+    wf: sciline.Pipeline = loki.LokiAtLarmorWorkflow()
     wf[NeXusDetectorName] = 'larmor_detector'
     wf[Filename[SampleRun]] = loki.data.loki_tutorial_sample_run_60339()
     wf[Filename[BackgroundRun]] = loki.data.loki_tutorial_background_run_60393()
