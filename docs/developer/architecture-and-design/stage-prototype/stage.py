@@ -10,44 +10,48 @@ Stage
     or an intermediate node; in both cases its own providers and ancestors are cut
     off.  An output that is also an input is passed through.
 
-Connectors
-    Objects between stages with ``push``, ``value``, and ``clear``.  The type of the
-    connector states why the graph is cut there: a reducer where members are
-    combined, a ``Forwarder`` where a value is held between changes, such as the
-    context of ``StreamProcessor``.  The accumulators of ``ess.reduce.streaming``
-    are reducers in this sense.
+Accumulator
+    The protocol for what sits between stages: ``push`` a value, read the combined
+    ``value``.  The accumulators of ``ess.reduce.streaming`` satisfy it.  ``Buffered``
+    adapts an n-ary function: it holds what was pushed and applies the function on
+    ``value``.  Whether a combine buffers or runs incrementally is the accumulator's
+    choice, not the aggregation's.
 
-Fold
-    The table-fold shape over one flat pipeline: member keys, cut keys with an n-ary
-    combine per key, outputs.  Two stages, ``contribute`` (member keys to cut) and
-    ``finalize`` (cut to outputs), and the combine functions between them.  A fold
-    holds nothing but its stages; parameters are set on the pipeline before the fold
-    is built, and whoever loops over members owns the contributions.  ``compute``
-    is that loop for a table.  The three entry points can run in different
+Aggregation
+    The table-fold shape over one flat pipeline: member keys, accumulation keys with
+    an accumulator per key, outputs.  Two stages, ``contribute`` (member keys to
+    accumulation keys) and ``finalize`` (accumulation keys to outputs), with the
+    accumulators between them.  An aggregation holds nothing but its stages;
+    parameters are set on the pipeline before it is built, and whoever loops over
+    members owns the contributions.  ``compute`` is that loop for a table, pushing
+    each contribution as it is made.  The three entry points can run in different
     processes with the contribution serialized between them.
 
 Nothing here adds nodes to the author's graph or hides a parameter: every object is
-derived from the flat pipeline at the time it is built.  ``Stage`` and ``Fold`` are
-mechanism and belong in sciline; the connectors are policy and belong next to
-``StreamProcessor``.
-Where several folds share a pipeline and a finalize, as sample and background runs
-in esssans do, the package's own object holds the pipeline, the folds, the shared
-finalize stage, and the contributions; see ``loki_validation.py``.
+derived from the flat pipeline at the time it is built.  ``Stage``, ``Accumulator``,
+``Buffered``, and ``Aggregation`` belong in sciline.  ``Forwarder``, which holds the
+latest value pushed, is the context connector of ``StreamProcessor`` and belongs in
+ess.reduce.  Where several aggregations share a pipeline and a finalize, as sample
+and background runs in esssans do, the package's own object holds the pipeline, the
+aggregations, the shared finalize stage, and the contributions; see
+``loki_validation.py``.
 """
 
 from __future__ import annotations
 
 from collections.abc import Callable, Hashable, Iterable, Mapping, Sequence
-from typing import Any
+from typing import Any, Generic, Protocol, TypeVar
 
 import networkx as nx
+
 import sciline
-from sciline._provider import ArgSpec, Provider
+from sciline._provider import Provider
 from sciline.handler import HandleAsComputeTimeException
 from sciline.scheduler import NaiveScheduler, Scheduler
 
 Key = Hashable
 Graph = dict[Key, Provider]
+T = TypeVar('T')
 
 
 def _task_graph(pipeline: sciline.Pipeline, outputs: Sequence[Key]) -> Graph:
@@ -83,7 +87,9 @@ class Stage:
         deps = _dependency_graph(graph)
         missing = [k for k in self._inputs if k not in deps]
         if missing:
-            raise ValueError(f'Inputs {missing} are not needed by outputs {self._outputs}')
+            raise ValueError(
+                f'Inputs {missing} are not needed by outputs {self._outputs}'
+            )
         dynamic: set[Key] = set(self._inputs)
         for key in self._inputs:
             dynamic |= nx.descendants(deps, key)
@@ -161,15 +167,7 @@ def warm(*stages: Stage) -> None:
 
 
 def _compute(graph: Graph, keys: Sequence[Key], scheduler: Scheduler) -> dict[Key, Any]:
-    # One sink over all requested keys, so that a key consumed by another requested
-    # key is not released by the scheduler before it is returned.
-    sink = object()
-    graph = dict(graph)
-    graph[sink] = Provider(
-        func=lambda *args: args, arg_spec=ArgSpec.from_args(*keys), kind='function'
-    )
-    (values,) = scheduler.get(graph, [sink])
-    return dict(zip(keys, values, strict=True))
+    return dict(zip(keys, scheduler.get(graph, list(keys)), strict=True))
 
 
 # --- Connectors -----------------------------------------------------------------
@@ -197,20 +195,63 @@ class Forwarder:
         self._set = False
 
 
-# --- Fold -----------------------------------------------------------------------
+# --- Accumulators ---------------------------------------------------------------
 
-Combine = Callable[..., Any]
+
+class Accumulator(Protocol[T]):
+    """What sits between stages: values are pushed, the combined value is read."""
+
+    def push(self, value: T) -> None: ...
+
+    @property
+    def value(self) -> T: ...
+
+
+class Buffered(Generic[T]):
+    """Factory for an accumulator that applies an n-ary function to all pushed values.
+
+    Holds every pushed value until ``value`` is read: one pass for the function, the
+    whole input in memory.  Right for concatenation, where no incremental form is
+    cheaper; wrong for a large dense sum, which wants a running total.
+    """
+
+    def __init__(self, func: Callable[..., T]) -> None:
+        self._func = func
+
+    def __call__(self) -> Accumulator[T]:
+        return _Buffer(self._func)
+
+
+class _Buffer(Generic[T]):
+    def __init__(self, func: Callable[..., T]) -> None:
+        self._func = func
+        self._values: list[T] = []
+
+    def push(self, value: T) -> None:
+        self._values.append(value)
+
+    @property
+    def value(self) -> T:
+        if not self._values:
+            raise ValueError('Nothing has been pushed')
+        return self._func(*self._values)
+
+
+# --- Aggregation ----------------------------------------------------------------
+
 Contribution = dict[Key, Any]
-"""Values at the cut keys, per member or combined."""
+"""Values at the accumulation keys, per member or combined."""
+Table = Mapping[Hashable, Mapping[Key, Any]]
+"""Rows of member-key values, by label."""
 
 
-class Fold:
+class Aggregation:
     def __init__(
         self,
         pipeline: sciline.Pipeline,
         *,
         members: Iterable[Key],
-        at: Mapping[Key, Combine],
+        accumulators: Mapping[Key, Callable[[], Accumulator[Any]]],
         outputs: Iterable[Key] = (),
         scheduler: Scheduler | None = None,
     ) -> None:
@@ -218,27 +259,38 @@ class Fold:
         Parameters
         ----------
         pipeline:
-            The flat pipeline with its parameters set; the fold is a snapshot of it.
+            The flat pipeline with its parameters set; the aggregation is a snapshot
+            of it.
         members:
             The keys supplied per member, the columns of a member table.
-        at:
-            The cut keys with their n-ary combine function.  A cut key that does not
-            depend on the members is not folded; finalize computes it from the fixed
-            part of the graph.
+        accumulators:
+            The accumulation keys, each with a factory for its accumulator.  A key
+            that does not depend on the members is not accumulated; finalize computes
+            it from the fixed part of the graph.  ``accumulation_keys`` lists the
+            keys that are.
         outputs:
-            Keys computed by finalize from the cut.  Omit for a fold used only for
-            its contributions, such as one of several sharing a finalize stage.
+            Keys computed by finalize from the accumulation keys.  Omit for an
+            aggregation used only for its contributions, such as one of several
+            sharing a finalize stage.
         """
         members = tuple(members)
         outputs = tuple(outputs)
-        probe = Stage(pipeline, outputs=tuple(at), inputs=members)
-        self.cut = probe.dynamic_outputs
-        self._at = {k: at[k] for k in self.cut}
+        probe = Stage(pipeline, outputs=tuple(accumulators), inputs=members)
+        self.accumulation_keys = probe.dynamic_outputs
+        self._accumulators = {k: accumulators[k] for k in self.accumulation_keys}
         self.contribute_stage = Stage(
-            pipeline, outputs=self.cut, inputs=members, scheduler=scheduler
+            pipeline,
+            outputs=self.accumulation_keys,
+            inputs=members,
+            scheduler=scheduler,
         )
         self.finalize_stage = (
-            Stage(pipeline, outputs=outputs, inputs=self.cut, scheduler=scheduler)
+            Stage(
+                pipeline,
+                outputs=outputs,
+                inputs=self.accumulation_keys,
+                scheduler=scheduler,
+            )
             if outputs
             else None
         )
@@ -253,33 +305,36 @@ class Fold:
     def contribute(self, row: Mapping[Key, Any]) -> Contribution:
         return self.contribute_stage(row)
 
-    def combine(self, contributions: Sequence[Contribution]) -> Contribution:
-        return {k: f(*(c[k] for c in contributions)) for k, f in self._at.items()}
+    def accumulators(self) -> dict[Key, Accumulator[Any]]:
+        """Fresh accumulators, one per accumulation key, for a caller that pushes."""
+        return {k: make() for k, make in self._accumulators.items()}
+
+    def combine(self, contributions: Iterable[Contribution]) -> Contribution:
+        """Push each contribution into fresh accumulators and read them."""
+        acc = self.accumulators()
+        for contribution in contributions:
+            for key, a in acc.items():
+                a.push(contribution[key])
+        return {key: a.value for key, a in acc.items()}
 
     def finalize(self, contribution: Contribution) -> dict[Key, Any]:
         if self.finalize_stage is None:
-            raise ValueError('This fold has no outputs')
+            raise ValueError('This aggregation has no outputs')
         return self.finalize_stage(contribution)
 
-    def compute(self, table: Any) -> dict[Key, Any]:
-        """Contribute per row, combine, finalize; nothing is held."""
+    def compute(self, table: Table) -> dict[Key, Any]:
+        """Contribute per row, pushing each as it is made; combine; finalize."""
+        if not table:
+            raise ValueError('The member table is empty')
         warm(*self.stages)
-        rows = _rows(table)
-        return self.finalize(self.combine([self.contribute(row) for row in rows.values()]))
+        return self.finalize(
+            self.combine(self.contribute(row) for row in table.values())
+        )
 
 
 def compute_members(
-    pipeline: sciline.Pipeline, *, members: Iterable[Key], key: Key, table: Any
+    pipeline: sciline.Pipeline, *, members: Iterable[Key], key: Key, table: Table
 ) -> dict[Hashable, Any]:
     """Per-member value of a key that depends on the member keys."""
     stage = Stage(pipeline, outputs=(key,), inputs=tuple(members))
-    return {label: stage(row)[key] for label, row in _rows(table).items()}
-
-
-def _rows(table: Any) -> dict[Hashable, dict[Key, Any]]:
-    """A dict of columns, labeled by position, or a DataFrame, labeled by its index."""
-    if hasattr(table, 'iterrows'):
-        return {idx: dict(row.items()) for idx, row in table.iterrows()}
-    keys = list(table)
-    n = len(table[keys[0]])
-    return {i: {k: table[k][i] for k in keys} for i in range(n)}
+    return {label: stage(row)[key] for label, row in table.items()}

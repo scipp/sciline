@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from typing import NewType
 
-import sciline
-
 from stage import Forwarder, Stage
+
+import sciline
 
 Events = NewType('Events', list[float])  # dynamic: one chunk at a time
 Angle = NewType('Angle', float)  # context: changes occasionally
@@ -40,21 +40,32 @@ class Summed:
         self.value: Histogram = Histogram({})
 
     def push(self, hist: Histogram) -> None:
-        self.value = Histogram({k: self.value.get(k, 0) + hist.get(k, 0) for k in self.value | hist})
+        self.value = Histogram(
+            {k: self.value.get(k, 0) + hist.get(k, 0) for k in self.value | hist}
+        )
 
 
 def test_stream_processor_shape():
     pipeline = sciline.Pipeline([geometry, histogram, result], params={Norm: 2.0})
-    dynamic, context, accumulated, targets = (Events,), (Angle,), (Histogram,), (Result,)
+    dynamic, context, accumulated, targets = (
+        (Events,),
+        (Angle,),
+        (Histogram,),
+        (Result,),
+    )
 
     # Three stages, as StreamProcessor builds three sub-workflows today. The
     # context frontier, the context-dependent nodes just above the chunk-dependent
     # ones, is derived from the stages rather than declared.
     per_chunk = Stage(pipeline, outputs=accumulated, inputs=dynamic)
-    context_frontier = Stage(pipeline, outputs=per_chunk.frontier, inputs=context).dynamic_outputs
+    context_frontier = Stage(
+        pipeline, outputs=per_chunk.frontier, inputs=context
+    ).dynamic_outputs
     assert context_frontier == (Geometry,)
     context_stage = Stage(pipeline, outputs=context_frontier, inputs=context)
-    chunk_stage = Stage(pipeline, outputs=accumulated, inputs=dynamic + context_frontier)
+    chunk_stage = Stage(
+        pipeline, outputs=accumulated, inputs=dynamic + context_frontier
+    )
     finalize_stage = Stage(pipeline, outputs=targets, inputs=accumulated)
 
     # The connectors say why each cut is there: the context is held between

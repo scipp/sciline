@@ -1,11 +1,11 @@
-"""Validate the Fold prototype on the esssans LoKI multi-run reduction.
+"""Validate the Aggregation prototype on the esssans LoKI multi-run reduction.
 
 Reference: with_pixel_mask_filenames + with_sample_runs + with_background_runs
 (sciline map/reduce). Prototype: SansReduction, the object esssans would return
-instead of a map/reduced pipeline, holding the flat pipeline, one Fold per run type,
-their shared finalize stage, and the contributions; the pixel masks are a list
-parameter read by one provider instead of a fold, since their cut sits inside the
-per-run work.
+instead of a map/reduced pipeline, holding the flat pipeline, one Aggregation per
+run type, their shared finalize stage, and the contributions; the pixel masks are a
+list parameter read by one provider instead of an aggregation, since the point at
+which they would be combined sits inside the per-run work.
 
 Run from this directory with
     python loki_validation.py
@@ -17,7 +17,6 @@ import time
 from typing import Any, NewType
 
 import ess.loki.data  # noqa: F401
-import sciline
 import scipp as sc
 from ess import loki, sans
 from ess.sans.io import read_xml_detector_masking
@@ -54,8 +53,9 @@ from ess.sans.types import (
 )
 from ess.sans.workflow import _merge, merge_contributions
 from scipp.testing import assert_allclose, assert_identical
+from stage import Aggregation, Buffered, Stage, compute_members, warm
 
-from stage import Fold, Stage, compute_members, warm
+import sciline
 
 OUTPUTS = (BackgroundSubtractedIofQ, BackgroundSubtractedIofQxy)
 
@@ -93,7 +93,10 @@ def read_mask_files(filenames: PixelMaskFilenames) -> MaskedDetectorIDsPerFile:
 
 def detector_masks(ids: DetectorIDs, masked: MaskedDetectorIDsPerFile) -> DetectorMasks:
     return _merge(
-        *(counted_to_detector_mask(ids, PixelMaskFilename(p), m) for p, m in masked.items())
+        *(
+            counted_to_detector_mask(ids, PixelMaskFilename(p), m)
+            for p, m in masked.items()
+        )
     )
 
 
@@ -143,9 +146,9 @@ def compare(name: str, a: Any, b: Any) -> None:
         print(f'  {name}: allclose (rtol 1e-12) but not identical')
 
 
-def cut_for(run_type: type) -> dict[Any, Any]:
+def accumulators_for(run_type: type) -> dict[Any, Any]:
     return {
-        qtype[run_type, part]: merge_contributions
+        qtype[run_type, part]: Buffered(merge_contributions)
         for part in (Numerator, Denominator)
         for qtype in (NormalizedQ, NormalizedQxQy)
     }
@@ -159,10 +162,10 @@ def show(label: str, t0: float) -> dict[str, int]:
 class SansReduction:
     """What esssans would return instead of a map/reduced pipeline.
 
-    Holds the pipeline, one fold per run type, the finalize stage over both cuts,
-    and the contributions by filename.  This is the only place the "set runs, set
-    parameters, compute" experience lives, and the only place that decides what a
-    parameter change keeps.
+    Holds the pipeline, one aggregation per run type, the finalize stage over the
+    accumulation keys of both, and the contributions by filename.  This is the only
+    place the "set runs, set parameters, compute" experience lives, and the only
+    place that decides what a parameter change keeps.
     """
 
     run_types = (SampleRun, BackgroundRun)
@@ -170,22 +173,30 @@ class SansReduction:
     def __init__(self, pipeline: sciline.Pipeline) -> None:
         self._pipeline = pipeline.copy()
         self._runs: dict[type, list[str]] = {rt: [] for rt in self.run_types}
-        self._contributions: dict[type, dict[str, Any]] = {rt: {} for rt in self.run_types}
-        self._folds = {rt: self._fold(rt) for rt in self.run_types}
+        self._contributions: dict[type, dict[str, Any]] = {
+            rt: {} for rt in self.run_types
+        }
+        self._aggregations = {rt: self._aggregation(rt) for rt in self.run_types}
         self._finalize = self._finalize_stage()
 
-    def _fold(self, run_type: type) -> Fold:
-        return Fold(self._pipeline, members=(Filename[run_type],), at=cut_for(run_type))
+    def _aggregation(self, run_type: type) -> Aggregation:
+        return Aggregation(
+            self._pipeline,
+            members=(Filename[run_type],),
+            accumulators=accumulators_for(run_type),
+        )
 
     def _finalize_stage(self) -> Stage:
-        cuts = tuple(k for fold in self._folds.values() for k in fold.cut)
-        return Stage(self._pipeline, outputs=OUTPUTS, inputs=cuts)
+        keys = tuple(
+            k for agg in self._aggregations.values() for k in agg.accumulation_keys
+        )
+        return Stage(self._pipeline, outputs=OUTPUTS, inputs=keys)
 
     def __setitem__(self, key: Any, value: Any) -> None:
         self._pipeline[key] = value
-        for run_type, fold in self._folds.items():
-            if key in fold.contribute_stage.keys:
-                self._folds[run_type] = self._fold(run_type)
+        for run_type, agg in self._aggregations.items():
+            if key in agg.contribute_stage.keys:
+                self._aggregations[run_type] = self._aggregation(run_type)
                 self._contributions[run_type].clear()
         if key in self._finalize.keys:
             self._finalize = self._finalize_stage()
@@ -196,14 +207,17 @@ class SansReduction:
         self._contributions[run_type] = {f: c for f, c in held.items() if f in runs}
 
     def compute(self) -> dict[Any, Any]:
-        warm(*(fold.contribute_stage for fold in self._folds.values()), self._finalize)
+        warm(
+            *(agg.contribute_stage for agg in self._aggregations.values()),
+            self._finalize,
+        )
         combined: dict[Any, Any] = {}
-        for run_type, fold in self._folds.items():
+        for run_type, agg in self._aggregations.items():
             held = self._contributions[run_type]
             for run in self._runs[run_type]:
                 if run not in held:
-                    held[run] = fold.contribute({Filename[run_type]: run})
-            combined |= fold.combine(list(held.values()))
+                    held[run] = agg.contribute({Filename[run_type]: run})
+            combined |= agg.combine(held.values())
         return self._finalize(combined)
 
 
@@ -239,14 +253,14 @@ def main() -> None:
     ref_calls = show('reference', t0)
     calls.clear()
 
-    # --- Prototype: the package object over two folds ----------------------------
+    # --- Prototype: the package object over two aggregations --------------------
     flat = base.copy()
     flat.insert(read_mask_files)
     flat.insert(detector_masks)
     flat[PixelMaskFilenames] = tuple(masks)
     # Filename[SampleRun] stays set on the pipeline: it is the member key of the
-    # sample fold, and an ordinary parameter for the background fold, whose
-    # DetectorMasks read the detector IDs of that one run (as in the reference).
+    # sample aggregation, and an ordinary parameter for the background aggregation,
+    # whose DetectorMasks read the detector IDs of that one run (as in the reference).
     t0 = time.perf_counter()
     reduction = SansReduction(flat)
     reduction.set_runs(SampleRun, sample_runs[:1])
@@ -267,17 +281,20 @@ def main() -> None:
     t0 = time.perf_counter()
     reduction[QBins] = sc.linspace('Q', start=0.01, stop=0.3, num=51, unit='1/angstrom')
     reduction.compute()
-    show('QBins changed (before the cut)', t0)
+    show('QBins changed (contribute side)', t0)
     calls.clear()
     t0 = time.perf_counter()
     reduction[UncertaintyBroadcastMode] = UncertaintyBroadcastMode.drop
     reduction.compute()
-    show('UncertaintyBroadcastMode changed (both sides of the cut)', t0)
+    show('UncertaintyBroadcastMode changed (both stages)', t0)
 
     # --- Per-member intermediate ----------------------------------------------
     key = NormalizedQ[SampleRun, Numerator]
     members = compute_members(
-        flat, members=(Filename[SampleRun],), key=key, table={Filename[SampleRun]: sample_runs}
+        flat,
+        members=(Filename[SampleRun],),
+        key=key,
+        table={i: {Filename[SampleRun]: f} for i, f in enumerate(sample_runs)},
     )
     single = sans.with_pixel_mask_filenames(base, masks)
     print('per-member NormalizedQ[SampleRun, Numerator] vs single-run compute:')
@@ -291,14 +308,27 @@ def main() -> None:
 
     # --- Three-entry-point form, as a framework would call it -------------------
     calls.clear()
-    folds = {rt: Fold(flat, members=(Filename[rt],), at=cut_for(rt)) for rt in (SampleRun, BackgroundRun)}
-    finalize = Stage(flat, outputs=OUTPUTS, inputs=folds[SampleRun].cut + folds[BackgroundRun].cut)
-    warm(*(fold.contribute_stage for fold in folds.values()), finalize)
-    sample = folds[SampleRun].contribute({Filename[SampleRun]: sample_runs[0]})
+    aggs = {
+        rt: Aggregation(
+            flat, members=(Filename[rt],), accumulators=accumulators_for(rt)
+        )
+        for rt in (SampleRun, BackgroundRun)
+    }
+    finalize = Stage(
+        flat,
+        outputs=OUTPUTS,
+        inputs=aggs[SampleRun].accumulation_keys
+        + aggs[BackgroundRun].accumulation_keys,
+    )
+    warm(*(agg.contribute_stage for agg in aggs.values()), finalize)
+    sample = aggs[SampleRun].contribute({Filename[SampleRun]: sample_runs[0]})
     for run in sample_runs[1:]:
-        sample = folds[SampleRun].combine([sample, folds[SampleRun].contribute({Filename[SampleRun]: run})])
-    background = folds[BackgroundRun].combine(
-        [folds[BackgroundRun].contribute({Filename[BackgroundRun]: run}) for run in background_runs]
+        sample = aggs[SampleRun].combine(
+            [sample, aggs[SampleRun].contribute({Filename[SampleRun]: run})]
+        )
+    background = aggs[BackgroundRun].combine(
+        aggs[BackgroundRun].contribute({Filename[BackgroundRun]: run})
+        for run in background_runs
     )
     staged = finalize({**sample, **background})
     print(f'three-entry-point form (calls {calls}):')

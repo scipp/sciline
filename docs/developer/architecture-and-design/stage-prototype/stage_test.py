@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from typing import NewType, TypeVar
+from typing import Any, NewType, TypeVar
 
 import pandas as pd
 import pytest
-import sciline
+from stage import Aggregation, Buffered, Stage, compute_members, warm
 
-from stage import Fold, Stage, compute_members, warm
+import sciline
 
 # --- A small "reduction" graph, shaped like esssans -----------------------------
 
@@ -19,7 +19,7 @@ Bins = NewType('Bins', int)
 Numerator = NewType('Numerator', list[float])  # per file, additive by concat
 Denominator = NewType('Denominator', float)  # per file, additive by sum
 IofQ = NewType('IofQ', float)
-Scale = NewType('Scale', float)  # cheap parameter, after the cut
+Scale = NewType('Scale', float)  # cheap parameter, after the accumulation keys
 
 
 class Calls:
@@ -81,7 +81,11 @@ def add(*parts: float) -> float:
     return sum(parts)
 
 
-CUT = {Numerator: concat, Denominator: add}
+ACCUMULATORS = {Numerator: Buffered(concat), Denominator: Buffered(add)}
+
+
+def files_table(files: list[str]) -> dict[int, dict[Any, str]]:
+    return {i: {Filename: f} for i, f in enumerate(files)}
 
 
 def reference(pipeline: sciline.Pipeline, files: list[str], scale: float = 1.0):
@@ -164,129 +168,272 @@ def test_warm_computes_shared_static_work_once(pipeline, calls):
     assert calls['calibration'] == 1
 
 
-# --- Fold -----------------------------------------------------------------------
+# --- Accumulators ---------------------------------------------------------------
 
 
-def test_fold_matches_manual_reduction(pipeline, calls):
+def test_buffered_makes_fresh_accumulators_that_apply_func_in_push_order():
+    def join(*parts: str) -> str:
+        return ''.join(parts)
+
+    make = Buffered(join)
+    a, b = make(), make()
+    a.push('x')
+    a.push('y')
+    b.push('z')
+    assert a.value == 'xy'
+    assert b.value == 'z'
+
+
+def test_buffered_accumulator_without_pushes_has_no_value():
+    acc = Buffered(add)()
+    with pytest.raises(ValueError, match='Nothing has been pushed'):
+        _ = acc.value
+
+
+class RunningSum:
+    """An accumulator holding a running total, never the pushed values."""
+
+    def __init__(self) -> None:
+        self.value = 0.0
+
+    def push(self, value: float) -> None:
+        self.value += value
+
+
+class RunningConcat:
+    def __init__(self) -> None:
+        self.value: list[float] = []
+
+    def push(self, value: list[float]) -> None:
+        self.value = self.value + value
+
+
+def test_custom_accumulator_class_as_factory(pipeline):
+    files = ['ab', 'cd', 'efg']
+    agg = Aggregation(
+        pipeline,
+        members=(Filename,),
+        accumulators={Numerator: RunningConcat, Denominator: RunningSum},
+        outputs=(IofQ,),
+    )
+    expected = reference(pipeline, files)
+    assert agg.compute(files_table(files))[IofQ] == pytest.approx(expected)
+
+
+Value = NewType('Value', int)
+Total = NewType('Total', int)
+
+
+def test_compute_pushes_each_contribution_before_the_next_is_made():
+    log: list[str] = []
+
+    def contribute(value: Value) -> Total:
+        log.append('contribute')
+        return Total(value)
+
+    class LoggingSum:
+        def __init__(self) -> None:
+            self.value = 0
+
+        def push(self, value: int) -> None:
+            log.append('push')
+            self.value += value
+
+    pipeline = sciline.Pipeline([contribute])
+    agg = Aggregation(
+        pipeline, members=(Value,), accumulators={Total: LoggingSum}, outputs=(Total,)
+    )
+    table = {i: {Value: v} for i, v in enumerate([1, 2, 3])}
+    assert agg.compute(table)[Total] == 6
+    assert log == ['contribute', 'push'] * 3
+
+
+# --- Aggregation ----------------------------------------------------------------
+
+
+def test_aggregation_matches_manual_reduction(pipeline, calls):
     files = ['ab', 'cd', 'efg']
     expected = reference(pipeline, files)
     calls.reset()
-    fold = Fold(pipeline, members=(Filename,), at=CUT, outputs=(IofQ,))
-    assert fold.cut == (Numerator, Denominator)
-    assert fold.compute({Filename: files})[IofQ] == pytest.approx(expected)
+    agg = Aggregation(
+        pipeline, members=(Filename,), accumulators=ACCUMULATORS, outputs=(IofQ,)
+    )
+    assert agg.accumulation_keys == (Numerator, Denominator)
+    assert agg.compute(files_table(files))[IofQ] == pytest.approx(expected)
     assert calls['load'] == len(files)
     assert calls['calibration'] == 1
     assert calls['normalize'] == 1
 
 
-def test_fold_from_dataframe_with_two_columns(pipeline):
-    table = pd.DataFrame({Filename: ['ab', 'cd'], Mask: ['m', 'mmm']}).rename_axis('run')
-    fold = Fold(pipeline, members=(Filename, Mask), at=CUT, outputs=(IofQ,))
+def test_aggregation_over_table_with_two_columns(pipeline):
+    table = {
+        'run1': {Filename: 'ab', Mask: 'm'},
+        'run2': {Filename: 'cd', Mask: 'mmm'},
+    }
+    agg = Aggregation(
+        pipeline, members=(Filename, Mask), accumulators=ACCUMULATORS, outputs=(IofQ,)
+    )
     num = [97.0, 98.0, 99.0 * 3, 100.0 * 3]
     den = (97.0 + 98.0) + (99.0 + 100.0) * 3
-    assert fold.compute(table)[IofQ] == pytest.approx(sum(num) / den)
+    assert agg.compute(table)[IofQ] == pytest.approx(sum(num) / den)
 
 
-def test_cut_key_independent_of_members_is_not_folded(pipeline):
+def test_key_independent_of_members_is_not_accumulated(pipeline):
     # essreflectometry wraps each reduce in try/except for this case.
-    fold = Fold(pipeline, members=(Filename,), at={**CUT, Calibration: add}, outputs=(IofQ,))
-    assert fold.cut == (Numerator, Denominator)
+    agg = Aggregation(
+        pipeline,
+        members=(Filename,),
+        accumulators={**ACCUMULATORS, Calibration: Buffered(add)},
+        outputs=(IofQ,),
+    )
+    assert agg.accumulation_keys == (Numerator, Denominator)
+    assert set(agg.accumulators()) == {Numerator, Denominator}
     expected = reference(pipeline, ['ab', 'cd'])
-    assert fold.compute({Filename: ['ab', 'cd']})[IofQ] == pytest.approx(expected)
+    assert agg.compute(files_table(['ab', 'cd']))[IofQ] == pytest.approx(expected)
 
 
-def test_fold_rejects_members_the_cut_does_not_need(pipeline):
+def test_aggregation_rejects_members_the_accumulation_keys_do_not_need(pipeline):
     with pytest.raises(ValueError, match='not needed'):
-        Fold(pipeline, members=(Filename,), at={Calibration: add}, outputs=(IofQ,))
+        Aggregation(
+            pipeline,
+            members=(Filename,),
+            accumulators={Calibration: Buffered(add)},
+            outputs=(IofQ,),
+        )
 
 
-def test_fold_three_entry_points_equal_compute(pipeline):
+def test_aggregation_three_entry_points_equal_compute(pipeline):
     # contribute, chained combine, finalize as the framework would call them (D15).
     files = ['ab', 'cd', 'efg']
-    fold = Fold(pipeline, members=(Filename,), at=CUT, outputs=(IofQ,))
-    partial = fold.contribute({Filename: files[0]})
+    agg = Aggregation(
+        pipeline, members=(Filename,), accumulators=ACCUMULATORS, outputs=(IofQ,)
+    )
+    partial = agg.contribute({Filename: files[0]})
     for f in files[1:]:
-        partial = fold.combine([partial, fold.contribute({Filename: f})])
+        partial = agg.combine([partial, agg.contribute({Filename: f})])
     assert set(partial) == {Numerator, Denominator}
-    assert fold.finalize(partial)[IofQ] == pytest.approx(reference(pipeline, files))
+    assert agg.finalize(partial)[IofQ] == pytest.approx(reference(pipeline, files))
 
 
-def test_fold_without_outputs_has_no_finalize(pipeline):
-    fold = Fold(pipeline, members=(Filename,), at=CUT)
-    assert fold.stages == (fold.contribute_stage,)
+def test_aggregation_without_outputs_has_no_finalize(pipeline):
+    agg = Aggregation(pipeline, members=(Filename,), accumulators=ACCUMULATORS)
+    assert agg.stages == (agg.contribute_stage,)
     with pytest.raises(ValueError, match='no outputs'):
-        fold.finalize(fold.contribute({Filename: 'ab'}))
+        agg.finalize(agg.contribute({Filename: 'ab'}))
 
 
-def test_fold_groups_via_pandas(pipeline):
+def test_aggregation_groups_via_pandas(pipeline):
     table = pd.DataFrame({Filename: ['ab', 'cd', 'ef'], 'sample': ['x', 'y', 'x']})
-    fold = Fold(pipeline, members=(Filename,), at=CUT, outputs=(IofQ,))
-    results = {name: fold.compute(group[[Filename]])[IofQ] for name, group in table.groupby('sample')}
+    agg = Aggregation(
+        pipeline, members=(Filename,), accumulators=ACCUMULATORS, outputs=(IofQ,)
+    )
+    results = {
+        name: agg.compute(group[[Filename]].to_dict('index'))[IofQ]
+        for name, group in table.groupby('sample')
+    }
     assert results == {
         'x': pytest.approx(reference(pipeline, ['ab', 'ef'])),
         'y': pytest.approx(reference(pipeline, ['cd'])),
     }
 
 
-def test_caller_holds_contributions_and_decides_what_a_parameter_change_keeps(pipeline, calls):
+def test_caller_holds_contributions_and_decides_what_a_parameter_change_keeps(
+    pipeline, calls
+):
     # The pattern a package's notebook object implements: contributions in a dict
-    # by label, a new fold when a parameter changes, contributions kept when the
-    # changed key is not read by the contribute stage.
+    # by label, a new aggregation when a parameter changes, contributions kept when
+    # the changed key is not read by the contribute stage.
     files = ['ab', 'cd']
-    expected = reference(pipeline, files, 3.0), reference(_with(pipeline, Bins, 1), files, 3.0)
+    expected = (
+        reference(pipeline, files, 3.0),
+        reference(_with(pipeline, Bins, 1), files, 3.0),
+    )
     calls.reset()
-    fold = Fold(pipeline, members=(Filename,), at=CUT, outputs=(IofQ,))
-    held = {f: fold.contribute({Filename: f}) for f in files}
+    agg = Aggregation(
+        pipeline, members=(Filename,), accumulators=ACCUMULATORS, outputs=(IofQ,)
+    )
+    held = {f: agg.contribute({Filename: f}) for f in files}
 
     pipeline[Scale] = 3.0
-    fold = Fold(pipeline, members=(Filename,), at=CUT, outputs=(IofQ,))
-    if Scale in fold.contribute_stage.keys:
+    agg = Aggregation(
+        pipeline, members=(Filename,), accumulators=ACCUMULATORS, outputs=(IofQ,)
+    )
+    if Scale in agg.contribute_stage.keys:
         held.clear()
-    held |= {f: fold.contribute({Filename: f}) for f in files if f not in held}
-    assert fold.finalize(fold.combine(list(held.values())))[IofQ] == pytest.approx(expected[0])
+    held |= {f: agg.contribute({Filename: f}) for f in files if f not in held}
+    assert agg.finalize(agg.combine(held.values()))[IofQ] == pytest.approx(expected[0])
     assert calls['load'] == 2
 
     pipeline[Bins] = 1
-    fold = Fold(pipeline, members=(Filename,), at=CUT, outputs=(IofQ,))
-    if Bins in fold.contribute_stage.keys:
+    agg = Aggregation(
+        pipeline, members=(Filename,), accumulators=ACCUMULATORS, outputs=(IofQ,)
+    )
+    if Bins in agg.contribute_stage.keys:
         held.clear()
-    held |= {f: fold.contribute({Filename: f}) for f in files if f not in held}
-    assert fold.finalize(fold.combine(list(held.values())))[IofQ] == pytest.approx(expected[1])
+    held |= {f: agg.contribute({Filename: f}) for f in files if f not in held}
+    assert agg.finalize(agg.combine(held.values()))[IofQ] == pytest.approx(expected[1])
     assert calls['load'] == 4
 
 
-def test_hierarchical_fold_banks_over_runs(pipeline):
-    # esssans iofq_test: banks over runs. One fold per bank on a pipeline with the
-    # bank set; the per-bank results are the members of an outer fold at its own
-    # cut key.
+def test_hierarchical_aggregation_banks_over_runs(pipeline):
+    # esssans iofq_test: banks over runs. One aggregation per bank on a pipeline
+    # with the bank set; the per-bank results are the members of an outer
+    # aggregation at its own accumulation key.
     files, masks = ['ab', 'cd'], ['m', 'mm', 'mmm']
-    per_bank = [
-        Fold(_with(pipeline, Mask, m), members=(Filename,), at=CUT, outputs=(IofQ,)).compute(
-            {Filename: files}
-        )[IofQ]
+    per_bank = {
+        m: Aggregation(
+            _with(pipeline, Mask, m),
+            members=(Filename,),
+            accumulators=ACCUMULATORS,
+            outputs=(IofQ,),
+        ).compute(files_table(files))[IofQ]
         for m in masks
-    ]
-    banks = Fold(pipeline, members=(IofQ,), at={IofQ: add}, outputs=(IofQ,))
+    }
+    banks = Aggregation(
+        pipeline, members=(IofQ,), accumulators={IofQ: Buffered(add)}, outputs=(IofQ,)
+    )
     expected = sum(reference(_with(pipeline, Mask, m), files) for m in masks)
-    assert banks.compute({IofQ: per_bank})[IofQ] == pytest.approx(expected)
+    table = {m: {IofQ: v} for m, v in per_bank.items()}
+    assert banks.compute(table)[IofQ] == pytest.approx(expected)
 
 
-def test_fold_is_a_snapshot_of_the_pipeline(pipeline):
-    fold = Fold(pipeline, members=(Filename,), at=CUT, outputs=(IofQ,))
+def test_aggregation_is_a_snapshot_of_the_pipeline_parameters(pipeline):
+    agg = Aggregation(
+        pipeline, members=(Filename,), accumulators=ACCUMULATORS, outputs=(IofQ,)
+    )
     pipeline[Bins] = 1
     expected = reference(_with(pipeline, Bins, 2), ['ab', 'cd'])
-    assert fold.compute({Filename: ['ab', 'cd']})[IofQ] == pytest.approx(expected)
+    assert agg.compute(files_table(['ab', 'cd']))[IofQ] == pytest.approx(expected)
+
+
+def doubled_denominator(data: Masked) -> Denominator:
+    return Denominator(2 * sum(data))
+
+
+def test_aggregation_is_a_snapshot_of_the_pipeline_graph(pipeline):
+    agg = Aggregation(
+        pipeline, members=(Filename,), accumulators=ACCUMULATORS, outputs=(IofQ,)
+    )
+    expected = reference(pipeline, ['ab', 'cd'])
+
+    other = pipeline.copy()
+    other.insert(doubled_denominator)
+    pipeline[Denominator] = other[Denominator]
+    assert reference(pipeline, ['ab', 'cd']) == pytest.approx(expected / 2)
+    assert agg.compute(files_table(['ab', 'cd']))[IofQ] == pytest.approx(expected)
 
 
 def test_compute_members(pipeline):
-    per_member = compute_members(pipeline, members=(Filename,), key=IofQ, table={Filename: ['ab', 'cd']})
+    per_member = compute_members(
+        pipeline, members=(Filename,), key=IofQ, table=files_table(['ab', 'cd'])
+    )
     assert per_member == {
         0: pytest.approx(reference(pipeline, ['ab'])),
         1: pytest.approx(reference(pipeline, ['cd'])),
     }
 
 
-# --- Generics and two folds sharing a finalize -----------------------------------
+# --- Generics and two aggregations sharing a finalize ----------------------------
 
 SampleRun = NewType('SampleRun', int)
 BackgroundRun = NewType('BackgroundRun', int)
@@ -310,20 +457,48 @@ def subtract(s: Data[SampleRun], b: Data[BackgroundRun]) -> Result:
     return Result(s - b)
 
 
-def test_fold_over_generic_key():
+def test_aggregation_over_generic_key():
     pipeline = sciline.Pipeline([load, subtract], params={File[BackgroundRun]: 'x'})
-    fold = Fold(pipeline, members=(File[SampleRun],), at={Data[SampleRun]: add}, outputs=(Result,))
-    assert fold.compute({File[SampleRun]: ['ab', 'cde']})[Result] == 5 - 1
+    agg = Aggregation(
+        pipeline,
+        members=(File[SampleRun],),
+        accumulators={Data[SampleRun]: Buffered(add)},
+        outputs=(Result,),
+    )
+    table = {i: {File[SampleRun]: f} for i, f in enumerate(['ab', 'cde'])}
+    assert agg.compute(table)[Result] == 5 - 1
 
 
-def test_two_folds_share_a_finalize_stage():
-    # esssans: sample runs and background runs, each folded, one finalize stage
-    # over both cuts, written by the package's object.
+def test_two_aggregations_share_a_finalize_stage():
+    # esssans: sample runs and background runs, each aggregated, one finalize stage
+    # over both sets of accumulation keys, written by the package's object.
     pipeline = sciline.Pipeline([load, subtract])
-    sample = Fold(pipeline, members=(File[SampleRun],), at={Data[SampleRun]: add})
-    background = Fold(pipeline, members=(File[BackgroundRun],), at={Data[BackgroundRun]: add})
-    finalize = Stage(pipeline, outputs=(Result,), inputs=sample.cut + background.cut)
+    sample = Aggregation(
+        pipeline,
+        members=(File[SampleRun],),
+        accumulators={Data[SampleRun]: Buffered(add)},
+    )
+    background = Aggregation(
+        pipeline,
+        members=(File[BackgroundRun],),
+        accumulators={Data[BackgroundRun]: Buffered(add)},
+    )
+    finalize = Stage(
+        pipeline,
+        outputs=(Result,),
+        inputs=sample.accumulation_keys + background.accumulation_keys,
+    )
     warm(sample.contribute_stage, background.contribute_stage, finalize)
-    s = sample.combine([sample.contribute({File[SampleRun]: f}) for f in ['ab', 'cde']])
-    b = background.combine([background.contribute({File[BackgroundRun]: f}) for f in ['x', 'yz']])
+    s = sample.combine(sample.contribute({File[SampleRun]: f}) for f in ['ab', 'cde'])
+    b = background.combine(
+        background.contribute({File[BackgroundRun]: f}) for f in ['x', 'yz']
+    )
     assert finalize({**s, **b})[Result] == 5 - 3
+
+
+def test_compute_rejects_an_empty_table(pipeline):
+    agg = Aggregation(
+        pipeline, members=(Filename,), accumulators=ACCUMULATORS, outputs=(IofQ,)
+    )
+    with pytest.raises(ValueError, match='empty'):
+        agg.compute({})
