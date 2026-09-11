@@ -16,6 +16,10 @@
    scheduler.DaskScheduler
    scheduler.NaiveScheduler
    TaskGraph
+   Stage
+   Accumulator
+   Aggregation
+   Buffered
    HandleAsBuildTimeException
    HandleAsComputeTimeException
 ```
@@ -28,7 +32,9 @@
    :recursive:
 
    compute_mapped
+   compute_members
    get_mapped_node_names
+   warm
 ```
 
 ## Exceptions

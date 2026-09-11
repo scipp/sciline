@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any, Literal, TypeVar
 
 from ._utils import key_name
 from .reporter import Reporter
-from .scheduler import DaskScheduler, NaiveScheduler, Scheduler
+from .scheduler import Scheduler, scheduler_or_default
 from .serialize import json_serialize_task_graph
 from .typing import Graph, Json, Key
 
@@ -81,16 +81,7 @@ class TaskGraph:
     ) -> None:
         self._graph = graph
         self._keys = targets
-        if scheduler is None:
-            try:
-                scheduler = DaskScheduler()
-            except ImportError:
-                scheduler = NaiveScheduler()
-        elif not isinstance(scheduler, Scheduler):
-            raise ValueError(
-                "Scheduler interface must be compatible with sciline.Scheduler"
-            )
-        self._scheduler = scheduler
+        self._scheduler = scheduler_or_default(scheduler)
 
     def compute(
         self, targets: Targets | None = None, reporter: Reporter | None = None

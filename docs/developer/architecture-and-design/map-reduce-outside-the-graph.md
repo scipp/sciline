@@ -150,7 +150,7 @@ Two things were considered and deferred:
   Each real shape is a loop of under twenty lines over plain objects, and the loop is where the policy belongs.
   If phase 3 needs connectors placed on process boundaries with pushes routed across them, that object is a placement and routing layer over the same stages and connectors, decided with that case in hand.
 - A builder that derives the stage boundaries from the graph given ordered groups of inputs.
-  One caller needs a derived boundary today, the context frontier of `StreamProcessor`, and it is two lines (`stream_test.py`).
+  One caller needs a derived boundary today, the context frontier of `StreamProcessor`, and it is two lines (the stream-shaped test in `tests/stage_test.py`).
   An aggregation's accumulation keys are a declaration, not a derivation.
   Extract the function when a second caller appears.
 
@@ -226,7 +226,7 @@ finalize_stage = Stage(pipeline, outputs=target_keys, inputs=accumulator_keys + 
 context = Forwarder(); accumulators = {key: EternalAccumulator() for key in accumulator_keys}
 ```
 
-`stream_test.py` runs this shape, including a context update with the accumulator kept; the rewrite of the real class against its 35 tests is the next step, not done here.
+The stream-shaped test in `tests/stage_test.py` runs this shape, including a context update with the accumulator kept; the rewrite of the real class against its 35 tests is the next step, not done here.
 
 `set_context` calls the context stage and pushes into the forwarder; `accumulate` calls the chunk stage with a chunk and the forwarder's value and pushes into the accumulators; `finalize` calls the third stage.
 The accumulator classes, the key-set validation, `on_finalize`, `clear`, and `visualize` stay, and the accumulator classes satisfy sciline's `Accumulator` protocol as they are.
@@ -261,7 +261,7 @@ The trap to keep out of stays: a provider written by hand that runs a pipeline.
 
 ## Evidence
 
-Prototype: `stage-prototype/stage.py`, tests in `stage-prototype/stage_test.py` and `stream_test.py`, run against sciline `main` (the pep695 branch needs an unreleased cyclebane for generics; on it all tests pass except the two that aggregate over a generic key, which fail in the branch's mapped-root check inside `map` and so go away with it).
+Implementation: `src/sciline/stage.py` and `src/sciline/aggregation.py`, tests in `tests/stage_test.py` and `tests/aggregation_test.py`, on sciline `main` (the pep695 branch needs an unreleased cyclebane for generics; on it all tests pass except the two that aggregate over a generic key, which fail in the branch's mapped-root check inside `map` and so go away with it).
 It reads `TaskGraph._graph` for the concrete graph and hardcodes the naive scheduler inside stages; both go away inside v2.
 
 Covered:
@@ -273,7 +273,7 @@ Covered:
 - banks over runs as one aggregation per bank feeding an outer aggregation; an aggregation over a generic key with `TypeVar`-instantiated providers; two aggregations sharing a finalize stage; the aggregation as a snapshot under later mutation of the caller's pipeline; per-member values of a key after the accumulation keys;
 - the `StreamProcessor` shape: chunk stage, context in a forwarder, histogram in an accumulator, context update without clearing, finalize.
 
-LoKI validation (`stage-prototype/loki_validation.py`): the esssans multi-run test workflow, one mask file, two sample runs, two background runs.
+LoKI validation (`loki_validation.py` next to this document): the esssans multi-run test workflow, one mask file, two sample runs, two background runs.
 Reference: `with_pixel_mask_filenames`, `with_sample_runs`, `with_background_runs` with `map`/`reduce`.
 Prototype: `SansReduction`, the package object described above, over two aggregations on the flat pipeline, the masks as a list parameter.
 `BackgroundSubtractedIofQ` and `BackgroundSubtractedIofQxy` are identical to the reference under `assert_identical`; per-member `NormalizedQ` equals both a single-run compute and `compute_mapped`; contribute, chained combine, finalize over bare aggregations equal the object's `compute`.
@@ -306,6 +306,86 @@ Not shown by the prototype: the `StreamProcessor` rewrite against its real tests
    `with_banks`, which maps without reducing, becomes a loop setting `NeXusDetectorName` on the package object or the pipeline, which is what its callers do with `compute_mapped` anyway.
 4. esslivedata: the bifrost bank fold becomes an `Aggregation` computed before the `StreamProcessor` is built, its result set as a parameter of the processor's pipeline.
 5. essapps: D8 and D15 wording as above; the D3/D6 spike's fake workflow with two accumulation points is an `Aggregation`.
+
+## Rollout plan
+
+Written 2026-09-11 from the site survey of the same date (every `map`, `reduce`, `compute_mapped`, `get_mapped_node_names`, `constraints=`, `compact=`, and `parameter_mappers` use in `/workspace/ess` and esslivedata) and the review of the prototype.
+Each item is one pull request unless stated.
+The rule for the order: everything additive lands and releases before anything breaks, and the breaking sciline release waits until no ESS package or esslivedata uses map/reduce.
+
+### A. sciline, additive
+
+1. ADR 0003 with `Stage`, `warm`, `Accumulator`, `Buffered`, `Aggregation`, `compute_members`, their tests, and a user-guide page on stages and aggregations next to the parameter-tables page.
+   Released as the next minor.
+   Tracking issues: one in scipp/sciline for A and E, one in scipp/ess for B to D.
+2. `provide(key, callable)` on `Pipeline` (scipp/sciline#241); a `reporter` argument on `Stage.__call__` and `warm` so that progress reaches the ESS widgets; whatever `StreamProcessor.visualize` needs to classify nodes from `Stage.frontier` and `Stage.dynamic`.
+   Scoped when B2 starts, since B2 is the consumer.
+3. Deprecation warnings on `map`, `reduce`, `compute_mapped`, `get_mapped_node_names`, `constraints=`, and `visualize(compact=)`, in the last minor before E.
+   Lands when D1 is released.
+
+### B. ess.reduce, additive
+
+1. Accumulators: `maybe_hist` moves out of `Accumulator.push` into the subclasses that histogram; a `Forwarder` (name is ess.reduce's call); a test that every accumulator satisfies `sciline.Accumulator`.
+   No behaviour change for `StreamProcessor` users.
+2. `StreamProcessor` rewritten as a driver over three stages, a forwarder, and accumulators, keeping its interface, against `streaming_test.py`, `streaming_visualize_test.py`, and `accumulators_test.py`.
+   `_FedWorkflow`, `_build_streaming_workflow`, `_find_descendants`, `_find_parents`, `_map_context_to_cached_nodes`, and the pruning by `None` go; `allow_bypass` becomes a derived property.
+   Needs A2.
+3. `assign_parameter_values` and `parameter_mappers` (`parameter.py:190`, `workflow.py:87-95`, consumed only by `WorkflowWidget.workflow_runner` in `ui.py:194`) are replaced by the package-object protocol.
+   Lands with or after C1, which defines that protocol for esssans.
+4. The polarization notebook `docs/user-guide/polarization/zoom.ipynb` uses `get_mapped_node_names` and `with_sample_runs`; it migrates with C1.
+
+### C. Reduction packages, one PR each, in this order
+
+1. **esssans**, the validated case and the one that sets the package-object pattern.
+   `_set_runs`, `with_sample_runs`, `with_background_runs` (`workflow.py:104-108`, four map/reduce pairs per run type) become one aggregation per run type with `Buffered(merge_contributions)` and a shared finalize stage, held by the package object with the contributions by filename and a `clear`.
+   `with_pixel_mask_filenames` (`:62-66`) becomes a `PixelMaskFilenames` list parameter and two providers, the mask built per run from that run's `DetectorIDs`.
+   `with_banks` (`:92-94`, map without reduce) becomes `compute_members` or a loop.
+   `ZoomTransmissionFractionWorkflow` (`isissans/zoom.py:158-165`) becomes an aggregation with `Buffered` over the concat and the unique-position check.
+   The `parameter_mappers` registrations (`:144-150`) go.
+   Notebooks: `loki-iofq`, `loki-direct-beam` (including the prose at cell `:537` about the `merge_contributions` node), `loki-reduction-ess` (cell 8, `compute_mapped` over banks), `isis/zoom`; `docs/api-reference/index.md`.
+   Tests: `loki/iofq_test.py` (`compute_mapped` at `:213,239`), `isissans/zoom_reduction_test.py`, `i_of_q_test.py`.
+2. **essdiffraction**, small.
+   `with_pixel_mask_filenames` (`powder/masking.py:80-101`) becomes a list parameter and one provider; the empty-list workaround for cyclebane (`:94-97`) goes.
+   All 22 test call sites pass `[]`, so the fold has no coverage today; add one test with a mask file.
+   `dream-advanced-powder-reduction.ipynb` cells 30 and 39 (one- and two-column tables over detectors, `collect_detectors`) become an aggregation over a mapping table.
+   The `parameter_mappers` registration in `dream/workflows.py:152` goes.
+3. **essspectroscopy**, bifrost.
+   Three folds over detector triplets: `RawDetector[SampleRun]` in `BifrostSimulationWorkflow` (`bifrost/workflow.py:112-116`), `EmptyDetector[SampleRun]` and `NeXusData[NXdetector, SampleRun]` in `BifrostWorkflow` (`:151-161`), with `merge_triplets` and `concat_event_lists`.
+   Open design point to settle in this PR: `NeXusData` depends on the run, so the bank aggregation sits inside per-run work when runs are members, which is the esssans-mask shape; either the package object owns a per-run bank aggregation or a list parameter `DetectorNames` with a provider that loops.
+   Test `bifrost/workflow_test.py:53-54` and notebook `bifrost-make-wavelength-lookup-table.ipynb:64` use `compute_mapped` and become `compute_members`.
+4. **essreflectometry**.
+   `with_filenames` (`reflectometry/workflow.py:63-86`) becomes an aggregation with up to seven accumulation keys, `Buffered` over `_concatenate_event_lists`, `_any_value`, and `_concatenate_lists`; the `try/except` around each reduce goes because `accumulation_keys` reports the static ones.
+   `BatchProcessor.compute` (`tools.py:199-212`) loses the `compute_mapped` fallback for mapped-but-unreduced pipelines; `batch_processor` (`:561`) enters the aggregation for a list-valued `Filename[SampleRun]`.
+   `gui.py:1037,1050` fold reference and sample runs.
+   `constraints=` at `offspec/workflow.py:41` and `amor/__init__.py:90` stay until E.
+   Notebooks `amor-reduction-advanced` (the `'611+612'` tuple entry) and `estia-advanced-mcstas-reduction`; tests `batch_processor_test.py:47,59`, `amor/pipeline_test.py`, `tools_test.py`.
+5. **essnmx**, notebooks and one test fixture only.
+   `mcstas_workflow.ipynb` folds panels over a scipp `Variable` and imports `cyclebane.graph.NodeName`/`IndexValues` directly to name mapped nodes; `scaling_workflow.ipynb` folds MTZ files with two accumulation keys, one of them the union `gemmi.SpaceGroup | None`; `tests/mcstas/workflow_test.py:38-43`.
+6. **essimaging**: two notebooks use `visualize(compact=)`; drop the argument.
+   Every package also drops `compact=` from its notebooks in its own PR.
+
+### D. esslivedata
+
+1. The bifrost bank fold (`config/instruments/bifrost/factories.py:375-379`) sits in the static part of the streaming pipeline; it becomes `Aggregation(...).compute(...)` with the result set as a parameter before the `StreamProcessor` is built.
+   Consumes B2 through the essreduce bump.
+   The direct `cyclebane>=26.9.0` pin (`pyproject.toml:36`, for a self-referential graph leak) goes when E removes cyclebane.
+
+### E. sciline, breaking, next major
+
+Remove `map`, `reduce`, `index_names`, `indices`, `get_mapped_node_names`, `compute_mapped`, `visualize(compact=)`, `constraints=`, and cyclebane; networkx becomes a direct dependency; the PEP 695 generics from `235-pep695-single-model-prototype` land without their map parts; `Scope` is deprecated (scipp/sciline#233); the parameter-tables guide is removed and the aggregations guide takes its place.
+essreduce, the only direct sciline dependency in the monorepo (`sciline>=25.11.0`), raises its minimum; C3 and C4 drop their `constraints=` in the same essreduce bump.
+Requires C1 to C5 and D1 released.
+
+### F. essapps
+
+Apply the edits listed at the end of `stages.md` on branch `architecture-sketch` (D8, D13, D14, D15, glossary), with `Fold` read as `Aggregation` and "accumulation point" as accumulation key; the D3/D6 spike's fake workflow with two accumulation points is an `Aggregation`.
+
+### Scheduling
+
+E waits for C and D; nothing forces it earlier.
+The PEP 695 generics cannot land with map/reduce present, which is what this ADR is about, so they wait with E.
+Parallelism between packages is possible after C1: C2 to C5 depend only on A1, and B2 only on A2.
+The critical path is A1, C1, then the remaining packages, then E.
 
 ## Open questions
 

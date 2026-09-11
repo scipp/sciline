@@ -7,8 +7,8 @@ Working document; drop before the branch merges.
 
 1. [ADR 0003](../adr/0003-replace-map-reduce-with-stages-outside-the-graph.md), proposed: the decision, alternatives tried, consequences. One page.
 2. [Map and reduce outside the graph](map-reduce-outside-the-graph.md): the design with semantics, evidence, migration, open questions.
-3. `stage-prototype/stage.py` (about 340 lines): `Stage`, `warm`, `Forwarder`, `Accumulator`, `Buffered`, `Aggregation`, `compute_members`. The docstring at the top is the shortest statement of the design.
-4. `stage-prototype/loki_validation.py`: `SansReduction`, the package object esssans would return, about thirty lines, and the validation against the map/reduce reference.
+3. `src/sciline/stage.py` and `src/sciline/aggregation.py`: `Stage`, `warm`, `Accumulator`, `Buffered`, `Aggregation`, `compute_members`. The docstring at the top is the shortest statement of the design.
+4. `loki_validation.py` in this directory: `SansReduction`, the package object esssans would return, about thirty lines, and the validation against the map/reduce reference.
 5. essapps branch `architecture-sketch`, `docs/developer/stages.md`: how the pieces map onto D8, D13, D14, D15, and phase 3.
 
 ## Where things are
@@ -16,11 +16,11 @@ Working document; drop before the branch merges.
 | What | Where |
 |---|---|
 | Design branch | sciline `map-reduce-outside-the-graph`, off `main`; commits `84e44d1` (first pass), `ddd7012` (connectors), `0bdbaa3` (stateless Fold), `77f718f` (ADR) |
-| Prototype and tests | `docs/developer/architecture-and-design/stage-prototype/`; 27 tests |
+| Prototype and tests | `src/sciline/stage.py`, `src/sciline/aggregation.py`; `tests/stage_test.py`, `tests/aggregation_test.py` |
 | essapps companion note | branch `architecture-sketch`, `docs/developer/stages.md`, commits `a5ccdb8`, `05a1ba7`, `8c77e38` |
 | Environment | `/opt/conda/bin/python` has sciline editable from `/workspace/sciline/src` and `ess.sans` installed; no venv in the repo |
-| Run tests | `cd docs/developer/architecture-and-design/stage-prototype && python -m pytest -q stage_test.py stream_test.py` |
-| Run validation | same directory, `python loki_validation.py`; about 40 s, downloads LoKI tutorial data on first run |
+| Run tests | `python -m pytest -n auto tests/stage_test.py tests/aggregation_test.py` |
+| Run validation | `python docs/developer/architecture-and-design/loki_validation.py`; about 40 s, downloads LoKI tutorial data on first run |
 | ESS monorepo checkout | `/workspace/ess/packages/{essreduce,esssans,essreflectometry,essspectroscopy,essnmx,essdiffraction,...}`; esslivedata at `/workspace/esslivedata` |
 | Stale copy | `/workspace/sciline/.scratch/proto/` is the first-pass prototype; delete |
 

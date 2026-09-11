@@ -11,6 +11,8 @@ Run from this directory with
     python loki_validation.py
 """
 
+# ruff: noqa: T201
+
 from __future__ import annotations
 
 import time
@@ -53,11 +55,12 @@ from ess.sans.types import (
 )
 from ess.sans.workflow import _merge, merge_contributions
 from scipp.testing import assert_allclose, assert_identical
-from stage import Aggregation, Buffered, Stage, compute_members, warm
 
 import sciline
+from sciline import Aggregation, Buffered, Stage, compute_members, warm
 
 OUTPUTS = (BackgroundSubtractedIofQ, BackgroundSubtractedIofQxy)
+SCHEDULER = sciline.scheduler.NaiveScheduler()
 
 calls: dict[str, int] = {}
 
@@ -184,13 +187,14 @@ class SansReduction:
             self._pipeline,
             members=(Filename[run_type],),
             accumulators=accumulators_for(run_type),
+            scheduler=SCHEDULER,
         )
 
     def _finalize_stage(self) -> Stage:
         keys = tuple(
             k for agg in self._aggregations.values() for k in agg.accumulation_keys
         )
-        return Stage(self._pipeline, outputs=OUTPUTS, inputs=keys)
+        return Stage(self._pipeline, outputs=OUTPUTS, inputs=keys, scheduler=SCHEDULER)
 
     def __setitem__(self, key: Any, value: Any) -> None:
         self._pipeline[key] = value
@@ -246,9 +250,10 @@ def main() -> None:
     ref = sans.with_pixel_mask_filenames(base, masks)
     ref = sans.with_sample_runs(ref, runs=sample_runs)
     ref = sans.with_background_runs(ref, runs=background_runs)
-    # Same scheduler as the prototype; the default dask scheduler runs the members
-    # of one graph in threads and is about 1.7 s faster here.
-    ref_results = ref.compute(OUTPUTS, scheduler=sciline.scheduler.NaiveScheduler())
+    # Both sides run on the naive scheduler so that timings compare call structure
+    # only. The default dask scheduler runs the members of one map/reduced graph in
+    # threads, about 1.7 s faster here; over stages that parallelism is the caller's.
+    ref_results = ref.compute(OUTPUTS, scheduler=SCHEDULER)
     t_ref = time.perf_counter() - t0
     ref_calls = show('reference', t0)
     calls.clear()
@@ -310,7 +315,10 @@ def main() -> None:
     calls.clear()
     aggs = {
         rt: Aggregation(
-            flat, members=(Filename[rt],), accumulators=accumulators_for(rt)
+            flat,
+            members=(Filename[rt],),
+            accumulators=accumulators_for(rt),
+            scheduler=SCHEDULER,
         )
         for rt in (SampleRun, BackgroundRun)
     }
@@ -319,6 +327,7 @@ def main() -> None:
         outputs=OUTPUTS,
         inputs=aggs[SampleRun].accumulation_keys
         + aggs[BackgroundRun].accumulation_keys,
+        scheduler=SCHEDULER,
     )
     warm(*(agg.contribute_stage for agg in aggs.values()), finalize)
     sample = aggs[SampleRun].contribute({Filename[SampleRun]: sample_runs[0]})
