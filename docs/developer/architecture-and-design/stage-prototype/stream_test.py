@@ -1,4 +1,4 @@
-"""StreamProcessor's shape expressed with Stage: chunk stage, held context, finalize."""
+"""StreamProcessor's shape: stages connected by a Forwarder and a reducer."""
 
 from __future__ import annotations
 
@@ -6,11 +6,11 @@ from typing import NewType
 
 import sciline
 
-from stage import Stage
+from stage import Forwarder, Stage
 
 Events = NewType('Events', list[float])  # dynamic: one chunk at a time
 Angle = NewType('Angle', float)  # context: changes occasionally
-Geometry = NewType('Geometry', list[float])  # depends on context only, cached
+Geometry = NewType('Geometry', list[float])  # depends on context only, held
 Histogram = NewType('Histogram', dict[int, float])  # accumulated
 Norm = NewType('Norm', float)  # finalize parameter
 Result = NewType('Result', dict[int, float])
@@ -33,8 +33,14 @@ def result(hist: Histogram, norm: Norm) -> Result:
     return Result({k: v / norm for k, v in hist.items()})
 
 
-def add_hist(a: Histogram, b: Histogram) -> Histogram:
-    return Histogram({k: a.get(k, 0) + b.get(k, 0) for k in a | b})
+class Summed:
+    """A reducer: ess.reduce's EternalAccumulator, for dicts."""
+
+    def __init__(self) -> None:
+        self.value: Histogram = Histogram({})
+
+    def push(self, hist: Histogram) -> None:
+        self.value = Histogram({k: self.value.get(k, 0) + hist.get(k, 0) for k in self.value | hist})
 
 
 def test_stream_processor_shape():
@@ -45,23 +51,24 @@ def test_stream_processor_shape():
     # context frontier, the context-dependent nodes just above the chunk-dependent
     # ones, is derived from the stages rather than declared.
     per_chunk = Stage(pipeline, outputs=accumulated, inputs=dynamic)
-    context_frontier = Stage(
-        pipeline, outputs=per_chunk.frontier, inputs=context
-    ).dynamic_outputs
+    context_frontier = Stage(pipeline, outputs=per_chunk.frontier, inputs=context).dynamic_outputs
     assert context_frontier == (Geometry,)
     context_stage = Stage(pipeline, outputs=context_frontier, inputs=context)
     chunk_stage = Stage(pipeline, outputs=accumulated, inputs=dynamic + context_frontier)
     finalize_stage = Stage(pipeline, outputs=targets, inputs=accumulated)
 
-    held = context_stage({Angle: 1.0})
-    acc: Histogram | None = None
-    for chunk in ([1.0, 2.0], [2.0, 3.0]):
-        contribution = chunk_stage({Events: chunk, **held})[Histogram]
-        acc = contribution if acc is None else add_hist(acc, contribution)
-    assert Calls.geometry == 1
-    assert finalize_stage({Histogram: acc})[Result] == {1: 0.5, 2: 1.0, 3: 0.5}
+    # The connectors say why each cut is there: the context is held between
+    # changes, the histogram is accumulated.
+    held = Forwarder()
+    acc = Summed()
 
-    held = context_stage({Angle: 3.0})  # context update, accumulator kept
-    acc = add_hist(acc, chunk_stage({Events: [1.0], **held})[Histogram])
-    assert finalize_stage({Histogram: acc})[Result] == {1: 2.0, 2: 1.0, 3: 0.5}
+    held.push(context_stage({Angle: 1.0}))
+    for chunk in ([1.0, 2.0], [2.0, 3.0]):
+        acc.push(chunk_stage({Events: chunk, **held.value})[Histogram])
+    assert Calls.geometry == 1
+    assert finalize_stage({Histogram: acc.value})[Result] == {1: 0.5, 2: 1.0, 3: 0.5}
+
+    held.push(context_stage({Angle: 3.0}))  # context update, accumulator kept
+    acc.push(chunk_stage({Events: [1.0], **held.value})[Histogram])
+    assert finalize_stage({Histogram: acc.value})[Result] == {1: 2.0, 2: 1.0, 3: 0.5}
     assert Calls.geometry == 2

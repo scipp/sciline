@@ -1,16 +1,18 @@
 """Validate the Fold prototype on the esssans LoKI multi-run reduction.
 
 Reference: with_pixel_mask_filenames + with_sample_runs + with_background_runs
-(sciline map/reduce). Prototype: three sequential Folds on the flat pipeline.
+(sciline map/reduce). Prototype: one Fold with two groups, sample runs and
+background runs, on the flat pipeline; the pixel masks are a list parameter read by
+one provider instead of a fold, since their cut sits inside the per-run work.
 
-Run with
-    PYTHONPATH=<sciline-main>/src:/workspace/sciline/.scratch/proto python loki_validation.py
+Run from this directory with
+    python loki_validation.py
 """
 
 from __future__ import annotations
 
 import time
-from typing import Any
+from typing import Any, NewType
 
 import ess.loki.data  # noqa: F401
 import sciline
@@ -51,7 +53,6 @@ from ess.sans.types import (
 from ess.sans.workflow import _merge, merge_contributions
 from scipp.testing import assert_allclose, assert_identical
 
-import stage
 from stage import Fold
 
 OUTPUTS = (BackgroundSubtractedIofQ, BackgroundSubtractedIofQxy)
@@ -74,6 +75,24 @@ def counted_to_detector_mask(
 ) -> DetectorMasks:
     _hit('to_detector_mask')
     return to_detector_mask(ids, path, masked_ids)
+
+
+# The prototype's mask handling: one list parameter, the files read once (static),
+# the masks built per run from the run's detector IDs.
+PixelMaskFilenames = NewType('PixelMaskFilenames', tuple[str, ...])
+MaskedDetectorIDsPerFile = NewType('MaskedDetectorIDsPerFile', dict[str, sc.Variable])
+
+
+def read_mask_files(filenames: PixelMaskFilenames) -> MaskedDetectorIDsPerFile:
+    return MaskedDetectorIDsPerFile(
+        {f: counted_read_xml_detector_masking(PixelMaskFilename(f)) for f in filenames}
+    )
+
+
+def detector_masks(ids: DetectorIDs, masked: MaskedDetectorIDsPerFile) -> DetectorMasks:
+    return _merge(
+        *(counted_to_detector_mask(ids, PixelMaskFilename(p), m) for p, m in masked.items())
+    )
 
 
 def counted_apply_pixel_masks(
@@ -122,16 +141,17 @@ def compare(name: str, a: Any, b: Any) -> None:
         print(f'  {name}: allclose (rtol 1e-12) but not identical')
 
 
-def as_pipeline(fold: Fold) -> sciline.Pipeline:
-    return fold.as_pipeline()
-
-
 def cut_for(run_type: type) -> dict[Any, Any]:
     return {
         qtype[run_type, part]: merge_contributions
         for part in (Numerator, Denominator)
         for qtype in (NormalizedQ, NormalizedQxQy)
     }
+
+
+def show(label: str, t0: float) -> dict[str, int]:
+    print(f'  {label}: {time.perf_counter() - t0:.1f} s, calls {calls}')
+    return dict(calls)
 
 
 def main() -> None:
@@ -163,70 +183,77 @@ def main() -> None:
     # of one graph in threads and is about 1.7 s faster here.
     ref_results = ref.compute(OUTPUTS, scheduler=sciline.scheduler.NaiveScheduler())
     t_ref = time.perf_counter() - t0
-    ref_calls = dict(calls)
+    ref_calls = show('reference', t0)
     calls.clear()
-    print(f'reference: {t_ref:.1f} s, calls {ref_calls}')
 
-    # --- Prototype: three folds -----------------------------------------------
+    # --- Prototype: one fold, two groups ---------------------------------------
+    flat = base.copy()
+    flat.insert(read_mask_files)
+    flat.insert(detector_masks)
+    flat[PixelMaskFilenames] = tuple(masks)
+    # Filename[SampleRun] stays set on the pipeline: it is a member key of the
+    # sample group, and an ordinary parameter for the background group, whose
+    # DetectorMasks read the detector IDs of that one run (as in the reference).
     t0 = time.perf_counter()
-    masked = Fold(
-        base,
-        members={PixelMaskFilename: masks},
-        at={DetectorMasks: _merge},
+    fold = Fold(
+        flat,
+        over={
+            Filename[SampleRun]: cut_for(SampleRun),
+            Filename[BackgroundRun]: cut_for(BackgroundRun),
+        },
         outputs=OUTPUTS,
+        keep_members=True,
     )
-    masked = as_pipeline(masked)
-    t_masks = time.perf_counter() - t0
-    print(f'  mask fold + as_pipeline: {t_masks:.1f} s, calls {calls}')
-    sample_fold = Fold(
-        masked,
-        members={Filename[SampleRun]: sample_runs},
-        at=cut_for(SampleRun),
-        outputs=OUTPUTS,
-    )
-    with_samples = as_pipeline(sample_fold)
-    t_samples = time.perf_counter() - t0 - t_masks
-    print(f'  sample fold + as_pipeline: {t_samples:.1f} s, calls {calls}')
-    bg_fold = Fold(
-        with_samples,
-        members={Filename[BackgroundRun]: background_runs},
-        at=cut_for(BackgroundRun),
-        outputs=OUTPUTS,
-    )
-    t_build = time.perf_counter() - t0
-    print(f'  all folds built: {t_build:.1f} s, calls {calls}')
-    results = bg_fold.compute()
+    fold.set_members({Filename[SampleRun]: sample_runs[:1]})
+    fold.set_members({Filename[BackgroundRun]: background_runs})
+    fold.compute()
+    show('one sample run', t0)
+    fold.set_members({Filename[SampleRun]: sample_runs})
+    results = fold.compute()
     t_proto = time.perf_counter() - t0
-    proto_calls = dict(calls)
-    print(f'prototype: {t_proto:.1f} s total ({t_proto - t_build:.1f} s compute), calls {proto_calls}')
+    proto_calls = show('second sample run added', t0)
 
     print('final results, prototype vs reference:')
     for key in OUTPUTS:
         compare(key.__name__, results[key], ref_results[key])
 
+    # --- Parameter changes ------------------------------------------------------
+    calls.clear()
+    t0 = time.perf_counter()
+    fold[QBins] = sc.linspace('Q', start=0.01, stop=0.3, num=51, unit='1/angstrom')
+    fold.compute()
+    show('QBins changed (before the cut; members held)', t0)
+    calls.clear()
+    t0 = time.perf_counter()
+    fold[UncertaintyBroadcastMode] = UncertaintyBroadcastMode.drop
+    fold.compute()
+    show('UncertaintyBroadcastMode changed (both sides of the cut)', t0)
+
     # --- Per-member intermediate ----------------------------------------------
     key = NormalizedQ[SampleRun, Numerator]
-    members = sample_fold.compute_members(key)
+    fold[QBins] = base.compute(QBins)
+    fold[UncertaintyBroadcastMode] = UncertaintyBroadcastMode.upper_bound
+    members = fold.compute_members(key)
     single = sans.with_pixel_mask_filenames(base, masks)
     print('per-member NormalizedQ[SampleRun, Numerator] vs single-run compute:')
     for (m, value), filename in zip(members.items(), sample_runs, strict=True):
         single[Filename[SampleRun]] = filename
         compare(f'member {m}', value, single.compute(key))
-    try:
-        mapped = sciline.compute_mapped(ref, key)
-        print('per-member vs sciline.compute_mapped:')
-        for (m, value), (_, expected) in zip(members.items(), mapped.items(), strict=True):
-            compare(f'member {m}', value, expected)
-    except Exception as e:  # noqa: BLE001
-        print(f'  compute_mapped({key}) failed: {type(e).__name__}: {e}')
+    mapped = sciline.compute_mapped(ref, key)
+    print('per-member vs sciline.compute_mapped:')
+    for (m, value), (_, expected) in zip(members.items(), mapped.items(), strict=True):
+        compare(f'member {m}', value, expected)
 
-    # --- Three-stage form -----------------------------------------------------
+    # --- Three-entry-point form --------------------------------------------------
     calls.clear()
-    partial = bg_fold.contribute(0)
-    for m in list(bg_fold.members)[1:]:
-        partial = bg_fold.combine([partial, bg_fold.contribute(m)])
-    staged = bg_fold.finalize(partial)
-    print(f'three-stage form (calls {calls}):')
+    sample = fold.contribute({Filename[SampleRun]: sample_runs[0]})
+    for run in sample_runs[1:]:
+        sample = fold.combine([sample, fold.contribute({Filename[SampleRun]: run})])
+    background = fold.combine(
+        [fold.contribute({Filename[BackgroundRun]: run}) for run in background_runs]
+    )
+    staged = fold.finalize([sample, background])
+    print(f'three-entry-point form (calls {calls}):')
     for key in OUTPUTS:
         compare(key.__name__, staged[key], results[key])
 

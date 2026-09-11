@@ -6,7 +6,7 @@ import pandas as pd
 import pytest
 import sciline
 
-from stage import Fold, Stage
+from stage import Fold, Stage, warm
 
 # --- A small "reduction" graph, shaped like esssans -----------------------------
 
@@ -28,6 +28,12 @@ class Calls:
 
     def hit(self, name: str) -> None:
         self.counts[name] = self.counts.get(name, 0) + 1
+
+    def __getitem__(self, name: str) -> int:
+        return self.counts.get(name, 0)
+
+    def reset(self) -> None:
+        self.counts.clear()
 
 
 @pytest.fixture
@@ -75,6 +81,9 @@ def add(*parts: float) -> float:
     return sum(parts)
 
 
+CUT = {Numerator: concat, Denominator: add}
+
+
 def reference(pipeline: sciline.Pipeline, files: list[str], scale: float = 1.0):
     num, den = [], 0.0
     for f in files:
@@ -85,31 +94,32 @@ def reference(pipeline: sciline.Pipeline, files: list[str], scale: float = 1.0):
     return scale * sum(num) / den
 
 
+def _with(pipeline, key, value):
+    p = pipeline.copy()
+    p[key] = value
+    return p
+
+
 # --- Stage ----------------------------------------------------------------------
 
 
 def test_stage_computes_static_part_once_and_dynamic_part_per_call(pipeline, calls):
     stage = Stage(pipeline, outputs=(Numerator, Denominator), inputs=(Filename,))
-    assert set(stage.frontier) == {Calibration, Bins}
-    assert calls.counts == {}
+    assert stage.frontier == (Calibration, Bins)
+    assert set(stage.dynamic) == {Filename, Loaded, Masked, Numerator, Denominator}
     a = stage({Filename: 'ab'})
-    b = stage({Filename: 'cd'})
-    assert a[Denominator] == (97 + 98) * 4
-    assert b[Denominator] == (99 + 100) * 4
-    assert calls.counts == {
-        'calibration': 1,
-        'load': 2,
-        'mask': 2,
-        'numerator': 2,
-        'denominator': 2,
-    }
+    b = stage({Filename: 'cde'})
+    assert a[Numerator] == [97.0 * 4, 98.0 * 4]
+    assert a[Denominator] == (97.0 + 98.0) * 4
+    assert b[Denominator] == (99.0 + 100.0 + 101.0) * 4
+    assert calls['calibration'] == 1
+    assert calls['load'] == 2
 
 
 def test_stage_with_intermediate_input_cuts_its_ancestors(pipeline, calls):
     stage = Stage(pipeline, outputs=(IofQ,), inputs=(Numerator, Denominator, Scale))
     assert stage.frontier == ()
-    assert calls.counts == {}
-    assert stage({Numerator: [1.0, 2.0], Denominator: 4.0, Scale: 2.0})[IofQ] == 1.5
+    assert stage({Numerator: [2.0, 4.0], Denominator: 3.0, Scale: 2.0})[IofQ] == 4.0
     assert calls.counts == {'normalize': 1}
 
 
@@ -119,126 +129,207 @@ def test_stage_rejects_input_the_outputs_do_not_need(pipeline):
 
 
 def test_stage_as_warm_workflow(pipeline, calls):
-    # D8: the expensive part is cached, only what depends on the cheap parameter reruns.
-    pipeline[Filename] = 'abc'
+    # D8: the expensive part up to the cheap parameter is held, the rest reruns.
+    pipeline[Filename] = 'ab'
+    expected = reference(pipeline, ['ab']), reference(pipeline, ['ab'], 3.0)
+    calls.reset()
     warm = Stage(pipeline, outputs=(IofQ,), inputs=(Scale,))
-    first = warm({Scale: 1.0})[IofQ]
-    assert calls.counts['load'] == 1
-    assert warm({Scale: 3.0})[IofQ] == pytest.approx(3 * first)
-    assert calls.counts['load'] == 1
-    assert calls.counts['normalize'] == 2
+    assert warm.frontier == (Numerator, Denominator)
+    assert warm({Scale: 1.0})[IofQ] == pytest.approx(expected[0])
+    assert warm({Scale: 3.0})[IofQ] == pytest.approx(expected[1])
+    assert calls['load'] == 1
+    assert calls['normalize'] == 2
+
+
+def test_stage_with_shared_ancestor_input_freezes_the_rest(pipeline, calls):
+    # Numerator is supplied; Denominator and Scale are static and held.
+    stage = Stage(pipeline, outputs=(IofQ,), inputs=(Numerator,))
+    assert stage.frontier == (Denominator, Scale)
+    assert stage({Numerator: [1.0]})[IofQ] == 1.0 / (sum(map(ord, 'unused')) * 4)
+
+
+def test_stage_passes_through_an_output_that_is_an_input(pipeline, calls):
+    stage = Stage(pipeline, outputs=(Numerator, IofQ), inputs=(Numerator,))
+    assert stage.dynamic_outputs == (Numerator, IofQ)
+    assert stage({Numerator: [1.0]})[Numerator] == [1.0]
+    assert calls['numerator'] == 0
+
+
+def test_warm_computes_shared_static_work_once(pipeline, calls):
+    numerator = Stage(pipeline, outputs=(Numerator,), inputs=(Filename,))
+    denominator = Stage(pipeline, outputs=(Denominator,), inputs=(Filename,))
+    warm(numerator, denominator)
+    assert numerator.static == {Calibration: 4.0, Bins: 2}
+    assert denominator.static == {Calibration: 4.0}
+    assert calls['calibration'] == 1
 
 
 # --- Fold -----------------------------------------------------------------------
 
 
 def test_fold_matches_manual_reduction(pipeline, calls):
-    files = ['ab', 'cd', 'ef']
-    fold = Fold(
-        pipeline,
-        members={Filename: files},
-        at={Numerator: concat, Denominator: add},
-        outputs=(IofQ,),
-    )
-    assert fold.compute(IofQ) == pytest.approx(reference(pipeline, files))
-    assert calls.counts['load'] == 3 + 2 * 3  # fold; reference computes twice per file
-    assert calls.counts['calibration'] == 1 + 2 * 3
+    files = ['ab', 'cd', 'efg']
+    expected = reference(pipeline, files)
+    calls.reset()
+    fold = Fold(pipeline, over={Filename: CUT}, outputs=(IofQ,))
+    fold.set_members({Filename: files})
+    assert fold.cut == (Numerator, Denominator)
+    assert fold.compute(IofQ) == pytest.approx(expected)
+    assert calls['load'] == len(files)
+    assert calls['calibration'] == 1
+    assert calls['normalize'] == 1
 
 
-def test_fold_outputs_default_to_the_sinks_and_folds_compose(pipeline):
-    # esssans `_set_runs` reduces its keys without naming an output, twice on one
-    # pipeline (sample runs, then background runs).
-    first = Fold(pipeline, members={Filename: ['ab', 'cd']}, at={Numerator: concat, Denominator: add})
-    assert first.cut == (Numerator, Denominator)
-    second = Fold(first.as_pipeline(), members={Mask: ['m', 'mm']}, at={IofQ: add})
-    assert second.as_pipeline().compute(IofQ) == pytest.approx(
-        reference(_with(pipeline, Mask, 'm'), ['ab', 'cd'])
-        + reference(_with(pipeline, Mask, 'mm'), ['ab', 'cd'])
-    )
+def test_fold_outputs_default_to_the_sinks(pipeline):
+    fold = Fold(pipeline, over={Filename: CUT})
+    fold.set_members({Filename: ['ab', 'cd']})
+    assert fold.compute() == {IofQ: pytest.approx(reference(pipeline, ['ab', 'cd']))}
 
 
 def test_fold_from_dataframe_with_two_columns(pipeline):
-    members = pd.DataFrame({Filename: ['ab', 'cd'], Bins: [1, 2]}).rename_axis('run')
-    fold = Fold(pipeline, members=members, at={Numerator: concat, Denominator: add}, outputs=(IofQ,))
-    per_member = fold.compute_members(Numerator)
-    assert [len(v) for v in per_member.values()] == [1, 2]
-    assert fold.compute(IofQ) == pytest.approx(
-        (97 + 99 + 100) * 4 / ((97 + 98 + 99 + 100) * 4)
-    )
+    members = pd.DataFrame({Filename: ['ab', 'cd'], Mask: ['m', 'mmm']}).rename_axis('run')
+    fold = Fold(pipeline, over={(Filename, Mask): CUT}, outputs=(IofQ,))
+    fold.set_members(members)
+    num = [97.0, 98.0, 99.0 * 3, 100.0 * 3]
+    den = (97.0 + 98.0) + (99.0 + 100.0) * 3
+    assert fold.compute(IofQ) == pytest.approx(sum(num) / den)
+    assert list(fold.members[(Filename, Mask)]) == [0, 1]
 
 
 def test_cut_key_independent_of_members_is_not_folded(pipeline):
-    # essreflectometry reduces SampleRotation with `_any_value` and wraps it in
-    # try/except because the key may not depend on Filename. Here it just works.
-    fold = Fold(
-        pipeline,
-        members={Filename: ['ab', 'cd']},
-        at={Numerator: concat, Denominator: add, Calibration: lambda *_: 1 / 0},
-        outputs=(IofQ, Calibration),
-    )
+    # essreflectometry wraps each reduce in try/except for this case.
+    fold = Fold(pipeline, over={Filename: {**CUT, Calibration: add}}, outputs=(IofQ,))
+    fold.set_members({Filename: ['ab', 'cd']})
     assert fold.cut == (Numerator, Denominator)
-    assert fold.compute(Calibration) == 4.0
+    assert fold.compute(IofQ) == pytest.approx(reference(pipeline, ['ab', 'cd']))
 
 
-def test_fold_three_stages_separately(pipeline):
-    # D15: contribute per member, combine, finalize -- e.g. in three processes.
-    files = ['ab', 'cd', 'ef']
-    fold = Fold(pipeline, members={Filename: files}, at={Numerator: concat, Denominator: add}, outputs=(IofQ,))
-    partial = fold.contribute(0)
-    for m in (1, 2):  # chained combine, as a rule's series does
-        partial = fold.combine([partial, fold.contribute(m)])
-    assert fold.finalize(partial)[IofQ] == pytest.approx(reference(pipeline, files))
+def test_fold_rejects_a_group_whose_cut_keys_are_all_static(pipeline):
+    fold = Fold(pipeline, over={Filename: {Calibration: add}}, outputs=(IofQ,))
+    fold.set_members({Filename: ['ab']})
+    with pytest.raises(ValueError, match='not needed'):
+        fold.compute()
+
+
+def test_fold_three_entry_points_equal_compute(pipeline):
+    # contribute, chained combine, finalize as the framework would call them (D15).
+    files = ['ab', 'cd', 'efg']
+    fold = Fold(pipeline, over={Filename: CUT}, outputs=(IofQ,))
+    partial = fold.contribute({Filename: files[0]})
+    for f in files[1:]:
+        partial = fold.combine([partial, fold.contribute({Filename: f})])
+    assert set(partial) == {Numerator, Denominator}
+    assert fold.finalize([partial])[IofQ] == pytest.approx(reference(pipeline, files))
 
 
 def test_fold_groups_via_pandas(pipeline):
-    # groupby: a plain pandas groupby over the member table.
-    members = pd.DataFrame({Filename: ['ab', 'cd', 'ef', 'gh'], 'angle': [1, 1, 2, 2]})
+    table = pd.DataFrame({Filename: ['ab', 'cd', 'ef'], 'sample': ['x', 'y', 'x']})
     results = {}
-    for angle, group in members.groupby('angle'):
-        fold = Fold(pipeline, members=group[[Filename]], at={Numerator: concat, Denominator: add}, outputs=(IofQ,))
-        results[angle] = fold.compute(IofQ)
-    assert results[1] == pytest.approx(reference(pipeline, ['ab', 'cd']))
-    assert results[2] == pytest.approx(reference(pipeline, ['ef', 'gh']))
+    for name, group in table.groupby('sample'):
+        fold = Fold(pipeline, over={Filename: CUT}, outputs=(IofQ,))
+        fold.set_members(group[[Filename]])
+        results[name] = fold.compute(IofQ)
+    assert results == {
+        'x': pytest.approx(reference(pipeline, ['ab', 'ef'])),
+        'y': pytest.approx(reference(pipeline, ['cd'])),
+    }
 
 
-def test_as_pipeline_is_a_flat_pipeline_that_reruns_on_upstream_change(pipeline, calls):
-    files = ['ab', 'cd']
-    fold = Fold(pipeline, members={Filename: files}, at={Numerator: concat, Denominator: add}, outputs=(IofQ,))
-    folded = fold.as_pipeline()
-    assert Filename not in folded.underlying_graph
-    assert folded.compute(IofQ) == pytest.approx(reference(pipeline, files))
-    folded[Bins] = 1  # upstream of the cut: contributions rerun
-    loads = calls.counts['load']
-    p = pipeline.copy()
-    p[Bins] = 1
-    assert folded.compute(IofQ) == pytest.approx(reference(p, files))
-    # Loading depends on the member alone, so it is held per member and not
-    # repeated; the reference computes twice per file.
-    assert calls.counts['load'] == loads + 0 + 4
-    folded[Scale] = 2.0  # downstream of the cut: the same, sciline does not cache
-    assert folded.compute(IofQ) == pytest.approx(2 * reference(p, files))
+def test_adding_a_member_costs_one_contribution(pipeline, calls):
+    fold = Fold(pipeline, over={Filename: CUT}, outputs=(IofQ,))
+    fold.set_members({Filename: ['ab', 'cd']})
+    fold.compute(IofQ)
+    fold.set_members({Filename: ['ab', 'cd', 'efg']})
+    result = fold.compute(IofQ)
+    assert calls['load'] == 3
+    assert calls['normalize'] == 2
+    assert result == pytest.approx(reference(pipeline, ['ab', 'cd', 'efg']))
 
 
-def test_hierarchical_fold_banks_over_runs(pipeline):
-    # esssans iofq_test: banks mapped on top of run-mapped pipeline. Here: the
-    # runs are folded into a flat pipeline, then folded over banks.
-    files = ['ab', 'cd']
-    runs = Fold(pipeline, members={Filename: files}, at={Numerator: concat, Denominator: add}, outputs=(IofQ,))
-    per_run = runs.as_pipeline()
-    banks = Fold(per_run, members={Mask: ['m', 'mm', 'mmm']}, at={IofQ: add}, outputs=(IofQ,))
-    expected = sum(
-        reference(_with(pipeline, Mask, m), files) for m in ['m', 'mm', 'mmm']
-    )
+def test_replacing_a_member_drops_its_contribution(pipeline, calls):
+    fold = Fold(pipeline, over={Filename: CUT}, outputs=(IofQ,))
+    fold.set_members({Filename: ['ab', 'cd']})
+    fold.compute(IofQ)
+    fold.set_members({Filename: ['ab', 'xy']})
+    result = fold.compute(IofQ)
+    assert calls['load'] == 3
+    assert result == pytest.approx(reference(pipeline, ['ab', 'xy']))
+
+
+def test_parameter_after_the_cut_keeps_contributions(pipeline, calls):
+    fold = Fold(pipeline, over={Filename: CUT}, outputs=(IofQ,))
+    fold.set_members({Filename: ['ab', 'cd']})
+    fold.compute(IofQ)
+    fold[Scale] = 3.0
+    result = fold.compute(IofQ)
+    assert calls['load'] == 2
+    assert calls['numerator'] == 2
+    assert calls['normalize'] == 2
+    assert result == pytest.approx(reference(pipeline, ['ab', 'cd'], 3.0))
+
+
+def test_parameter_before_the_cut_drops_contributions_but_keeps_members(pipeline, calls):
+    fold = Fold(pipeline, over={Filename: CUT}, outputs=(IofQ,), keep_members=True)
+    fold.set_members({Filename: ['ab', 'cd']})
+    fold.compute(IofQ)
+    fold[Bins] = 1
+    result = fold.compute(IofQ)
+    assert calls['load'] == 2
+    assert calls['numerator'] == 4
+    assert result == pytest.approx(reference(_with(pipeline, Bins, 1), ['ab', 'cd']))
+
+
+def test_setting_a_member_key_as_parameter_is_refused(pipeline):
+    fold = Fold(pipeline, over={Filename: CUT}, outputs=(IofQ,))
+    with pytest.raises(ValueError, match='member key'):
+        fold[Filename] = 'ab'
+
+
+def test_hierarchical_fold_banks_over_runs(pipeline, calls):
+    # esssans iofq_test: banks over runs. The inner fold over runs is reused per
+    # bank with the bank set as a parameter; the loaded runs are held. The outer
+    # fold's members are the inner results, at the outer cut key itself.
+    files, masks = ['ab', 'cd'], ['m', 'mm', 'mmm']
+    expected = sum(reference(_with(pipeline, Mask, m), files) for m in masks)
+    calls.reset()
+    runs = Fold(pipeline, over={Filename: CUT}, outputs=(IofQ,), keep_members=True)
+    runs.set_members({Filename: files})
+    per_bank = []
+    for mask in masks:
+        runs[Mask] = mask
+        per_bank.append(runs.compute(IofQ))
+    banks = Fold(pipeline, over={IofQ: {IofQ: add}}, outputs=(IofQ,))
+    banks.set_members({IofQ: per_bank})
     assert banks.compute(IofQ) == pytest.approx(expected)
+    assert calls['load'] == len(files)
+    assert calls['mask'] == len(files) * len(masks)
 
 
-def _with(pipeline, key, value):
-    p = pipeline.copy()
-    p[key] = value
-    return p
+def test_fold_is_a_snapshot_of_the_pipeline(pipeline):
+    fold = Fold(pipeline, over={Filename: CUT}, outputs=(IofQ,))
+    fold.set_members({Filename: ['ab', 'cd']})
+    pipeline[Bins] = 1
+    assert fold.compute(IofQ) == pytest.approx(reference(_with(pipeline, Bins, 2), ['ab', 'cd']))
+    assert fold.compute_members(Numerator)[0] == [97.0 * 4, 98.0 * 4]
 
 
-# --- Generics -------------------------------------------------------------------
+def test_compute_members_of_a_key_after_the_cut(pipeline):
+    fold = Fold(pipeline, over={Filename: CUT}, outputs=(IofQ,))
+    fold.set_members({Filename: ['ab', 'cd']})
+    per_member = fold.compute_members(IofQ)
+    assert per_member == {
+        0: pytest.approx(reference(pipeline, ['ab'])),
+        1: pytest.approx(reference(pipeline, ['cd'])),
+    }
+
+
+def test_table_with_unknown_columns_is_refused(pipeline):
+    fold = Fold(pipeline, over={Filename: CUT}, outputs=(IofQ,))
+    with pytest.raises(KeyError, match='No group'):
+        fold.set_members({Mask: ['m']})
+
+
+# --- Generics and several groups -------------------------------------------------
 
 SampleRun = NewType('SampleRun', int)
 BackgroundRun = NewType('BackgroundRun', int)
@@ -254,52 +345,37 @@ class Data(sciline.Scope[RunType, float], float): ...
 Result = NewType('Result', float)
 
 
+def load(f: File[RunType]) -> Data[RunType]:
+    return Data[RunType](float(len(f)))
+
+
+def subtract(s: Data[SampleRun], b: Data[BackgroundRun]) -> Result:
+    return Result(s - b)
+
+
 def test_fold_over_generic_key():
-    def load(f: File[RunType]) -> Data[RunType]:
-        return Data[RunType](float(len(f)))
-
-    def subtract(s: Data[SampleRun], b: Data[BackgroundRun]) -> Result:
-        return Result(s - b)
-
     pipeline = sciline.Pipeline([load, subtract], params={File[BackgroundRun]: 'x'})
-    fold = Fold(
-        pipeline,
-        members={File[SampleRun]: ['ab', 'cde']},
-        at={Data[SampleRun]: add},
-        outputs=(Result,),
-    )
+    fold = Fold(pipeline, over={File[SampleRun]: {Data[SampleRun]: add}}, outputs=(Result,))
+    fold.set_members({File[SampleRun]: ['ab', 'cde']})
     assert fold.compute(Result) == 5 - 1
 
 
-def test_stage_with_shared_ancestor_input_freezes_the_rest(pipeline, calls):
-    # Numerator is supplied; Denominator and Scale are static and held.
-    stage = Stage(pipeline, outputs=(IofQ,), inputs=(Numerator,))
-    assert stage.frontier == (Denominator, Scale)
-    assert stage({Numerator: [1.0]})[IofQ] == 1.0 / (sum(map(ord, 'unused')) * 4)
-
-
-def test_fold_is_a_snapshot_of_the_pipeline(pipeline):
-    fold = Fold(pipeline, members={Filename: ['ab', 'cd']}, at={Numerator: concat, Denominator: add})
-    pipeline[Bins] = 1
-    folded = fold.as_pipeline()
-    expected = reference(_with(pipeline, Bins, 2), ['ab', 'cd'])
-    assert fold.compute(IofQ) == pytest.approx(expected)
-    assert folded.compute(IofQ) == pytest.approx(expected)
-    assert fold.compute_members(Numerator)[0] == [97.0 * 4, 98.0 * 4]
-
-
-def test_sibling_folds_on_one_pipeline_under_dask():
-    # esssans `_set_runs`: sample runs and background runs folded on one pipeline,
-    # computed with the default (dask) scheduler.
-    from sciline.scheduler import DaskScheduler
-
-    def total(s: Data[SampleRun], b: Data[BackgroundRun]) -> Result:
-        return Result(s + b)
-
-    def load(f: File[RunType]) -> Data[RunType]:
-        return Data[RunType](float(len(f)))
-
-    pipeline = sciline.Pipeline([load, total])
-    sample = Fold(pipeline, members={File[SampleRun]: ['a', 'bb']}, at={Data[SampleRun]: add})
-    both = Fold(sample.as_pipeline(), members={File[BackgroundRun]: ['ccc']}, at={Data[BackgroundRun]: add})
-    assert both.as_pipeline().compute(Result, scheduler=DaskScheduler()) == 6
+def test_two_groups_on_one_pipeline():
+    # esssans: sample runs and background runs, each folded, one finalize.
+    pipeline = sciline.Pipeline([load, subtract])
+    fold = Fold(
+        pipeline,
+        over={
+            File[SampleRun]: {Data[SampleRun]: add},
+            File[BackgroundRun]: {Data[BackgroundRun]: add},
+        },
+        outputs=(Result,),
+    )
+    fold.set_members({File[SampleRun]: ['ab', 'cde']})
+    with pytest.raises(ValueError, match='No members'):
+        fold.compute()
+    fold.set_members({File[BackgroundRun]: ['x', 'yz']})
+    assert fold.compute(Result) == 5 - 3
+    sample = fold.combine([fold.contribute({File[SampleRun]: f}) for f in ['a', 'b']])
+    background = fold.contribute({File[BackgroundRun]: 'xyz'})
+    assert fold.finalize([sample, background])[Result] == 2 - 3

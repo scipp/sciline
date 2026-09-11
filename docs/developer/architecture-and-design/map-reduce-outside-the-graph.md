@@ -7,13 +7,17 @@ Proposal, with a prototype. Companion to the demand-driven generics design docum
 Sciline's `map`/`reduce` put a loop over members and a combine step inside the graph.
 That has been tried twice (parameter tables in 23.08, cyclebane in 24.06), is the source of every breaking change and every remaining open question in the PEP 695 work, and still cannot express what `ess.reduce.streaming.StreamProcessor` and the essapps architecture need: run one part of a graph repeatedly with some values supplied per call, combine the results outside, run the rest once.
 
-The proposal is to make that operation the primitive and build everything else from it:
+The proposal is to make that operation the primitive and compose everything else from it outside the graph:
 
 - `sciline.v2.Pipeline`: the flat graph from type hints, with PEP 695 generics, without `map`, `reduce`, `groupby`, `constraints`, or cyclebane.
-- `Stage`: the part of a pipeline from a set of input keys to a set of output keys, with everything that does not depend on the inputs computed once and the inputs supplied per call. This is what `StreamProcessor` builds by hand today, what scipp/sciline#241 asks for, and what the essapps warm workflow (D8) and split workflows (phase 3) are.
-- `Fold`: a member table and a set of cut keys with a combine function per key; two stages of the same flat pipeline, `contribute` (member keys to cut keys) and `finalize` (cut keys to outputs). This replaces every real use of `map`/`reduce` in the ESS packages and is the essapps contribute/combine/finalize triple (D15).
+- `Stage`, in sciline: the part of a pipeline from a set of input keys to a set of output keys, with everything that does not depend on the inputs computed once and the inputs supplied per call. This is what `StreamProcessor` builds by hand today, what scipp/sciline#241 asks for, and what the essapps warm workflow (D8) and split workflows (phase 3) are.
+- Connectors, in ess.reduce: objects between stages with `push`, `value`, and `clear`. The type of the connector says why the graph is cut there: a reducer where members are combined, a forwarder where a context is held between changes. The accumulators of `ess.reduce.streaming` are reducers in this sense.
+- Drivers, in ess.reduce: `Fold` for the table-fold shape, with settable members and parameters and the three entry points contribute, combine, finalize; `StreamProcessor` for streams. Each is a loop over stages and connectors and carries only its policy.
 
-A 330-line prototype on sciline `main` passes 17 tests covering the use-case shapes found in the ESS packages, reproduces the LoKI multi-run reduction identically against the existing `with_sample_runs` with the same provider call counts, and has been through one critical review whose findings are folded in below.
+There is no drop-in replacement for the pipeline that `with_sample_runs` and its siblings return today.
+Those helpers become a dedicated object per package, built on `Fold`, on which users set runs and parameters and compute.
+
+A prototype on sciline `main` passes 26 tests covering the use-case shapes found in the ESS packages and reproduces the LoKI multi-run reduction identically against the existing `with_sample_runs`, with the same provider call counts.
 
 ## Problem
 
@@ -49,13 +53,14 @@ Every use in `/workspace/ess` and esslivedata, by shape:
 
 | Shape | Sites | What is combined |
 |---|---|---|
-| Fold: map over a table, reduce at one or more keys, result feeds further providers | esssans runs (4 cut keys from one map, `merge_contributions`), essreflectometry runs (up to 7 cut keys, concat and `_any_value`), isissans zoom monitors (concat along a new dim, assert-unique position), bifrost triplets (two cut keys at different depths), masks in esssans and esspowder (dict union), NMX panels and MTZ files, DREAM detectors with a two-column table | events by concat, dense by sum, metadata by pick-one, dicts by union, `DataGroup` by key |
+| Fold: map over a table, reduce at one or more keys, result feeds further providers | esssans runs (4 cut keys from one map, `merge_contributions`), essreflectometry runs (up to 7 cut keys, concat and `_any_value`), isissans zoom monitors (concat along a new dim, assert-unique position), bifrost triplets (two cut keys at different depths), NMX panels and MTZ files, DREAM detectors with a two-column table | events by concat, dense by sum, metadata by pick-one, `DataGroup` by key |
+| Fold whose cut sits inside another fold's per-member work | pixel masks in esssans and esspowder: `DetectorMasks` reads the detector IDs of the sample run | dicts by union |
 | Per-member results, no reduce | esssans `with_banks`, LoKI notebook, `BatchProcessor`, bifrost test | none; read with `compute_mapped` |
-| Sequential composition on one pipeline | sample runs then background runs; banks over already-folded runs | as above |
+| Several folds on one pipeline, one final stage | sample runs and background runs | as above |
 | Fold in the static part of a `StreamProcessor` | esslivedata bifrost `EmptyDetector` over banks | `_combine_banks` |
 
 Two things stand out.
-Reduced nodes are almost always grafted back onto the same pipeline (`workflow[K] = workflow[K].map(df).reduce(func=f)`), so the caller sees an ordinary pipeline afterwards; `parameter_mappers` in `ess.reduce` depends on that.
+Reduced nodes are grafted back onto the same pipeline (`workflow[K] = workflow[K].map(df).reduce(func=f)`), so the caller sees an ordinary pipeline afterwards, and `parameter_mappers` in `ess.reduce` depends on that; the proposal gives that up, see the migration.
 And essreflectometry wraps each reduce in `try/except` because a cut key may not depend on the mapped key at all.
 
 ## Proposal
@@ -84,6 +89,7 @@ Docs: the parameter-tables guide is replaced by a guide on folds; the generic-pr
 stage = Stage(pipeline, outputs=(Numerator, Denominator), inputs=(Filename,))
 stage.frontier          # the static keys the dynamic part reads, computed once
 values = stage({Filename: 'run1.nxs'})   # -> {Numerator: ..., Denominator: ...}
+warm(stage_a, stage_b)  # static parts of several stages of one pipeline in one run
 ```
 
 Semantics:
@@ -91,66 +97,104 @@ Semantics:
 - The graph is the ancestors of `outputs`.
   The dynamic part is `inputs` and their descendants; the static part is the rest.
   An input may be a parameter or an intermediate node; either way its own providers and ancestors are cut.
+  An output that is also an input is passed through, so that a stage from a key to itself is the identity; a fold whose members are values at its own cut key needs this.
 - The frontier, the static keys read by dynamic nodes plus static outputs, is computed on first use and held.
   Nothing else of the static part is kept.
+  `warm` computes the static parts of several stages together, so that what they share, a file every stage reads, is computed once and released; without it each stage would read it.
 - A call supplies exactly the inputs, computes only the dynamic part, and releases the supplied and computed values when it returns.
   This meets the three requirements of scipp/sciline#241 by construction: no rebuild, call-scoped lifetime, culling.
 - A stage is a snapshot: the pipeline it was built from is not modified, and changing that pipeline afterwards does not affect the stage.
   To change a fixed parameter, build a new stage.
-- `dynamic` and `dynamic_outputs` expose the partition: which nodes, and which outputs, depend on the inputs at all.
-  Layered partitions, such as `StreamProcessor`'s static, context-dependent, and chunk-dependent sets, are built from these, see below.
+- `dynamic`, `dynamic_outputs`, and `keys` expose the partition: which nodes and outputs depend on the inputs, and which keys the stage reads at all.
+  Layered partitions, such as `StreamProcessor`'s static, context-dependent, and chunk-dependent sets, and the member frontier of a fold, are built from these, see below.
 
 What it replaces: `_build_streaming_workflow`, `_FedWorkflow`, `_find_descendants`/`_find_parents`, and the pruning-by-assignment hack in `StreamProcessor`; the sciline wrapper of D8, whose cache is the frontier of `Stage(inputs=cheap_parameters)`; and each half of a split workflow.
 
 It belongs in sciline because it needs the concrete graph and `Provider` to do without private access, which is the argument scipp/sciline#241 makes.
+It is the only thing here that does.
 
-### 3. `Fold`
+### 3. Composition: stages and connectors
+
+Every use above is a set of stages of one flat pipeline with something between them, and the something is where the state and the policy live.
+Between two stages sits a connector, an object with `push`, `value`, and `clear`:
+
+- a reducer, where per-member values are combined: the accumulators of `ess.reduce.streaming`, or an n-ary function over held contributions;
+- a forwarder, where a value is held until it is replaced: `StreamProcessor`'s context, the frontier of a warm workflow, a stage output crossing a process boundary in essapps phase 3;
+- a store keyed by member label, where per-member values are held for reuse.
+
+`Stage` itself holds nothing but its frontier, and even that is a forwarder from a stage with no inputs, kept inside because it is the common case.
+Every held value is an object the driver can inspect, clear, serialize, or place on a process boundary, which is the explicit lifetime scipp/sciline#241 asks for.
+A value leaves one driver and enters another as a parameter of the flat pipeline: a fold over banks whose result feeds a `StreamProcessor` is `pipeline[EmptyDetector] = fold.compute(EmptyDetector)` before the processor is built.
+
+The alternative considered was a `Stage` with tiers of inputs and a hold policy per tier, deriving all boundaries itself.
+It is the same information, held inside one class instead of shown as objects, and it puts policy into sciline.
+The connector form was chosen.
+
+Two things were considered and deferred:
+
+- A generic network object holding stages and connectors and scheduling pushes through them.
+  The real shapes disagree on exactly that policy: a chunk runs eagerly because it cannot be held, a context update runs eagerly but must not touch the accumulators, a table fold may run lazily, `clear` drops accumulators but keeps context, rolling windows and `on_finalize` add their own rules.
+  A generic object either parametrizes all of that or hides one choice, and it is the nested-workflow shape one level up: a graph of stages with its own scheduler.
+  Each real shape is a loop of under twenty lines over plain objects, and the loop is where the policy belongs.
+  If phase 3 needs connectors placed on process boundaries with pushes routed across them, that object is a placement and routing layer over the same stages and connectors, decided with that case in hand.
+- A builder that derives the stage boundaries from the graph given ordered groups of inputs.
+  One caller needs a derived boundary today, the context frontier of `StreamProcessor`, and it is two lines (`stream_test.py`).
+  A fold's cut is a declaration, not a derivation.
+  Extract the function when a second caller appears.
+
+What is shared, then, is small: `Stage` and `warm` in sciline; the connector protocol, a `Forwarder`, and the existing accumulators in ess.reduce; a visualize function over a list of stages and connectors, since `StreamProcessor`'s node classification is read off `Stage.frontier` and `dynamic`; and the drivers below.
+
+### 4. `Fold`
 
 ```python
 fold = Fold(
     pipeline,
-    members=pd.DataFrame({Filename[SampleRun]: files}).rename_axis('run'),
-    at={NormalizedQ[SampleRun, Numerator]: merge_contributions,
-        NormalizedQ[SampleRun, Denominator]: merge_contributions},
+    over={Filename[SampleRun]: cut_for(SampleRun),         # member key(s) -> {cut key: combine}
+          Filename[BackgroundRun]: cut_for(BackgroundRun)},
     outputs=(BackgroundSubtractedIofQ,),
 )
-fold.compute(BackgroundSubtractedIofQ)      # contribute per member, combine, finalize
+fold.set_members(pd.DataFrame({Filename[SampleRun]: files}).rename_axis('run'))
+fold.set_members({Filename[BackgroundRun]: background_files})
+fold[QBins] = bins                          # a parameter; what depends on it is rebuilt
+fold.compute(BackgroundSubtractedIofQ)      # contribute what is not held, combine, finalize
 fold.compute_members(NormalizedQ[SampleRun, Numerator])   # per-member values
-fold.contribute(run); fold.combine([...]); fold.finalize(contribution)   # the three stages
-fold.as_pipeline()      # a flat pipeline whose cut keys are provided by the fold
+fold.contribute(row); fold.combine([...]); fold.finalize([...])   # the three entry points
 ```
 
 Semantics:
 
-- `members` is a table: one row per member, one column per key; a dict of columns or a DataFrame.
-  The row index is the member key.
-- `at` maps cut keys to n-ary combine functions, today's `reduce(func=)` signature, which every combine in the ESS packages already has; `outputs` defaults to the pipeline's output keys, since the `with_*` helpers reduce their keys without naming an output.
-  A cut key that does not depend on the member keys is not folded; `finalize` computes it from the fixed part of the graph.
+- `over` declares the structure: per group of member keys, the cut keys with an n-ary combine per key, today's `reduce(func=)` signature, which every combine in the ESS packages already has.
+  A group is identified by its member keys, which are the columns of its member table.
+  Sample runs and background runs are two groups of one fold with one finalize; a two-column table (DREAM) is one group with two member keys.
+  A member key of one group is an ordinary parameter for the others: the LoKI background group reads `DetectorMasks` built from the detector IDs of whatever `Filename[SampleRun]` is set on the pipeline, as the reference does.
+- A cut key that does not depend on the group's member keys is not folded; finalize computes it from the fixed part of the graph.
   That removes essreflectometry's `try/except`; it also means a misplaced cut key is silently static, which `cut` reports and a test should check.
-- The fold takes a copy of the pipeline when it is built, so that every stage, `compute_members`, and `as_pipeline()` see one snapshot however the caller's pipeline is changed afterwards.
-- `contribute` is `Stage(outputs=cut, inputs=member_keys)`, `finalize` is `Stage(outputs=outputs, inputs=cut)`, both from the same flat pipeline, so a parameter is set once and reaches both.
-  Which parameters `finalize` reads is derived: the ones that are not ancestors of the cut.
-- A contribution is a dict at the cut keys.
-  `combine` applies the per-key function across contributions; `finalize` takes one contribution.
-  The three can run in three processes with the contribution serialized between them.
-- `as_pipeline()` returns the flat pipeline with the cut keys provided by synthesized providers whose inputs are the contribute stage's frontier.
-  A change to any parameter upstream of the cut reruns the fold; the member keys and what only they reach are pruned from the graph, so a later assignment to a pruned key is a no-op, as it is for a mapped key today.
-  This is the drop-in form for `with_sample_runs` and the other `with_*` helpers, and what `parameter_mappers` needs; `get_parameters` is unaffected because it runs on the unfolded pipeline and `assign_parameter_values` folds afterwards.
-  The synthesized node needs a key that is unique per cut, stable across processes, and picklable; the prototype uses a type named after the cut keys, which is enough for sibling folds under the dask scheduler but not for `serialize`, and v2's `provide(key, callable)` should take a plain hashable key instead.
-
-What is not in `Fold`:
-
-- `groupby`: a pandas `groupby` over the member table and a fold per group.
-- Hierarchy: a fold over a folded pipeline (banks over runs), or a fold whose members are themselves folded (angle groups inside a run, runs across records).
-  Both are compositions of plain objects; nothing nests inside a graph.
-- Parallelism over members: a driver concern, threads or dask over `contribute`, not a property of the graph.
+- Per group, two stages of the flat pipeline: the member stage, from the member keys to the member frontier, the nodes that read nothing but the members; and the contribute stage, from the member frontier to the cut, whose static part is the outer frontier.
+  One finalize stage from all cuts to the outputs.
+  The split is derived with `Stage` alone: the member frontier is what the stage from the outer frontier to the cut reads that is not static.
+  All static parts are warmed together.
+- The fold holds contributions per member label, keyed by the table's row index.
+  `set_members` keeps the held values of a member whose label and row are unchanged, so adding a run costs one contribution and replacing one costs one; `compute` contributes what is missing, combines each group with its functions in one n-ary call, and finalizes.
+  `fold[key] = value` rebuilds only what reads the key: a parameter after the cut keeps every contribution; one before the cut drops them.
+  With `keep_members=True` the member frontier, what the graph computes from a member alone, is held across such a change as well.
+- `contribute`, `combine`, and `finalize` are the three entry points of essapps D15 and can run in three processes with the contribution, a dict at the cut keys, serialized between them.
+  `contribute` takes a row, not a label, so a member need not be in any table.
+- Hierarchy is composition of plain objects.
+  Banks over runs: one fold over runs with `keep_members=True`, the bank set as a parameter per iteration, the per-bank results given as members of a second fold whose member key is its own cut key.
+  Angle groups inside a run (essapps D15) are an inner fold whose finalize output is a member of the outer one.
+  Nothing nests inside a graph.
+- Not in `Fold`: `groupby`, which is a pandas `groupby` over the table and a fold per group; parallelism over members, which is a driver concern, threads or dask over `contribute`, not a property of the graph.
   The single-scheduler run over all members that in-graph mapping gave is what this loses; it is also what made everything else hard.
-  Sharing of member-only work across composed folds is kept by the member frontier (see the LoKI validation).
 
-### 4. `StreamProcessor` on `Stage`
+A fold whose cut sits inside another fold's per-member work is not a fold.
+esssans's pixel masks are the case: `DetectorMasks` reads the detector IDs of the sample run, so under `map`/`reduce` the mask fold is evaluated per sample run by the graph.
+Outside the graph that is one list parameter, `PixelMaskFilenames`, and two providers: one reads the files, static and shared; one builds the masks per run.
+Folds are for members that are expensive or whose per-member values users want; a handful of small files combined by union is neither.
+
+### 5. `StreamProcessor` on `Stage`
 
 `StreamProcessor` is not a `Fold`: its members are not recomputable, its accumulators may be stateful and non-associative (rolling windows), and a context update must not invalidate what was accumulated.
-It is three stages, which is also how it is structured today, with the context frontier derived from the partition rather than found by hand:
+It is three stages and two kinds of connector, which is also how it is structured today, with the context frontier derived from the partition rather than found by hand:
 
 ```python
 per_chunk = Stage(pipeline, outputs=accumulator_keys, inputs=dynamic_keys)
@@ -158,23 +202,24 @@ context_frontier = Stage(pipeline, outputs=per_chunk.frontier, inputs=context_ke
 context_stage = Stage(pipeline, outputs=context_frontier, inputs=context_keys)
 chunk_stage = Stage(pipeline, outputs=accumulator_keys, inputs=dynamic_keys + context_frontier)
 finalize_stage = Stage(pipeline, outputs=target_keys, inputs=accumulator_keys + context_targets)
+context = Forwarder(); accumulators = {key: EternalAccumulator() for key in accumulator_keys}
 ```
 
 `stream_test.py` runs this shape, including a context update with the accumulator kept; the rewrite of the real class against its 35 tests is the next step, not done here.
 
-`set_context` calls the first and holds the result; `accumulate` calls the second with a chunk and the held context and pushes into accumulators; `finalize` calls the third.
-The accumulator classes, the key-set validation, `on_finalize`, `clear`, and `visualize` stay; the node classification behind `visualize` is read off the stages' frontier and dynamic sets.
+`set_context` calls the context stage and pushes into the forwarder; `accumulate` calls the chunk stage with a chunk and the forwarder's value and pushes into the accumulators; `finalize` calls the third stage.
+The accumulator classes, the key-set validation, `on_finalize`, `clear`, and `visualize` stay; `Accumulator.push` histograms by default through `maybe_hist`, which moves to the reducing subclasses so that a forwarder does not.
 `allow_bypass` becomes "a dynamic key that is also an input of the finalize stage".
 The module shrinks to the policy, which is what scipp/ess#732 said should stay: which values are transient and which are held.
 
-### 5. What this means for essapps
+### 6. What this means for essapps
 
 - D8: the wrapper is `Stage(inputs=cheap_parameters)`.
   The cheap parameters stay a declaration, since they decide what a UI offers as a slider; the cached nodes are derived from it, not declared.
-- D15: contribute, combine, finalize are `Fold`'s three methods; the contribution is the dict at the cut keys.
+- D15: contribute, combine, finalize are `Fold`'s three entry points; the contribution is the dict at the cut keys.
   The declaration of which parameters finalize reads is derived from the graph and can be removed from D13/D15.
-  A chained series is `fold.combine([previous, fold.contribute(new)])`; the in-memory fold is the same call with the partial held.
-- Phase 3: the session model's warm workflow, the checkpoint model's in-application workflow, and the split model's two stages are the same `Stage` objects; the models differ only in where the objects live and when a cut value becomes a record.
+  A chained series is `fold.combine([previous, fold.contribute(row)])`; the in-memory fold is `compute` with the contributions held.
+- Phase 3: the session model's warm workflow, the checkpoint model's in-application workflow, and the split model's two stages are the same `Stage` objects; the models differ only in where the objects live and when a cut value becomes a record, which is where a forwarder sits.
   The decision the stateless note defers is then about placement, not about a mechanism.
 - Hierarchy inside one record (Bifrost angle groups, NMX chunks) is an inner fold whose finalize output is a member of the outer one, which is what D15 already says the callable does itself.
 
@@ -183,76 +228,76 @@ The module shrinks to the policy, which is what scipp/ess#732 said should stay: 
 The nested-workflow idea that was rejected before sciline put a graph inside a node: sub-workflows with their own parameters, composed by an outer workflow.
 Its problems were plumbing and opacity: parameters had to be passed through boundaries, and a boundary hid what was inside.
 
-Here the author writes one flat graph, and `Stage` and `Fold` are derived from it at the time they are used, from the keys the caller names.
-Every parameter is set on the flat pipeline and reaches every stage.
-No provider or key is added to the author's graph, with one exception: `as_pipeline()` synthesizes providers for the cut keys, whose inputs are derived from the graph and are real type hints.
-Composition across stages is function composition in Python, so the graph never contains a graph.
+Here the author writes one flat graph, and stages are derived from it at the time they are used, from the keys the caller names.
+Every parameter is set on the flat pipeline and reaches every stage; `fold[key] = value` is that, with the rebuild derived.
+No provider or key is added to the author's graph.
+Composition across stages is function composition in Python with connectors between, so the graph never contains a graph, and what is held is visible as objects.
 
-The strongest argument is the one the plumbing objection was about: every static key the dynamic part reads becomes a real, typed argument of the synthesized provider, so every settable parameter survives the fold and is set in one place.
-
-What remains of the objection is opacity: inside `as_pipeline()` there are no per-member errors, no progress, and nothing to visualize.
-So `as_pipeline()` is a bridge for the `with_*` helpers and the UI's `parameter_mappers`, not the way to use folds; new code, essapps included, uses `Fold` directly.
-The trap to keep out of: a provider written by hand that runs a pipeline; `as_pipeline()` should stay the only one, and its callers should migrate.
+An earlier draft kept a bridge, `as_pipeline()`, that synthesized providers for the cut keys so that the `with_*` helpers could keep returning a pipeline.
+It was dropped: it was the only way two folds could compose, so it was not a bridge but the mechanism; it forced the member table to be fixed at construction; and it reintroduced the opacity, a provider that runs a loop with no per-member errors, progress, or visualization.
+The trap to keep out of stays: a provider written by hand that runs a pipeline.
 
 ## Evidence
 
 Prototype: `stage-prototype/stage.py`, tests in `stage-prototype/stage_test.py` and `stream_test.py`, run against sciline `main` (the pep695 branch needs an unreleased cyclebane for generics; on it all tests but the generics one pass as well).
-It reads `TaskGraph._graph` for the concrete graph, hardcodes the naive scheduler inside stages, and synthesizes providers with `exec`; all three go away inside v2.
+It reads `TaskGraph._graph` for the concrete graph and hardcodes the naive scheduler inside stages; both go away inside v2.
 
 Covered:
 
-- static part computed once, dynamic part per call; an intermediate input cuts its ancestors; an input the outputs do not need is refused;
+- static part computed once, dynamic part per call; an intermediate input cuts its ancestors; an input the outputs do not need is refused; an output that is an input is passed through; `warm` computes shared static work once;
 - the warm workflow shape (cheap parameter after an expensive load);
-- a fold with two cut keys and different combine functions equal to a manual loop; a two-column member table; a cut key independent of the members passed through; contribute, chained combine, finalize as separate calls; groupby via pandas;
-- `as_pipeline()`: a flat pipeline, the member key pruned from the graph, rerun on a change upstream of the cut without reloading the members; sibling folds on one pipeline under the dask scheduler; the fold as a snapshot under later mutation of the caller's pipeline;
-- banks over folded runs; a fold over a generic key with `TypeVar`-instantiated providers; an intermediate input with a shared ancestor, where the rest is frozen;
-- the `StreamProcessor` shape: chunk stage, held context, context update without clearing, finalize.
+- a fold with two cut keys and different combine functions equal to a manual loop; a two-column member table; a cut key independent of the members passed through; a group with no dependent cut key refused; contribute, chained combine, finalize as separate calls; groupby via pandas;
+- adding a member costs one contribution; replacing one drops its contribution; a parameter after the cut keeps contributions; one before the cut drops them and, with `keep_members`, keeps the loaded members; a member key cannot be set as a parameter; a table with unknown columns is refused;
+- banks over folded runs with the runs loaded once; a fold over a generic key with `TypeVar`-instantiated providers; two groups on one pipeline through `compute` and through the three entry points; the fold as a snapshot under later mutation of the caller's pipeline; per-member values of a key after the cut;
+- the `StreamProcessor` shape: chunk stage, context in a forwarder, histogram in a reducer, context update without clearing, finalize.
 
-LoKI validation (`stage-prototype/loki_validation.py`): the esssans multi-run test workflow, one mask file, two sample runs, two background runs, three folds composed on one pipeline (masks, sample runs, background runs) as `with_pixel_mask_filenames`, `with_sample_runs`, and `with_background_runs` do it with `map`/`reduce`.
-`BackgroundSubtractedIofQ` and `BackgroundSubtractedIofQxy` are identical to the reference under `assert_identical`, per-member `NormalizedQ` equals both a single-run compute and `compute_mapped`, and contribute, chained combine, finalize equal the one-shot result.
-Provider call counts equal the reference's, including one read of the mask file, and wall time is 7.2 s against 7.4 s for the reference under the same scheduler.
-Under sciline's default dask scheduler the reference takes 5.7 s, because the single graph runs the two sample runs in threads; in this design that parallelism is the driver's, a thread pool over `contribute`, and is not in the prototype.
+LoKI validation (`stage-prototype/loki_validation.py`): the esssans multi-run test workflow, one mask file, two sample runs, two background runs.
+Reference: `with_pixel_mask_filenames`, `with_sample_runs`, `with_background_runs` with `map`/`reduce`.
+Prototype: one `Fold` with two groups on the flat pipeline, the masks as a list parameter.
+`BackgroundSubtractedIofQ` and `BackgroundSubtractedIofQxy` are identical to the reference under `assert_identical`; per-member `NormalizedQ` equals both a single-run compute and `compute_mapped`; contribute, chained combine, finalize equal `compute`.
+Provider call counts equal the reference's, including one read of the mask file, once `warm` computes the static parts of the two groups together; before that the file was read once per group.
+Wall time is 6.5 s against 6.9 s under the same scheduler; under sciline's default dask scheduler the reference is about 1.7 s faster because the single graph runs the two sample runs in threads, and that parallelism is the driver's here, not in the prototype.
+Adding the second sample run after computing with one costs one contribution: one more `apply_pixel_masks` call and no second mask read.
 
-The call counts needed one addition, and it is the same trick `StreamProcessor` uses for its static inputs, applied per member.
-A contribute stage has two kinds of inputs: the member keys and the outer frontier.
-Nodes that depend on the member keys alone (reading a mask file, loading a run) are propagated once per member up to the first node that also reads a frontier value, the member frontier, and held there; a call with new frontier values computes only from the member frontier down.
-Without this, a fold composed under another fold reran its whole contribute per outer member, and the mask file was read once per sample run.
-Holding the member frontier is a memory policy: for a fold over runs it is the loaded run, which a graph also holds for the duration of one compute but not across computes.
-The prototype holds it for the fold's lifetime; the eventual `Fold` needs this as an option, with releasing after each combine as the default for large members.
-
-Two more things the validation changed in the prototype: a stage computes its static values on first use rather than at construction, since a fold used only through `as_pipeline()` never needs its finalize stage, and `outputs` defaults to the pipeline's sinks, since the `with_*` helpers reduce their keys without naming an output.
+One finding on memory policy: with `keep_members=True`, changing `QBins` reruns everything from `apply_pixel_masks` on, and the wall time is the same as a cold compute.
+The member frontier is derived, and in this graph it lies above the wavelength conversion, because that reads `WavelengthBins`, a parameter; what the graph computes from a member alone is small.
+Holding more would need a second tier, parameters declared as rarely changing, which is `StreamProcessor`'s context and not in `Fold`.
 
 Not shown by the prototype: the `StreamProcessor` rewrite against its real tests, and parallel members.
 
 ## Migration
 
-1. sciline: `Pipeline` without map/reduce, `Stage`, `provide`.
+1. sciline: `Pipeline` without map/reduce, `Stage`, `warm`, `provide`.
    Whether this is `sciline.v2` or the next major release is a real choice.
    The namespace lets esslivedata and external users pin through the change and keeps v1 importable next to v2; it also bundles two independent changes under one name, invites mixing v1 and v2 pipelines in one process with obscure failures, and guarantees a second rename.
    Recommendation: one major release, with the ESS monorepo migrated in one PR and esslivedata pinning the previous version until it follows; the last minor release before it deprecates `map`, `reduce`, and `constraints=`.
-   `Stage` belongs in sciline whichever way this goes, since it needs the graph and `Provider`.
-2. ess.reduce: `Fold` next to `StreamProcessor` in one module of stage-derived tools, since it is where the combine functions and the essapps wrapper live and where it can change without a sciline release; `StreamProcessor` rewritten on `Stage` against its existing tests; `with_*` helpers in esssans, esspowder, essreflectometry, essspectroscopy return `fold.as_pipeline()` so their callers do not change; `BatchProcessor` loses its mapped/unmapped fallback; `parameter_mappers` unchanged.
-   `with_banks`, which maps without reducing, becomes a helper returning one pipeline per bank, which is what its callers do with `compute_mapped` anyway.
-   NMX and DREAM notebooks use `Fold` directly.
-3. esslivedata: the bifrost bank fold becomes `Fold(...).as_pipeline()` before the `StreamProcessor` is built, as now.
-4. essapps: D8 and D15 wording as above; the D3/D6 spike's fake workflow with two accumulation points is a `Fold`.
+2. ess.reduce: `Fold`, `Forwarder`, and the accumulators in one module of stage-derived tools; `StreamProcessor` rewritten on `Stage` against its existing tests; `BatchProcessor` loses its mapped/unmapped fallback.
+   `parameter_mappers`, which maps a list-valued parameter to a `with_*` helper returning a pipeline, is replaced by a registry from member key to cut, so that the UI builds a `Fold` over the pipeline and calls `set_members` for the list-valued parameters; `get_parameters` is unaffected because it runs on the flat pipeline.
+3. esssans, essreflectometry, essspectroscopy, essnmx, essdiffraction: the `with_*` helpers that fold are replaced by a dedicated object per package, a `Fold` with the package's cuts, on which users set runs and parameters and compute; notebooks and tests change accordingly.
+   `with_pixel_mask_filenames` in esssans and essdiffraction becomes a `PixelMaskFilenames` list parameter with two providers.
+   `with_banks`, which maps without reducing, becomes a loop setting `NeXusDetectorName` on the fold or the pipeline, which is what its callers do with `compute_mapped` anyway.
+4. esslivedata: the bifrost bank fold becomes a `Fold` computed before the `StreamProcessor` is built, its result set as a parameter of the processor's pipeline.
+5. essapps: D8 and D15 wording as above; the D3/D6 spike's fake workflow with two accumulation points is a `Fold`.
 
 ## Open questions
 
 - **Combine protocol.**
-  N-ary, as in the prototype and in `reduce(func=)` today: a pairwise call is the n-ary one with two arguments, `sc.concat` over a list is one pass where pairwise folding of binned events reallocates per step, and associativity is a property the workflow declares for D15, not a signature.
-  Accumulators stay in `StreamProcessor`.
-- **Member table type.**
-  The prototype accepts a dict of columns or a DataFrame.
-  Recommendation: `Mapping[member, Mapping[Key, value]]` only, which `df.to_dict('index')` produces, so that pandas stays out of the library and there is one convention for member labels.
-- **What is held per member.**
-  Two candidates: the member frontier (so that a rerun with changed upstream parameters does not reload), and the contribution (so that D15's removal of a member is a combine over the rest).
-  Both are memory policies, and for event data both are large; recommendation: options on `Fold`, off by default, on in a warm session.
-- **`as_pipeline()`.**
-  Keep it for the `with_*` helpers, or migrate their callers to `Fold` and drop it.
-  Recommendation: keep it; it is forty lines and it is what keeps the change non-breaking for `parameter_mappers` and the UI.
+  `Fold` uses n-ary functions over held contributions, as `reduce(func=)` does today: `sc.concat` over a list is one pass where pairwise folding of binned events reallocates per step, and associativity is a property the workflow declares for D15, not a signature.
+  `StreamProcessor` uses accumulator objects, which subsume the n-ary function and add non-associative policies.
+  Both fit the connector slot; whether `Fold` should accept an accumulator per cut key instead, so that one protocol serves both drivers, is open.
+- **Member labels.**
+  The prototype takes a dict of columns, labeled by position, or a DataFrame, labeled by its index, and keeps held values by label when the row is unchanged.
+  Recommendation: `Mapping[label, Mapping[Key, value]]` only, which `df.to_dict('index')` produces, so that pandas stays out of the library and the label is always the caller's.
+- **What is held.**
+  Contributions per member always, in the prototype; the member frontier as an option; nothing else.
+  For event data both are large, and the LoKI finding above says the member frontier buys little without a second tier of rarely changing parameters.
+  Recommendation: keep contributions, since they are what makes add and remove cheap and what D15 stores anyway; decide on the member frontier when a case shows it pays.
+- **`contribute` and sibling groups.**
+  `contribute(row)` warms only its own group's stages, so two groups contributed separately each read a shared static file.
+  Warming all groups would load what another group's static part needs, wrong for a throwaway contribute process.
+  Left as is; the driver that wants sharing calls `compute`.
 - **Names.**
-  `Stage`, `Fold`, `cut`, `members`, `contribute`/`combine`/`finalize` here; essapps says contribution, accumulation point, stage output.
+  `Stage`, `Fold`, `over`, `cut`, `contribute`/`combine`/`finalize`, `Forwarder` here; essapps says contribution, accumulation point, stage output.
   One vocabulary across sciline, ess.reduce, and essapps is worth settling before the code lands.
 - **Parallel members.**
   An executor argument on `Fold`, or leave it to the caller with dask delayed over `contribute`.
