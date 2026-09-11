@@ -150,13 +150,19 @@ def test_stage_is_a_snapshot_of_the_pipeline(pipeline: sl.Pipeline) -> None:
     assert stage({Filename: 'ab'})[Numerator] == [97.0 * 4, 98.0 * 4]
 
 
-def test_stage_uses_given_scheduler(
-    pipeline: sl.Pipeline, scheduler: sl.scheduler.Scheduler
-) -> None:
-    stage = Stage(
-        pipeline, outputs=(Denominator,), inputs=(Filename,), scheduler=scheduler
-    )
-    assert stage({Filename: 'ab'})[Denominator] == (97.0 + 98.0) * 4
+def test_stage_uses_given_scheduler(scheduler: sl.scheduler.Scheduler) -> None:
+    # Builtin keys and local providers, so that the graph pickles by value for
+    # dask.distributed workers, which cannot import this test module.
+    def length(s: str) -> int:
+        return len(s)
+
+    def scaled(n: int, factor: float) -> complex:
+        return complex(n * factor, 0.0)
+
+    pipeline = sl.Pipeline([length, scaled], params={float: 0.5})
+    stage = Stage(pipeline, outputs=(complex,), inputs=(str,), scheduler=scheduler)
+    assert stage.frontier == (float,)
+    assert stage({str: 'abcd'})[complex] == 2.0 + 0.0j
 
 
 def test_stage_rejects_object_that_is_not_a_scheduler(pipeline: sl.Pipeline) -> None:
