@@ -36,10 +36,10 @@ class Stage:
     """The part of a pipeline from a set of input keys to a set of output keys.
 
     Everything the outputs need that does not depend on the inputs is computed once,
-    on first use, and held. Calling the stage supplies values for the inputs and
-    computes only what lies downstream of them. An input may be a parameter or an
-    intermediate result; in both cases its own provider and ancestors are cut off.
-    An output that is also an input is passed through.
+    on first use, and the values at the frontier are held. Calling the stage supplies
+    values for the inputs and computes only what lies downstream of them. An input
+    may be a parameter or an intermediate result; in both cases its own provider and
+    ancestors are cut off. An output that is also an input is passed through.
 
     A stage is a snapshot of the pipeline at the time it is built. Later changes to
     the pipeline do not affect it.
@@ -200,7 +200,7 @@ def warm(*stages: Stage) -> None:
     Stages that are already warm are skipped.
 
     All stages must be built from the same pipeline. The scheduler of the first
-    stage is used.
+    stage that is not yet warm is used.
 
     Parameters
     ----------

@@ -182,7 +182,8 @@ class Aggregation:
         Raises
         ------
         ValueError
-            If a member key is not needed by the accumulation keys.
+            If an accumulation key or an output is not in the pipeline, or if a
+            member key is not needed by the accumulation keys.
         """
         members = tuple(members)
         outputs = tuple(outputs)
