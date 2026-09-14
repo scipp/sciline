@@ -6,7 +6,7 @@ import pandas as pd
 import pytest
 
 import sciline as sl
-from sciline import Aggregation, Buffered, Stage, compute_members, warm
+from sciline import Aggregation, Buffered, Reduced, Stage, compute_members, warm
 from sciline.aggregation import Table
 from sciline.typing import Key
 
@@ -127,30 +127,46 @@ def test_buffered_accumulator_without_pushes_has_no_value() -> None:
         acc.value
 
 
-class RunningSum:
-    """An accumulator holding a running total, never the pushed values."""
+def test_reduced_makes_fresh_accumulators_that_apply_func_in_push_order() -> None:
+    def join(left: str, right: str) -> str:
+        return left + right
 
-    def __init__(self) -> None:
-        self.value = 0.0
-
-    def push(self, value: float) -> None:
-        self.value += value
-
-
-class RunningConcat:
-    def __init__(self) -> None:
-        self.value: list[float] = []
-
-    def push(self, value: list[float]) -> None:
-        self.value = self.value + value
+    make = Reduced(join)
+    a, b = make(), make()
+    a.push('x')
+    a.push('y')
+    a.push('z')
+    b.push('w')
+    assert a.value == 'xyz'
+    assert b.value == 'w'
 
 
-def test_custom_accumulator_class_as_factory(pipeline: sl.Pipeline) -> None:
+def test_reduced_accumulator_without_pushes_has_no_value() -> None:
+    acc = Reduced(add)()
+    with pytest.raises(ValueError, match='Nothing has been pushed'):
+        acc.value
+
+
+def test_reduced_accumulator_takes_the_first_push_as_result() -> None:
+    pushed: list[list[float]] = []
+
+    def merge(left: list[float], right: list[float]) -> list[float]:
+        pushed.append(right)
+        return left + right
+
+    acc = Reduced(merge)()
+    for part in ([1.0], [2.0], [3.0]):
+        acc.push(part)
+    assert acc.value == [1.0, 2.0, 3.0]
+    assert pushed == [[2.0], [3.0]]
+
+
+def test_aggregation_with_reduced_accumulators(pipeline: sl.Pipeline) -> None:
     files = ['ab', 'cd', 'efg']
     agg = Aggregation(
         pipeline,
         members=(Filename,),
-        accumulators={Numerator: RunningConcat, Denominator: RunningSum},
+        accumulators={Numerator: Reduced(concat), Denominator: Reduced(add)},
         outputs=(IofQ,),
     )
     expected = reference(pipeline, files)

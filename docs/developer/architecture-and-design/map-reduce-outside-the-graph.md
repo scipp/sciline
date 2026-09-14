@@ -11,7 +11,7 @@ The proposal is to make that operation the primitive and compose everything else
 
 - `Pipeline` (called v2 below, whether it ships as a namespace or a major release; see Migration): the flat graph from type hints, with PEP 695 generics, without `map`, `reduce`, `groupby`, `constraints`, or cyclebane.
 - `Stage`, in sciline: the part of a pipeline from a set of input keys to a set of output keys, with everything that does not depend on the inputs computed once and the inputs supplied per call. This is what `StreamProcessor` builds by hand today, what scipp/sciline#241 asks for, and what the essapps warm workflow (D8) and split workflows (phase 3) are.
-- `Accumulator`, in sciline: the structural protocol for what sits between stages, `push` a value and read the combined `value`. `Buffered(func)` is a factory for an accumulator that holds all pushed values and applies an n-ary function on `value`. The accumulators of `ess.reduce.streaming` satisfy the protocol. `Forwarder`, which holds the latest value pushed, is the connector for a context between stages and stays in ess.reduce.
+- `Accumulator`, in sciline: the structural protocol for what sits between stages, `push` a value and read the combined `value`. `Buffered(func)` is a factory for an accumulator that holds all pushed values and applies an n-ary function on `value`; `Reduced(func)` is a factory for one that holds only a running result of an associative binary function. The accumulators of `ess.reduce.streaming` satisfy the protocol. `Forwarder`, which holds the latest value pushed, is the connector for a context between stages and stays in ess.reduce.
 - `Aggregation`, in sciline: the table-fold shape as two stages of one pipeline, contribute and finalize, with an accumulator per accumulation key between them and the three entry points exposed. It holds nothing but its stages; parameters are set on the pipeline, and whoever loops over members owns the contributions.
 - `StreamProcessor`, in ess.reduce, as a loop over stages and connectors carrying only its policy.
 
@@ -123,6 +123,7 @@ Between two stages sits a connector, an object with `push` and `value`:
 - an accumulator, where per-member values are combined.
   `Accumulator` is a structural protocol in sciline, `push(value)` and a `value` property, because `Aggregation` consumes it.
   `Buffered(func)`, in sciline, is a factory for an accumulator that holds all pushed values and applies an n-ary function on `value`.
+  `Reduced(func)`, in sciline, is a factory for an accumulator that holds only a running result, applying an associative binary function to it and each pushed value; the function must not modify its arguments, since pushed values belong to the caller.
   The accumulators of `ess.reduce.streaming` satisfy the protocol as they are once `maybe_hist` moves out of their base class; `clear` stays an ess.reduce convention for accumulators that are reused between finalizes.
 - a forwarder, where a value is held until it is replaced: `StreamProcessor`'s context, the frontier of a warm workflow, a stage output crossing a process boundary in essapps phase 3.
   `Forwarder` stays in ess.reduce; nothing in sciline consumes one.
@@ -130,7 +131,7 @@ Between two stages sits a connector, an object with `push` and `value`:
 
 Whether a combine buffers or runs incrementally is the accumulator's choice, not the aggregation's.
 For concat-like combines the two cost about the same, twice the total, and `Buffered` is right.
-For a sum over large dense arrays a running total holds one array instead of one per member, and an incremental accumulator is right.
+For a sum over large dense arrays a running total holds one array instead of one per member, and an incremental accumulator such as `Reduced` is right.
 An accumulator in the table case and in streaming is the same object: whether values arrive from one input over time or from many members is the driver's picture.
 Lifetime (`clear`), identity (contributions by label), and order dependence are the driver's.
 
@@ -154,7 +155,7 @@ Two things were considered and deferred:
   An aggregation's accumulation keys are a declaration, not a derivation.
   Extract the function when a second caller appears.
 
-What is shared, then, is small: `Stage`, `warm`, `Accumulator`, `Buffered`, and `Aggregation` in sciline; `Forwarder` and the existing accumulators in ess.reduce, satisfying the protocol without a base class; a visualize function over a list of stages and connectors, since `StreamProcessor`'s node classification is read off `Stage.frontier` and `dynamic`; and the drivers below.
+What is shared, then, is small: `Stage`, `warm`, `Accumulator`, `Buffered`, `Reduced`, and `Aggregation` in sciline; `Forwarder` and the existing accumulators in ess.reduce, satisfying the protocol without a base class; a visualize function over a list of stages and connectors, since `StreamProcessor`'s node classification is read off `Stage.frontier` and `dynamic`; and the drivers below.
 
 ### 4. `Aggregation`
 
@@ -182,7 +183,8 @@ Semantics:
   `combine` and `compute` make fresh accumulators from the factories on every call, so nothing survives between calls.
   Factories rather than instances with a `clear`: clearing inside the aggregation would either forbid combining in batches over several calls or silently add to stale state, and holding instances would make `combine` non-reentrant; with factories, whoever calls `accumulators()` owns the instances and their lifetime.
   `Buffered(func)` wraps an n-ary function, today's `reduce(func=)` signature, which every combine in the ESS packages already has; every existing combine migrates through it.
-  An accumulator that keeps a running total is written by the workflow author, and the ess.reduce accumulators are such objects.
+  `Reduced(func)` wraps an associative binary function and keeps a running result; it does not update in place, so a sum briefly holds the old and new result and the pushed value.
+  An accumulator that needs in-place updates is written by the workflow author, who owns the copy of the first value; the ess.reduce accumulators are such objects.
   A key in `accumulators` that does not depend on the members is not accumulated; finalize computes it from the fixed part of the graph.
   That removes essreflectometry's `try/except`; it also means a misplaced key is silently static, which `accumulation_keys` reports and a test should check.
 - The aggregation holds nothing but its stages.
@@ -291,12 +293,12 @@ Not shown by the prototype: the `StreamProcessor` rewrite against its real tests
 
 ## Migration
 
-1. sciline: `Pipeline` without map/reduce, `Stage`, `warm`, `provide`, `Accumulator`, `Buffered`, `Aggregation`, `compute_members`.
+1. sciline: `Pipeline` without map/reduce, `Stage`, `warm`, `provide`, `Accumulator`, `Buffered`, `Reduced`, `Aggregation`, `compute_members`.
    `Aggregation` is in sciline because it is mechanism, not policy: it holds no contributions, no member table, and no invalidation rule, needs nothing beyond `Stage` and the `Accumulator` protocol, and is the documented replacement for `map(...).reduce(...)` that users outside ESS need.
    It ships without an experimental label; the staged rollout below, the additive minor release, then the esssans migration, then the breaking release, is the trial period.
    Whether this is `sciline.v2` or the next major release is a real choice.
    The namespace lets esslivedata and external users pin through the change and keeps v1 importable next to v2; it also bundles two independent changes under one name, invites mixing v1 and v2 pipelines in one process with obscure failures, and guarantees a second rename.
-   Recommendation: one major release; the additive part (`Stage`, `warm`, `provide`, `Accumulator`, `Buffered`, `Aggregation`, `compute_members`) ships in a minor release first so that the ESS packages migrate one at a time before removal; esslivedata pins the previous version until it follows; the last minor release before removal deprecates `map`, `reduce`, and `constraints=`.
+   Recommendation: one major release; the additive part (`Stage`, `warm`, `provide`, `Accumulator`, `Buffered`, `Reduced`, `Aggregation`, `compute_members`) ships in a minor release first so that the ESS packages migrate one at a time before removal; esslivedata pins the previous version until it follows; the last minor release before removal deprecates `map`, `reduce`, and `constraints=`.
 2. ess.reduce: `Forwarder` and the accumulators in one module; the accumulators satisfy sciline's `Accumulator` protocol once `maybe_hist` moves out of their base class, and keep `clear` as their own convention; `StreamProcessor` rewritten on `Stage` against its existing tests.
    essreflectometry's `BatchProcessor` loses its mapped/unmapped fallback.
    `parameter_mappers`, which maps a list-valued parameter to a `with_*` helper returning a pipeline, goes.
@@ -316,7 +318,7 @@ The rule for the order: everything additive lands and releases before anything b
 
 ### A. sciline, additive
 
-1. ADR 0003 with `Stage`, `warm`, `Accumulator`, `Buffered`, `Aggregation`, `compute_members`, their tests, and a user-guide page on stages and aggregations next to the parameter-tables page.
+1. ADR 0003 with `Stage`, `warm`, `Accumulator`, `Buffered`, `Reduced`, `Aggregation`, `compute_members`, their tests, and a user-guide page on stages and aggregations next to the parameter-tables page.
    Released as the next minor.
    Tracking issues: one in scipp/sciline for A and E, one in scipp/ess for B to D.
 2. `provide(key, callable)` on `Pipeline` (scipp/sciline#241); a `reporter` argument on `Stage.__call__` and `warm` so that progress reaches the ESS widgets; whatever `StreamProcessor.visualize` needs to classify nodes from `Stage.frontier` and `Stage.dynamic`.
@@ -399,7 +401,7 @@ The critical path is A1, C1, then the remaining packages, then E.
 Settled 2026-09-11:
 
 - **Combine protocol.**
-  An accumulator per accumulation key, the `Accumulator` protocol with `push` and `value`, with `Buffered(func)` for n-ary functions.
+  An accumulator per accumulation key, the `Accumulator` protocol with `push` and `value`, with `Buffered(func)` for n-ary functions and `Reduced(func)` for associative binary functions.
   An n-ary function forces buffering inside the aggregation, and anyone who cares about memory would write their own loop; with accumulators the buffer-versus-incremental choice sits on the object the author passes.
 - **Member tables.**
   `Mapping[label, Mapping[Key, value]]` only; pandas stays out of the library and the label is always the caller's.

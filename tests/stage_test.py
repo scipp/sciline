@@ -218,16 +218,8 @@ class Latest:
         self.value = value
 
 
-class Summed:
-    """Accumulator with a running sum of histograms."""
-
-    def __init__(self) -> None:
-        self.value: Histogram = Histogram({})
-
-    def push(self, hist: Histogram) -> None:
-        self.value = Histogram(
-            {k: self.value.get(k, 0) + hist.get(k, 0) for k in self.value | hist}
-        )
+def add_histograms(left: Histogram, right: Histogram) -> Histogram:
+    return Histogram({k: left.get(k, 0) + right.get(k, 0) for k in left | right})
 
 
 def test_stream_of_chunks_with_context_held_between_changes(calls: Calls) -> None:
@@ -257,7 +249,7 @@ def test_stream_of_chunks_with_context_held_between_changes(calls: Calls) -> Non
     finalize_stage = Stage(pipeline, outputs=(Result,), inputs=(Histogram,))
 
     held = Latest()
-    acc = Summed()
+    acc = sl.Reduced(add_histograms)()
 
     held.push(context_stage({Angle: 1.0}))
     for chunk in ([1.0, 2.0], [2.0, 3.0]):

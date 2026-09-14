@@ -43,10 +43,11 @@ The graph partition becomes the primitive:
    `warm(*stages)` computes the static parts of several stages of one pipeline in one run, so shared static work is done once.
    `provide(key, callable)` registers a provider for a key known only at runtime, as scipp/sciline#241 asks.
 
-2. **`Accumulator`, `Buffered`, `Aggregation`, and `compute_members`, in sciline.**
+2. **`Accumulator`, `Buffered`, `Reduced`, `Aggregation`, and `compute_members`, in sciline.**
    An accumulator is any object with `push(value)` and a `value` property: values go in, the combined value comes out.
    Whether it buffers or keeps a running result is its own choice.
    `Buffered(func)` is a factory for one that holds every pushed value and applies an n-ary function on `value`, which is how every existing combine function is used.
+   `Reduced(func)` is a factory for one that holds only a running result of an associative binary function, for sums of large arrays.
    Member keys are the keys supplied per repetition, such as `Filename[SampleRun]`; one row of values for them is a member.
    An accumulation key is a key at which per-member values are combined; a contribution is the dict of values at the accumulation keys for one member.
    An aggregation is two stages of one flat pipeline, contribute (member keys to accumulation keys) and finalize (accumulation keys to outputs, optional), with an accumulator factory per accumulation key between them.
@@ -89,7 +90,7 @@ A drop-in replacement for the map/reduced pipeline is a non-goal.
   Prototyped and stripped: it merged `Pipeline`'s job with orchestration, reproduced the map/reduced pipeline, and was hard to reason about; on LoKI the held frontier bought nothing because the wavelength conversion reads a parameter.
 - **An n-ary combine function per accumulation key**, as `reduce(func=)` takes today.
   It forces the aggregation to hold every contribution before combining, so anyone who cares about memory writes their own loop.
-  With an accumulator the buffer-versus-running choice sits on the object the author passes; `Buffered` keeps the n-ary function as the thing authors write.
+  With an accumulator the buffer-versus-running choice sits on the object the author passes; `Buffered` keeps the n-ary function as the thing authors write, and `Reduced` covers the running case without a hand-written class.
 - **A generic network object** holding stages and connectors and routing pushes.
   The real shapes disagree on the push policy (eager chunks, context updates that keep accumulators, lazy table aggregations, `clear` semantics), and it is the nested-workflow shape one level up.
   Deferred: if the package objects turn out to repeat the same thirty lines, that object is their generalisation.

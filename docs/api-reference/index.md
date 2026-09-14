@@ -20,6 +20,7 @@
    Accumulator
    Aggregation
    Buffered
+   Reduced
    HandleAsBuildTimeException
    HandleAsComputeTimeException
 ```
