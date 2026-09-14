@@ -121,7 +121,7 @@ A drop-in replacement for the map/reduced pipeline is a non-goal.
 - The GUI needs one protocol across package objects; whether that is a base class or one generic object from a registry of member key to accumulation key is decided when the second package is migrated.
 - Parallelism over members, which one graph under the dask scheduler gave for free, becomes the caller's responsibility.
 - A map/reduce whose reduced key sits inside another's per-member work (esssans pixel masks) is not an aggregation; it becomes a list parameter and a provider.
-- A requested accumulation key that does not depend on the members is computed by finalize without error; `accumulation_keys` reports it and package tests must check it.
+- A requested accumulation key that does not depend on the members is computed by finalize without error; `accumulation_keys` reports it, and a consumer that declares its accumulation keys, a package test or the essapps binding, compares the two.
 - Stages hold their frontier for their lifetime, and package objects hold contributions per member, which are binned events under `ReturnEvents=True`; package objects need `clear`.
 - Each aggregation walks the graph at construction and again on every parameter change that reaches it.
 - Visualization of a mapped graph goes with `compact=`; a visualization over stages and connectors replaces it.

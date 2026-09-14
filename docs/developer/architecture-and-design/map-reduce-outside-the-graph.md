@@ -130,6 +130,8 @@ Between two stages sits a connector, an object with `push` and `value`:
 - a dict by member label, where per-member contributions are held by whoever loops over members.
 
 Whether a combine buffers or runs incrementally is the accumulator's choice, not the aggregation's.
+Either way `combine` takes combined values as well as contributions, so that combining can proceed in groups or as a chain, and that asks two things of an accumulator: its `value` must be pushable, and the result must not depend on how the pushes were grouped.
+`Buffered` has both when its function is associative, `Reduced` requires it, and an ess.reduce accumulator has them if `push` accepts what `value` returns, which the histogramming ones must keep once `maybe_hist` moves out of the base class.
 For concat-like combines the two cost about the same, twice the total, and `Buffered` is right.
 For a sum over large dense arrays a running total holds one array instead of one per member, and an incremental accumulator such as `Reduced` is right.
 An accumulator in the table case and in streaming is the same object: whether values arrive from one input over time or from many members is the driver's picture.
@@ -186,7 +188,7 @@ Semantics:
   `Reduced(func)` wraps an associative binary function and keeps a running result; it does not update in place, so a sum briefly holds the old and new result and the pushed value.
   An accumulator that needs in-place updates is written by the workflow author, who owns the copy of the first value; the ess.reduce accumulators are such objects.
   A key in `accumulators` that does not depend on the members is not accumulated; finalize computes it from the fixed part of the graph.
-  That removes essreflectometry's `try/except`; it also means a misplaced key is silently static, which `accumulation_keys` reports and a test should check.
+  That removes essreflectometry's `try/except`; it also means a misplaced key is silently static, which `accumulation_keys` reports, and a consumer that declares its accumulation keys, a package test or the essapps binding, compares the two.
 - The aggregation holds nothing but its stages.
   Whoever loops over members owns the contributions, a dict by label, and decides what a parameter change keeps with one test: whether the key is in `contribute_stage.keys`.
   `compute(table)` is the loop for a caller that holds nothing: it contributes per row and pushes each contribution as it is made, so peak memory is the accumulators' choice, not the aggregation's.
@@ -242,8 +244,8 @@ The module shrinks to the policy, which is what scipp/ess#732 said should stay: 
 - D8: the wrapper is `Stage(inputs=cheap_parameters)`.
   The cheap parameters stay a declaration, since they decide what a UI offers as a slider; the cached nodes are derived from it, not declared.
 - D15: contribute, combine, finalize are `Aggregation`'s three entry points; the contribution is the dict at the accumulation keys.
-  The declaration of which parameters finalize reads is derived from the graph and can be removed from D13/D15.
-  A chained series is an accumulator per accumulation key, from `agg.accumulators()`, into which essapps pushes each contribution as it arrives; the in-memory variant is the wrapper holding the contributions by member label.
+  The declaration of which parameters finalize reads stays in the spec, because the backend validates a combine request without importing workflow code and a combine form has to know its fields; the binding derives the split from `contribute_stage.keys` and `finalize_stage.keys` and refuses a spec whose declaration disagrees with the graph.
+  A chained series, one combine record per arrival in a throwaway process, is `agg.combine([previous, new])` followed by `agg.finalize`, holding nothing; a session holds the contributions by member label and combines over those that remain; a process that holds accumulators from `agg.accumulators()` and pushes each arrival is the fold, which writes their `value` as a record every n arrivals.
 - Phase 3: the session model's warm workflow, the checkpoint model's in-application workflow, and the split model's two stages are the same `Stage` objects; the models differ only in where the objects live and when a value at an accumulation key becomes a record, which is where a forwarder sits.
   The decision the stateless note defers is then about placement, not about a mechanism.
 - Hierarchy inside one record (Bifrost angle groups, NMX chunks) is an inner aggregation whose finalize output is a member of the outer one, which is what D15 already says the callable does itself.
@@ -265,7 +267,7 @@ The trap to keep out of stays: a provider written by hand that runs a pipeline.
 ## Evidence
 
 Implementation: `src/sciline/stage.py` and `src/sciline/aggregation.py`, tests in `tests/stage_test.py` and `tests/aggregation_test.py`, on sciline `main` (the pep695 branch needs an unreleased cyclebane for generics; on it all tests pass except the two that aggregate over a generic key, which fail in the branch's mapped-root check inside `map` and so go away with it).
-It reads `TaskGraph._graph` for the concrete graph and hardcodes the naive scheduler inside stages; both go away inside v2.
+It builds the concrete graph through `to_task_graph` with `HandleAsComputeTimeException`, so that keys without a value become nodes that fail when computed rather than when the stage is built, and takes a scheduler with the same default as `Pipeline`.
 
 Covered:
 
@@ -381,7 +383,8 @@ Requires C1 to C5 and D1 released.
 
 ### F. essapps
 
-Apply the edits listed at the end of `stages.md` on branch `architecture-sketch` (D8, D13, D14, D15, glossary), with `Fold` read as `Aggregation` and "accumulation point" as accumulation key; the D3/D6 spike's fake workflow with two accumulation points is an `Aggregation`.
+Apply the edits listed at the end of `stages.md` on branch `architecture-sketch` (D8, D13, D14, D15, glossary); the rename of accumulation point to accumulation key is done there, and the D13 declaration of the parameters finalize reads stays, checked against the graph.
+The D3/D6 spike's fake workflow with two accumulation keys is an `Aggregation`.
 
 ### Scheduling
 

@@ -5,6 +5,7 @@ depend on them, and compute the part that does on each call."""
 
 from __future__ import annotations
 
+import threading
 from collections.abc import Iterable, Mapping, Sequence
 from typing import Any
 
@@ -42,6 +43,9 @@ class Stage:
 
     A stage is a snapshot of the pipeline at the time it is built. Later changes to
     the pipeline do not affect it.
+
+    A stage may be called from several threads at once; the held part is computed
+    once even then.
     """
 
     def __init__(
@@ -112,6 +116,7 @@ class Stage:
         self._static_graph = {k: p for k, p in graph.items() if k in needed}
         self._keys = frozenset(self._static_graph) | frozenset(self._dynamic)
         self._static: dict[Key, Any] | None = None
+        self._lock = threading.Lock()
 
     @property
     def inputs(self) -> tuple[Key, ...]:
@@ -152,9 +157,12 @@ class Stage:
     @property
     def static(self) -> Mapping[Key, Any]:
         """Values at the frontier, computed on first use and held."""
-        if self._static is None:
-            self._static = _compute(self._static_graph, self._frontier, self._scheduler)
-        return self._static
+        with self._lock:
+            if self._static is None:
+                self._static = _compute(
+                    self._static_graph, self._frontier, self._scheduler
+                )
+            return self._static
 
     def __call__(self, values: Mapping[Key, Any]) -> dict[Key, Any]:
         """Compute the outputs for the given input values.

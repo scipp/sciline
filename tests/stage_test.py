@@ -261,3 +261,23 @@ def test_stream_of_chunks_with_context_held_between_changes(calls: Calls) -> Non
     acc.push(chunk_stage({Events: [1.0], **held.value})[Histogram])
     assert finalize_stage({Histogram: acc.value})[Result] == {1: 2.0, 2: 1.0, 3: 0.5}
     assert calls['geometry'] == 2
+
+
+def test_stage_called_from_threads_computes_static_part_once(calls: Calls) -> None:
+    from concurrent.futures import ThreadPoolExecutor
+    from time import sleep
+
+    def calibration(mask: Mask) -> Calibration:
+        calls.hit('calibration')
+        sleep(0.05)
+        return Calibration(float(len(mask)))
+
+    def load(filename: Filename, cal: Calibration) -> Loaded:
+        return Loaded([cal * ord(c) for c in filename])
+
+    pipeline = sl.Pipeline([calibration, load], params={Mask: 'mask'})
+    stage = Stage(pipeline, outputs=(Loaded,), inputs=(Filename,))
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        results = list(pool.map(stage, [{Filename: 'ab'}] * 4))
+    assert calls['calibration'] == 1
+    assert all(r == results[0] for r in results)

@@ -27,6 +27,10 @@ class Accumulator(Protocol[T]):
     Accumulators sit between the stages of an :py:class:`Aggregation`: the
     contribution of each member is pushed, the combined value is read. Whether an
     accumulator holds the pushed values or a running result is its own choice.
+
+    :py:meth:`Aggregation.combine` pushes combined values as well as contributions,
+    so that combining can proceed in groups or as a chain. For that, ``value`` must
+    be pushable, and the result must not depend on how the pushes were grouped.
     """
 
     def push(self, value: T) -> None:
@@ -44,6 +48,9 @@ class Buffered(Generic[T]):
     the function to them in push order. This suits functions without a cheaper
     incremental form, such as concatenation. A sum of large arrays is better served
     by :py:class:`Reduced`.
+
+    For combined values to be pushed back in, the function must be associative:
+    ``func(func(a, b), c) == func(a, b, c)``.
     """
 
     def __init__(self, func: Callable[..., T]) -> None:
@@ -231,7 +238,8 @@ class Aggregation:
         Parameters
         ----------
         contributions:
-            Contributions of members, or combinations of such.
+            Contributions of members, or combinations of such; see
+            :py:class:`Accumulator` for what the latter asks of the accumulators.
 
         Returns
         -------
