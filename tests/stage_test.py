@@ -92,7 +92,10 @@ def test_stage_with_intermediate_input_cuts_its_ancestors(
     assert stage.frontier == ()
     assert Filename not in stage.keys
     assert Calibration not in stage.keys
-    assert stage.compute({Numerator: [2.0, 4.0], Denominator: 3.0, Scale: 2.0})[IofQ] == 4.0
+    assert (
+        stage.compute({Numerator: [2.0, 4.0], Denominator: 3.0, Scale: 2.0})[IofQ]
+        == 4.0
+    )
     assert calls.counts == {'normalize': 1}
 
 
@@ -132,7 +135,9 @@ def test_stage_with_shared_ancestor_input_holds_the_rest(
     # Numerator is supplied; Denominator and Scale are static and held.
     stage = Stage(pipeline, outputs=(IofQ,), inputs=(Numerator,))
     assert stage.frontier == (Denominator, Scale)
-    assert stage.compute({Numerator: [1.0]})[IofQ] == 1.0 / (sum(map(ord, 'unused')) * 4)
+    assert stage.compute({Numerator: [1.0]})[IofQ] == 1.0 / (
+        sum(map(ord, 'unused')) * 4
+    )
 
 
 def test_stage_passes_through_an_output_that_is_an_input(
@@ -181,8 +186,8 @@ def test_warm_computes_shared_static_work_once(
     numerator = Stage(pipeline, outputs=(Numerator,), inputs=(Filename,))
     denominator = Stage(pipeline, outputs=(Denominator,), inputs=(Filename,))
     warm(numerator, denominator)
-    assert numerator.static == {Calibration: 4.0, Bins: 2}
-    assert denominator.static == {Calibration: 4.0}
+    assert numerator.static() == {Calibration: 4.0, Bins: 2}
+    assert denominator.static() == {Calibration: 4.0}
     assert calls['calibration'] == 1
 
 
@@ -191,7 +196,7 @@ def test_warm_skips_stages_that_are_already_warm(
 ) -> None:
     numerator = Stage(pipeline, outputs=(Numerator,), inputs=(Filename,))
     denominator = Stage(pipeline, outputs=(Denominator,), inputs=(Filename,))
-    numerator.static
+    numerator.static()
     warm(numerator, denominator)
     warm(numerator, denominator)
     assert calls['calibration'] == 2
@@ -255,11 +260,19 @@ def test_stream_of_chunks_with_context_held_between_changes(calls: Calls) -> Non
     for chunk in ([1.0, 2.0], [2.0, 3.0]):
         acc.push(chunk_stage.compute({Events: chunk, **held.value})[Histogram])
     assert calls['geometry'] == 1
-    assert finalize_stage.compute({Histogram: acc.value})[Result] == {1: 0.5, 2: 1.0, 3: 0.5}
+    assert finalize_stage.compute({Histogram: acc.value})[Result] == {
+        1: 0.5,
+        2: 1.0,
+        3: 0.5,
+    }
 
     held.push(context_stage.compute({Angle: 3.0}))  # context update, accumulator kept
     acc.push(chunk_stage.compute({Events: [1.0], **held.value})[Histogram])
-    assert finalize_stage.compute({Histogram: acc.value})[Result] == {1: 2.0, 2: 1.0, 3: 0.5}
+    assert finalize_stage.compute({Histogram: acc.value})[Result] == {
+        1: 2.0,
+        2: 1.0,
+        3: 0.5,
+    }
     assert calls['geometry'] == 2
 
 
@@ -281,3 +294,26 @@ def test_stage_called_from_threads_computes_static_part_once(calls: Calls) -> No
         results = list(pool.map(stage.compute, [{Filename: 'ab'}] * 4))
     assert calls['calibration'] == 1
     assert all(r == results[0] for r in results)
+
+
+def test_warm_and_compute_from_threads_compute_static_part_once(calls: Calls) -> None:
+    from concurrent.futures import ThreadPoolExecutor
+    from time import sleep
+
+    def calibration(mask: Mask) -> Calibration:
+        calls.hit('calibration')
+        sleep(0.05)
+        return Calibration(float(len(mask)))
+
+    def load(filename: Filename, cal: Calibration) -> Loaded:
+        return Loaded([cal * ord(c) for c in filename])
+
+    pipeline = sl.Pipeline([calibration, load], params={Mask: 'mask'})
+    stage = Stage(pipeline, outputs=(Loaded,), inputs=(Filename,))
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        computed = pool.submit(stage.compute, {Filename: 'ab'})
+        warmed = [pool.submit(warm, stage, stage) for _ in range(3)]
+        computed.result()
+        for w in warmed:
+            w.result()
+    assert calls['calibration'] == 1

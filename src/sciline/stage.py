@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import threading
 from collections.abc import Iterable, Mapping, Sequence
+from contextlib import ExitStack
 from typing import Any
 
 import networkx as nx
@@ -36,17 +37,18 @@ class Stage:
     """The part of a pipeline from a set of input keys to a set of output keys.
 
     Everything the outputs need that does not depend on the inputs is computed once,
-    on first use, and the values at the frontier are held. Each call to :py:meth:`compute`
-    supplies values for the inputs and computes only what lies downstream of them. An input
-    may be a parameter or an intermediate result; in both cases its own provider and
-    ancestors are cut off. An output that is also an input is passed through.
+    on first use, and the values at the frontier are held. Each call to
+    :py:meth:`compute` supplies values for the inputs and computes only what lies
+    downstream of them. An input may be a parameter or an intermediate result; in
+    both cases its own provider and ancestors are cut off. An output that is also an
+    input is passed through.
 
     A stage is a snapshot of the pipeline at the time it is built. Later changes to
     the pipeline do not affect it. Parameter values are held by reference, not
     copied, so modifying a value in place can change what the stage computes.
 
-    :py:meth:`compute` may be called from several threads at once; the held part is computed
-    once even then.
+    :py:meth:`compute` may be called from several threads at once; the held part is
+    computed once even then.
     """
 
     def __init__(
@@ -116,7 +118,8 @@ class Stage:
             needed |= nx.ancestors(deps, key)
         self._static_graph = {k: p for k, p in graph.items() if k in needed}
         self._keys = frozenset(self._static_graph) | frozenset(self._dynamic)
-        self._static: dict[Key, Any] | None = None
+        self._static: dict[Key, Any] = {}
+        self._warm = False
         self._lock = threading.Lock()
 
     @property
@@ -155,15 +158,14 @@ class Stage:
         built."""
         return self._dynamic_outputs
 
-    @property
     def static(self) -> Mapping[Key, Any]:
-        """Values at the frontier, computed on first use and held."""
-        with self._lock:
-            if self._static is None:
-                self._static = _compute(
-                    self._static_graph, self._frontier, self._scheduler
-                )
-            return self._static
+        """Values at the frontier, computed on first use and held.
+
+        The first call computes the held part, which may be expensive; use
+        :py:func:`warm` to compute it together with that of other stages.
+        """
+        warm(self)
+        return self._static
 
     def compute(self, values: Mapping[Key, Any]) -> dict[Key, Any]:
         """Compute the outputs for the given input values.
@@ -188,7 +190,7 @@ class Stage:
         graph: Graph = dict(self._dynamic_graph)
         for k, v in values.items():
             graph[k] = Provider.parameter(v)
-        for k, v in self.static.items():
+        for k, v in self.static().items():
             graph[k] = Provider.parameter(v)
         return _compute(graph, self._outputs, self._scheduler)
 
@@ -203,19 +205,29 @@ def warm(*stages: Stage) -> None:
     All stages must be built from the same pipeline. The scheduler of the first
     stage that is not yet warm is used.
 
+    May be called from several threads at once, also together with
+    :py:meth:`Stage.compute`; each held part is computed once.
+
     Parameters
     ----------
     stages:
         Stages built from one pipeline.
     """
-    cold = [s for s in stages if s._static is None]
-    if not cold:
-        return
-    graph: Graph = {}
-    keys: dict[Key, None] = {}
-    for stage in cold:
-        graph.update(stage._static_graph)
-        keys.update(dict.fromkeys(stage._frontier))
-    values = _compute(graph, tuple(keys), cold[0]._scheduler)
-    for stage in cold:
-        stage._static = {k: values[k] for k in stage._frontier}
+    # Locks are taken in a fixed order, so that concurrent calls over overlapping
+    # stages cannot deadlock.
+    unique = tuple(dict.fromkeys(stages))
+    with ExitStack() as locks:
+        for stage in sorted(unique, key=id):
+            locks.enter_context(stage._lock)
+        cold = [s for s in unique if not s._warm]
+        if not cold:
+            return
+        graph: Graph = {}
+        keys: dict[Key, None] = {}
+        for stage in cold:
+            graph.update(stage._static_graph)
+            keys.update(dict.fromkeys(stage._frontier))
+        values = _compute(graph, tuple(keys), cold[0]._scheduler)
+        for stage in cold:
+            stage._static = {k: values[k] for k in stage._frontier}
+            stage._warm = True

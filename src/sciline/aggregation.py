@@ -44,8 +44,8 @@ class Accumulator(Protocol[T]):
 class Buffered(Generic[T]):
     """Factory for accumulators that apply an n-ary function to all pushed values.
 
-    Each accumulator holds every pushed value until ``value`` is read, then applies
-    the function to them in push order. This suits functions without a cheaper
+    Each accumulator holds every pushed value and applies the function to them, in
+    push order, each time ``value`` is read. This suits functions without a cheaper
     incremental form, such as concatenation. A sum of large arrays is better served
     by :py:class:`Reduced`.
 
