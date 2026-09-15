@@ -42,7 +42,8 @@ class Stage:
     ancestors are cut off. An output that is also an input is passed through.
 
     A stage is a snapshot of the pipeline at the time it is built. Later changes to
-    the pipeline do not affect it.
+    the pipeline do not affect it. Parameter values are held by reference, not
+    copied, so modifying a value in place can change what the stage computes.
 
     A stage may be called from several threads at once; the held part is computed
     once even then.

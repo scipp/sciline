@@ -87,6 +87,7 @@ warm(stage_a, stage_b)                # compute the static parts of both in one 
 - **Snapshot.**
   The stage is built from the task graph of the pipeline at construction time.
   Later changes to the pipeline do not affect it; to change a parameter, build a new stage.
+  Parameter values are held by reference, not copied, so a value modified in place, rather than set anew, can change what the stage computes.
 - **Introspection.**
   `dynamic` lists the keys that depend on the inputs, and `dynamic_outputs` the outputs among them.
   `keys` lists every key the stage uses.
@@ -140,6 +141,7 @@ It requires two things of an accumulator:
 `Buffered` satisfies both if its function is associative, that is `func(func(a, b), c) == func(a, b, c)`.
 `Reduced` requires associativity anyway.
 An ess.reduce accumulator satisfies both if its `push` accepts what its `value` returns.
+The histogramming accumulators must keep this property once `maybe_hist` moves out of their base class (see below).
 
 ### Which one to use
 
@@ -150,8 +152,13 @@ For a sum of large dense arrays, a running result holds one array instead of one
 
 An accumulator in an aggregation over a table and an accumulator in a stream are the same kind of object.
 Whether the values come from many members or from one input over time only matters to the driver.
+The driver also owns everything else about the values: their lifetime (`clear`), their identity (contributions by label), and whether the result may depend on the order of pushes.
+
 The accumulators of `ess.reduce.streaming` satisfy the protocol once `maybe_hist`, which histograms in the base class `push`, moves to the subclasses that need it.
+The base class then adds nothing to the protocol, and a forwarder built on it does not histogram.
 Their `clear` method stays an ess.reduce convention for accumulators that are reused between finalizations.
+No base class beyond the protocol is shared between sciline and ess.reduce.
+`Accumulator` is in sciline because `Aggregation` consumes it; `Forwarder` stays in ess.reduce because nothing in sciline consumes one.
 
 ## 5. `Aggregation`
 
@@ -307,6 +314,7 @@ accumulators = {key: EternalAccumulator() for key in accumulator_keys}
 - `finalize` calls the finalize stage.
 
 The accumulator classes, the validation of key sets, `on_finalize`, `clear`, and `visualize` stay.
+`visualize` classifies nodes from `Stage.frontier` and `Stage.dynamic`; whatever else it needs from sciline is added with the rewrite.
 `allow_bypass` becomes a derived property: a dynamic key that is also an input of the finalize stage.
 The module shrinks to its policy, which values are transient and which are held, as scipp/ess#732 proposed.
 
@@ -356,8 +364,12 @@ Scheduler, task graph, reporter, handlers, and serialization are reused unchange
 The generics come from the branch unchanged: rules are matched structurally, not by `TypeVar` identity, and only backward chaining is used.
 `Scope` can then be deprecated (scipp/sciline#233).
 
+**Required by `Stage`:** building the task graph for targets when some keys have no value, which `HandleAsComputeTimeException` does today (section 3, implementation notes).
+The generics branch must keep this.
+
 With demand-driven generics, `underlying_graph` and `output_keys()` only contain what has been requested.
 `Stage` is not affected, because it builds the concrete task graph of its outputs and never looks at the sinks of the pipeline.
+Callers that ask whether a stage uses a key must therefore test against `stage.keys`, not against the pipeline's graph.
 
 **Tests and docs:** of the current 238 tests, 16 use map/reduce and are removed; the map-related tests of the generics branch are trimmed; the rest are ported.
 The parameter-tables guide is replaced by the guide on stages and aggregations, and the generic-providers guide loses `constraints=`.
@@ -486,14 +498,33 @@ Not validated: the rewrite of `StreamProcessor` against its real tests.
     The package object then either holds a bank aggregation per run, or the banks become a list parameter with a provider that loops.
 - **esslivedata:** the bifrost bank fold becomes an `Aggregation` computed before the `StreamProcessor` is built (section 6.5).
 - **essapps:** the design text is updated as listed at the end of `stages.md`.
+  The fake workflow with two accumulation keys in the D3/D6 spike becomes an `Aggregation`.
+
+### Findings of the survey that affect the migration
+
+From the survey of 2026-09-11 (section 1):
+
+- essreduce is the only package in the scipp/ess monorepo that depends on sciline directly (`sciline>=25.11.0`).
+  The breaking release is adopted by raising that minimum.
+- In ess.reduce, `assign_parameter_values` goes together with `parameter_mappers`; both are used only by `WorkflowWidget`.
+  The polarization notebook `zoom.ipynb` in ess.reduce uses `get_mapped_node_names` and `with_sample_runs` and migrates with esssans.
+- essdiffraction's `with_pixel_mask_filenames` has no test coverage: all 22 call sites in tests pass an empty list.
+  Its migration should add a test with a mask file, and the workaround for empty lists in cyclebane goes.
+- essreflectometry (offspec, amor) uses `constraints=`, which stays until the breaking release.
+- essnmx notebooks import `cyclebane.graph.NodeName` and `IndexValues` directly to name mapped nodes.
+- essimaging uses map/reduce only through `visualize(compact=)` in two notebooks.
+- esslivedata pins `cyclebane>=26.9.0` directly, for a leak with self-referential graphs; the pin goes when sciline drops cyclebane.
+- Tracking: one issue in scipp/sciline for the sciline releases, one in scipp/ess for ess.reduce and the reduction packages.
 
 ### Order
 
 1. sciline releases the additive part in a minor version, with the user guide on stages and aggregations.
 2. The packages migrate one at a time, each in its own pull request, while map/reduce still exists.
-   esssans goes first, because it is the validated case and sets the pattern for package objects.
-   The `StreamProcessor` rewrite and esslivedata follow independently.
-3. The last minor release of sciline deprecates `map`, `reduce`, `compute_mapped`, `get_mapped_node_names`, `constraints=`, and `visualize(compact=)`.
+   esssans goes first, because it is the validated case and sets the pattern for package objects and for the interface that replaces `parameter_mappers`.
+   The other packages depend only on the additive release and can then migrate in parallel.
+   The `StreamProcessor` rewrite follows independently, but needs `Pipeline.provide` and the `reporter` argument of `Stage` in a sciline release first.
+   esslivedata follows the `StreamProcessor` rewrite through the essreduce version bump.
+3. The last minor release of sciline deprecates `map`, `reduce`, `compute_mapped`, `get_mapped_node_names`, `constraints=`, and `visualize(compact=)`, once esslivedata has migrated.
 4. Once no ESS package or esslivedata uses map/reduce, a major release of sciline removes it together with cyclebane, and the PEP 695 generics land.
 
 ## 11. Open questions

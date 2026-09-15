@@ -75,6 +75,7 @@ A stage splits the graph needed for the outputs into two parts:
 
 An input can be a parameter or an intermediate result; in the second case everything upstream of it is cut off.
 A stage is a snapshot: changing the pipeline afterwards does not change the stage.
+The snapshot copies the graph but not the parameter values, so a value modified in place, rather than set anew, can change what the stage computes.
 `warm(*stages)` computes the static parts of several stages together, so that work they share is done once.
 
 This is the operation that `StreamProcessor` builds by hand and that scipp/sciline#241 asks for.
@@ -140,6 +141,7 @@ In practice:
 The ESS packages then migrate one at a time while map/reduce still exists.
 The removal comes last, in a major release.
 Users who depend on map/reduce and do not need the new generics can stay on the last release before the removal.
+Keeping the old `Pipeline` in a separate namespace would serve them equally, but nobody intends to maintain it, so pinning is the offer.
 
 ## Alternatives considered
 
@@ -171,7 +173,8 @@ Users who depend on map/reduce and do not need the new generics can stay on the 
 
 - Sciline drops map/reduce and cyclebane, and the PEP 695 generics can land.
 - Users outside ESS keep a documented replacement; the parameter-tables guide becomes a guide on stages and aggregations.
-- `StreamProcessor` loses its graph manipulation and keeps only its policy.
+- `StreamProcessor` is expected to lose its graph manipulation and keep only its policy.
+  The prototype runs this shape in a test; the rewrite of the real class has not been done.
 - The same terms (stage, accumulator, accumulation key, contribution, contribute/combine/finalize) apply in sciline, ess.reduce, and essapps.
   They follow Beam, Flink, and Spark; `fold` was avoided because it means reshaping in scipp.
 - Every parameter is set on one flat pipeline, and everything held is a plain object that the caller can inspect, clear, or serialize.
@@ -193,4 +196,5 @@ Users who depend on map/reduce and do not need the new generics can stay on the 
   Progress reporting through `Stage` is not implemented yet.
 - networkx becomes a direct dependency; today it comes through cyclebane.
 
+Not yet done: the `StreamProcessor` rewrite against its streaming and visualize tests.
 Not yet decided: whether the breaking change ships as a major release or as `sciline.v2` (recommendation: major release).
