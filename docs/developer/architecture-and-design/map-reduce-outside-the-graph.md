@@ -502,8 +502,6 @@ Not validated: the rewrite of `StreamProcessor` against its real tests.
 
 ### Findings of the survey that affect the migration
 
-From the survey of 2026-09-11 (section 1):
-
 - essreduce is the only package in the scipp/ess monorepo that depends on sciline directly (`sciline>=25.11.0`).
   The breaking release is adopted by raising that minimum.
 - In ess.reduce, `assign_parameter_values` goes together with `parameter_mappers`; both are used only by `WorkflowWidget`.
