@@ -36,8 +36,8 @@ class Stage:
     """The part of a pipeline from a set of input keys to a set of output keys.
 
     Everything the outputs need that does not depend on the inputs is computed once,
-    on first use, and the values at the frontier are held. Calling the stage supplies
-    values for the inputs and computes only what lies downstream of them. An input
+    on first use, and the values at the frontier are held. Each call to :py:meth:`compute`
+    supplies values for the inputs and computes only what lies downstream of them. An input
     may be a parameter or an intermediate result; in both cases its own provider and
     ancestors are cut off. An output that is also an input is passed through.
 
@@ -45,7 +45,7 @@ class Stage:
     the pipeline do not affect it. Parameter values are held by reference, not
     copied, so modifying a value in place can change what the stage computes.
 
-    A stage may be called from several threads at once; the held part is computed
+    :py:meth:`compute` may be called from several threads at once; the held part is computed
     once even then.
     """
 
@@ -165,7 +165,7 @@ class Stage:
                 )
             return self._static
 
-    def __call__(self, values: Mapping[Key, Any]) -> dict[Key, Any]:
+    def compute(self, values: Mapping[Key, Any]) -> dict[Key, Any]:
         """Compute the outputs for the given input values.
 
         Parameters

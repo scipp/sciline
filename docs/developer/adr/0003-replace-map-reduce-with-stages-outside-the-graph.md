@@ -62,8 +62,8 @@ Add two building blocks that work on an ordinary flat pipeline and add nothing t
 
 ```python
 stage = Stage(pipeline, inputs=(Filename,), outputs=(Result,))
-stage({Filename: 'run1.nxs'})  # -> {Result: ...}
-stage({Filename: 'run2.nxs'})  # -> {Result: ...}, calibration not loaded again
+stage.compute({Filename: 'run1.nxs'})  # -> {Result: ...}
+stage.compute({Filename: 'run2.nxs'})  # -> {Result: ...}, calibration not loaded again
 ```
 
 A stage splits the graph needed for the outputs into two parts:

@@ -227,7 +227,7 @@ class Aggregation:
         :
             The value of each accumulation key for this member.
         """
-        return self.contribute_stage(row)
+        return self.contribute_stage.compute(row)
 
     def accumulators(self) -> dict[Key, Accumulator[Any]]:
         """Return new accumulators, one per accumulation key."""
@@ -273,7 +273,7 @@ class Aggregation:
         """
         if self.finalize_stage is None:
             raise ValueError('This aggregation has no outputs')
-        return self.finalize_stage(contribution)
+        return self.finalize_stage.compute(contribution)
 
     def compute(self, table: Table) -> dict[Key, Any]:
         """Contribute per row, pushing each contribution as it is made, then finalize.
@@ -323,4 +323,4 @@ def compute_members(
         The value of ``key`` for each row, by the row's label.
     """
     stage = Stage(pipeline, outputs=(key,), inputs=tuple(members))
-    return {label: stage(row)[key] for label, row in table.items()}
+    return {label: stage.compute(row)[key] for label, row in table.items()}

@@ -451,4 +451,4 @@ def test_two_aggregations_share_a_finalize_stage() -> None:
     b = background.combine(
         background.contribute({File[BackgroundRun]: f}) for f in ['x', 'yz']
     )
-    assert finalize({**s, **b})[Result] == 5 - 3
+    assert finalize.compute({**s, **b})[Result] == 5 - 3

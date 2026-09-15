@@ -63,7 +63,7 @@ Terms used in this document:
 ```python
 stage = Stage(pipeline, inputs=(Filename,), outputs=(Numerator, Denominator))
 stage.frontier                        # keys whose values the stage holds
-stage({Filename: 'run1.nxs'})         # -> {Numerator: ..., Denominator: ...}
+stage.compute({Filename: 'run1.nxs'}) # -> {Numerator: ..., Denominator: ...}
 warm(stage_a, stage_b)                # compute the static parts of both in one run
 ```
 

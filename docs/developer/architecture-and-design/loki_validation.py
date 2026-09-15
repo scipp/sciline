@@ -222,7 +222,7 @@ class SansReduction:
                 if run not in held:
                     held[run] = agg.contribute({Filename[run_type]: run})
             combined |= agg.combine(held.values())
-        return self._finalize(combined)
+        return self._finalize.compute(combined)
 
 
 def main() -> None:
@@ -339,7 +339,7 @@ def main() -> None:
         aggs[BackgroundRun].contribute({Filename[BackgroundRun]: run})
         for run in background_runs
     )
-    staged = finalize({**sample, **background})
+    staged = finalize.compute({**sample, **background})
     print(f'three-entry-point form (calls {calls}):')
     for key in OUTPUTS:
         compare(key.__name__, staged[key], results[key])
