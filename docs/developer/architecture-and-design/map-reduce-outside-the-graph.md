@@ -91,7 +91,7 @@ warm(stage_a, stage_b)                # compute the static parts of both in one 
 - **Introspection.**
   `dynamic` lists the keys that depend on the inputs, and `dynamic_outputs` the outputs among them.
   `keys` lists every key the stage uses.
-  A parameter is in `keys` exactly when changing it would change the stage's results; callers use this to decide what to rebuild (section 6.1).
+  A parameter is in `keys` exactly when changing it would change the stage's results; callers use this to decide what to rebuild (section 6.7).
 - **`warm(*stages)`.**
   Stages built from one pipeline often share static work, for example a file that each of them reads.
   `warm` computes the static parts of several stages in one scheduler run, so shared intermediate results are computed once and then released.
@@ -234,12 +234,14 @@ This section shows each.
 
 ### 6.1 A package object (esssans)
 
-esssans users today call `with_sample_runs` and `with_background_runs`, set parameters, and compute.
+esssans users today set parameters, call `with_sample_runs` and `with_background_runs`, and compute.
 To keep this experience, esssans returns its own object instead of a pipeline.
-The validation script contains such an object, `SansReduction`, in about 60 lines.
+The validation script contains such an object, `SansReduction`, in about 50 lines.
+It is built from a pipeline with all parameters set, so setting the runs is the last step of the setup.
+To change a parameter, the user builds a new object.
+Nearly every parameter is read per run, so this costs no more than rebuilding only the affected stages would.
 It holds:
 
-- the flat pipeline,
 - one aggregation per run type (sample and background), each without outputs,
 - one finalize stage from the accumulation keys of both aggregations to the outputs,
 - the contributions of each run type, by filename.
@@ -247,12 +249,7 @@ It holds:
 Its methods:
 
 - `set_runs(run_type, runs)` records the runs and drops the contributions of runs no longer listed.
-- `obj[key] = value` sets the parameter on the pipeline.
-  For each aggregation with `key in agg.contribute_stage.keys`, it builds a new aggregation and drops that run type's contributions.
-  If `key in finalize.keys`, it builds a new finalize stage.
 - `compute()` warms all stages together, contributes the runs that have no contribution yet, combines, and finalizes.
-
-This is the only place where the rules for "set runs, set parameters, compute" live, and they fit on one screen.
 
 ### 6.2 Several aggregations, one final stage
 
@@ -410,7 +407,7 @@ It rebuilt the map/reduced pipeline in another form, and it was the hardest part
 The per-member frontier was meant to avoid reloading runs when a parameter changes.
 On LoKI it gave no measurable benefit: the wavelength conversion reads the parameter `WavelengthBins`, so the per-member frontier lies upstream of the conversion and holding it saves little.
 Holding more would require a second tier of parameters declared as rarely changing, which is what `StreamProcessor` calls context.
-The draft was stripped down to the current `Aggregation`, and its rules moved into the package object (section 6.1).
+The draft was stripped down to the current `Aggregation`, and the package object (section 6.1) does not take parameter changes: a new parameter value means a new object.
 
 ### 8.5 No bridge back into a pipeline
 
@@ -452,7 +449,7 @@ The tests cover:
 - **Stage:** static part computed once and dynamic part per call; an intermediate input cuts off its ancestors; inputs the outputs do not need are rejected; pass-through of an output that is an input; snapshot behaviour; `warm` computes shared work once and skips warm stages; concurrent calls compute the static part once; an expensive load before a cheap parameter (the warm-workflow shape).
 - **Accumulators:** push order, the first push as result, reading without pushes.
 - **Aggregation:** equal to a manual loop; two accumulation keys with different accumulators; a two-column member table; a key that does not depend on the members; members the accumulation keys do not need are rejected; the three steps called separately, with chained combining; no outputs; grouping with pandas; snapshot of parameters and graph; `compute` pushes each contribution before making the next; generic keys with `TypeVar` providers; `compute_members`.
-- **Composition:** a caller that keeps contributions by label and rebuilds on a parameter change only when the contribute stage reads the key; banks over runs; two aggregations sharing a finalize stage; the `StreamProcessor` shape with a context update.
+- **Composition:** banks over runs; two aggregations sharing a finalize stage; the `StreamProcessor` shape with a context update.
 
 ### LoKI multi-run reduction
 
@@ -472,7 +469,7 @@ Results:
   With sciline's default dask scheduler the reference is about 1.7 s faster, because the single graph computes the two sample runs in parallel threads.
   In the prototype this parallelism would be up to the caller (by mapping `contribute` over the runs) and is not used.
 - Adding a second sample run after computing with one costs one contribution: one more `apply_pixel_masks` call and no second read of the mask file.
-- Changing `QBins` drops the contributions and recomputes them, as the reference does.
+- Changing `QBins` means a new `SansReduction`, which makes the same provider calls as the reference.
 
 Not validated: the rewrite of `StreamProcessor` against its real tests.
 
@@ -488,7 +485,7 @@ Not validated: the rewrite of `StreamProcessor` against its real tests.
   `StreamProcessor` is rewritten on `Stage` against its existing tests (section 6.6).
   `parameter_mappers`, which maps a list-valued parameter to a `with_*` helper that returns a pipeline, is replaced by a common interface of the package objects (section 11).
   `get_parameters` is unaffected, because it works on the flat pipeline.
-- **Reduction packages** (esssans, essreflectometry, essspectroscopy, essdiffraction, essnmx): the `with_*` helpers that fold are replaced by package objects on which users set members and parameters and compute (section 6.1).
+- **Reduction packages** (esssans, essreflectometry, essspectroscopy, essdiffraction, essnmx): the `with_*` helpers that fold are replaced by package objects, built from a configured pipeline, on which users set members and compute (section 6.1).
   Notebooks and tests change accordingly, and `visualize(compact=)` is dropped from notebooks.
   Specific points:
   - The pixel-mask folds in esssans and essdiffraction become a list parameter with providers (section 6.4).

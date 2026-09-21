@@ -91,7 +91,7 @@ def files_table(files: list[str]) -> Table:
     return {i: {Filename: f} for i, f in enumerate(files)}
 
 
-def reference(pipeline: sl.Pipeline, files: list[str], scale: float = 1.0) -> float:
+def reference(pipeline: sl.Pipeline, files: list[str]) -> float:
     num: list[float] = []
     den = 0.0
     for f in files:
@@ -99,7 +99,7 @@ def reference(pipeline: sl.Pipeline, files: list[str], scale: float = 1.0) -> fl
         p[Filename] = f
         num += p.compute(Numerator)
         den += p.compute(Denominator)
-    return scale * sum(num) / den
+    return sum(num) / den
 
 
 def with_param(pipeline: sl.Pipeline, key: Key, value: Any) -> sl.Pipeline:
@@ -287,43 +287,6 @@ def test_aggregation_groups_via_pandas(pipeline: sl.Pipeline) -> None:
         'x': pytest.approx(reference(pipeline, ['ab', 'ef'])),
         'y': pytest.approx(reference(pipeline, ['cd'])),
     }
-
-
-def test_caller_holds_contributions_and_decides_what_a_parameter_change_keeps(
-    pipeline: sl.Pipeline, calls: Calls
-) -> None:
-    # Contributions held by label; a new aggregation when a parameter changes;
-    # contributions kept when the changed key is not read by the contribute stage.
-    files = ['ab', 'cd']
-    expected = (
-        reference(pipeline, files, 3.0),
-        reference(with_param(pipeline, Bins, 1), files, 3.0),
-    )
-    calls.reset()
-    agg = Aggregation(
-        pipeline, members=(Filename,), accumulators=ACCUMULATORS, outputs=(IofQ,)
-    )
-    held = {f: agg.contribute({Filename: f}) for f in files}
-
-    pipeline[Scale] = 3.0
-    agg = Aggregation(
-        pipeline, members=(Filename,), accumulators=ACCUMULATORS, outputs=(IofQ,)
-    )
-    if Scale in agg.contribute_stage.keys:
-        held.clear()
-    held |= {f: agg.contribute({Filename: f}) for f in files if f not in held}
-    assert agg.finalize(agg.combine(held.values()))[IofQ] == pytest.approx(expected[0])
-    assert calls['load'] == 2
-
-    pipeline[Bins] = 1
-    agg = Aggregation(
-        pipeline, members=(Filename,), accumulators=ACCUMULATORS, outputs=(IofQ,)
-    )
-    if Bins in agg.contribute_stage.keys:
-        held.clear()
-    held |= {f: agg.contribute({Filename: f}) for f in files if f not in held}
-    assert agg.finalize(agg.combine(held.values()))[IofQ] == pytest.approx(expected[1])
-    assert calls['load'] == 4
 
 
 def test_hierarchical_aggregation_banks_over_runs(pipeline: sl.Pipeline) -> None:

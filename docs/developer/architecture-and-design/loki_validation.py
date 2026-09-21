@@ -2,8 +2,8 @@
 
 Reference: with_pixel_mask_filenames + with_sample_runs + with_background_runs
 (sciline map/reduce). Prototype: SansReduction, the object esssans would return
-instead of a map/reduced pipeline, holding the flat pipeline, one Aggregation per
-run type, their shared finalize stage, and the contributions; the pixel masks are a
+instead of a map/reduced pipeline, holding one Aggregation per run type, their
+shared finalize stage, and the contributions; the pixel masks are a
 list parameter read by one provider instead of an aggregation, since the point at
 which they would be combined sits inside the per-run work.
 
@@ -165,45 +165,35 @@ def show(label: str, t0: float) -> dict[str, int]:
 class SansReduction:
     """What esssans would return instead of a map/reduced pipeline.
 
-    Holds the pipeline, one aggregation per run type, the finalize stage over the
-    accumulation keys of both, and the contributions by filename.  This is the only
-    place the "set runs, set parameters, compute" experience lives, and the only
-    place that decides what a parameter change keeps.
+    Built from a pipeline with all parameters set; to change a parameter, build a
+    new object. Holds one aggregation per run type, the finalize stage over the
+    accumulation keys of both, and the contributions by filename.
     """
 
     run_types = (SampleRun, BackgroundRun)
 
     def __init__(self, pipeline: sciline.Pipeline) -> None:
-        self._pipeline = pipeline.copy()
         self._runs: dict[type, list[str]] = {rt: [] for rt in self.run_types}
         self._contributions: dict[type, dict[str, Any]] = {
             rt: {} for rt in self.run_types
         }
-        self._aggregations = {rt: self._aggregation(rt) for rt in self.run_types}
-        self._finalize = self._finalize_stage()
-
-    def _aggregation(self, run_type: type) -> Aggregation:
-        return Aggregation(
-            self._pipeline,
-            members=(Filename[run_type],),
-            accumulators=accumulators_for(run_type),
+        self._aggregations = {
+            rt: Aggregation(
+                pipeline,
+                members=(Filename[rt],),
+                accumulators=accumulators_for(rt),
+                scheduler=SCHEDULER,
+            )
+            for rt in self.run_types
+        }
+        self._finalize = Stage(
+            pipeline,
+            outputs=OUTPUTS,
+            inputs=tuple(
+                k for agg in self._aggregations.values() for k in agg.accumulation_keys
+            ),
             scheduler=SCHEDULER,
         )
-
-    def _finalize_stage(self) -> Stage:
-        keys = tuple(
-            k for agg in self._aggregations.values() for k in agg.accumulation_keys
-        )
-        return Stage(self._pipeline, outputs=OUTPUTS, inputs=keys, scheduler=SCHEDULER)
-
-    def __setitem__(self, key: Any, value: Any) -> None:
-        self._pipeline[key] = value
-        for run_type, agg in self._aggregations.items():
-            if key in agg.contribute_stage.keys:
-                self._aggregations[run_type] = self._aggregation(run_type)
-                self._contributions[run_type].clear()
-        if key in self._finalize.keys:
-            self._finalize = self._finalize_stage()
 
     def set_runs(self, run_type: type, runs: list[str]) -> None:
         self._runs[run_type] = list(runs)
@@ -281,17 +271,16 @@ def main() -> None:
     for key in OUTPUTS:
         compare(key.__name__, results[key], ref_results[key])
 
-    # --- Parameter changes ------------------------------------------------------
+    # --- Parameter change: a new object -----------------------------------------
     calls.clear()
     t0 = time.perf_counter()
-    reduction[QBins] = sc.linspace('Q', start=0.01, stop=0.3, num=51, unit='1/angstrom')
+    changed = flat.copy()
+    changed[QBins] = sc.linspace('Q', start=0.01, stop=0.3, num=51, unit='1/angstrom')
+    reduction = SansReduction(changed)
+    reduction.set_runs(SampleRun, sample_runs)
+    reduction.set_runs(BackgroundRun, background_runs)
     reduction.compute()
-    show('QBins changed (contribute side)', t0)
-    calls.clear()
-    t0 = time.perf_counter()
-    reduction[UncertaintyBroadcastMode] = UncertaintyBroadcastMode.drop
-    reduction.compute()
-    show('UncertaintyBroadcastMode changed (both stages)', t0)
+    show('QBins changed', t0)
 
     # --- Per-member intermediate ----------------------------------------------
     key = NormalizedQ[SampleRun, Numerator]
