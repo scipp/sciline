@@ -158,6 +158,39 @@ class DaskScheduler:
         return f'{self.__class__.__name__}({module}.{name})'
 
 
+def scheduler_or_default(scheduler: Scheduler | None) -> Scheduler:
+    """Return the given scheduler, or the default one if none is given.
+
+    The default is :py:class:`DaskScheduler` if dask is installed and
+    :py:class:`NaiveScheduler` otherwise.
+
+    Parameters
+    ----------
+    scheduler:
+        A scheduler, or None to select the default.
+
+    Returns
+    -------
+    :
+        The scheduler to use.
+
+    Raises
+    ------
+    ValueError
+        If ``scheduler`` does not implement :py:class:`Scheduler`.
+    """
+    if scheduler is None:
+        try:
+            return DaskScheduler()
+        except ImportError:
+            return NaiveScheduler()
+    if not isinstance(scheduler, Scheduler):
+        raise ValueError(
+            "Scheduler interface must be compatible with sciline.Scheduler"
+        )
+    return scheduler
+
+
 def _to_dask_key(key: Hashable) -> str:
     """Map a Sciline key to a dask key.
 
