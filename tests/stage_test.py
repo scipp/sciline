@@ -99,9 +99,43 @@ def test_stage_with_intermediate_input_cuts_its_ancestors(
     assert calls.counts == {'normalize': 1}
 
 
+def test_stage_does_not_compute_ancestors_of_intermediate_input_shared_with_input(
+    calls: Calls,
+) -> None:
+    def load(filename: Filename) -> Loaded:
+        calls.hit('load')
+        return Loaded([1.0])
+
+    def apply_mask(data: Loaded) -> Masked:
+        calls.hit('mask')
+        return Masked(data)
+
+    def denominator(data: Masked, filename: Filename) -> Denominator:
+        return Denominator(sum(data) + len(filename))
+
+    pipeline = sl.Pipeline([load, apply_mask, denominator])
+    # The naive scheduler computes every node of the graph it is given.
+    stage = Stage(
+        pipeline,
+        outputs=(Denominator,),
+        inputs=(Masked, Filename),
+        scheduler=sl.scheduler.NaiveScheduler(),
+    )
+    assert Loaded not in stage.keys
+    assert stage.compute({Masked: [2.0], Filename: 'ab'})[Denominator] == 4.0
+    assert calls.counts == {}
+
+
 def test_stage_rejects_input_the_outputs_do_not_need(pipeline: sl.Pipeline) -> None:
     with pytest.raises(ValueError, match='not needed'):
         Stage(pipeline, outputs=(Denominator,), inputs=(Scale,))
+
+
+def test_stage_rejects_input_needed_only_through_another_input(
+    pipeline: sl.Pipeline,
+) -> None:
+    with pytest.raises(ValueError, match='not needed'):
+        Stage(pipeline, outputs=(Denominator,), inputs=(Masked, Filename))
 
 
 def test_stage_rejects_output_not_in_pipeline(pipeline: sl.Pipeline) -> None:

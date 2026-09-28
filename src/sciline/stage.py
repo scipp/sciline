@@ -89,6 +89,15 @@ class Stage:
             pipeline, targets=self._outputs, handler=HandleAsComputeTimeException()
         )
         deps = _dependency_graph(graph)
+        # Cut off the providers of the inputs, then drop what only they needed.
+        for key in self._inputs:
+            if key in deps:
+                deps.remove_edges_from(list(deps.in_edges(key)))
+        needed_by_outputs = set(self._outputs)
+        for key in self._outputs:
+            needed_by_outputs |= nx.ancestors(deps, key)
+        deps = deps.subgraph(needed_by_outputs)
+        graph = {k: p for k, p in graph.items() if k in needed_by_outputs}
         missing = [k for k in self._inputs if k not in deps]
         if missing:
             raise ValueError(
