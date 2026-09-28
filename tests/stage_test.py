@@ -226,6 +226,58 @@ def test_warm_computes_shared_static_work_once(
     assert calls['calibration'] == 1
 
 
+def test_warm_shares_work_between_pipeline_copies_that_agree(
+    pipeline: sl.Pipeline, calls: Calls
+) -> None:
+    # Scale is not used by the stages, so they agree on every key they share.
+    other = pipeline.copy()
+    other[Scale] = 2.0
+    numerator = Stage(pipeline, outputs=(Numerator,), inputs=(Filename,))
+    denominator = Stage(other, outputs=(Denominator,), inputs=(Filename,))
+    warm(numerator, denominator)
+    assert numerator.static() == {Calibration: 4.0, Bins: 2}
+    assert denominator.static() == {Calibration: 4.0}
+    assert calls['calibration'] == 1
+
+
+def test_warm_rejects_stages_that_compute_a_shared_key_differently(
+    pipeline: sl.Pipeline,
+) -> None:
+    other = pipeline.copy()
+    other[Mask] = 'other mask'
+    a = Stage(pipeline, outputs=(Numerator,), inputs=(Filename,))
+    b = Stage(other, outputs=(Numerator,), inputs=(Filename,))
+    with pytest.raises(ValueError, match='differently'):
+        warm(a, b)
+
+
+def test_warm_rejects_stages_built_before_and_after_a_parameter_change(
+    pipeline: sl.Pipeline,
+) -> None:
+    before = Stage(pipeline, outputs=(Numerator,), inputs=(Filename,))
+    pipeline[Mask] = 'other mask'
+    after = Stage(pipeline, outputs=(Numerator,), inputs=(Filename,))
+    with pytest.raises(ValueError, match='differently'):
+        warm(before, after)
+
+
+def test_warm_stages_with_the_same_missing_parameter_raises_unsatisfied() -> None:
+    def calibration(mask: Mask) -> Calibration:
+        return Calibration(float(len(mask)))
+
+    def numerator(cal: Calibration, filename: Filename) -> Numerator:
+        return Numerator([cal])
+
+    def denominator(cal: Calibration, filename: Filename) -> Denominator:
+        return Denominator(cal)
+
+    pipeline = sl.Pipeline([calibration, numerator, denominator])
+    a = Stage(pipeline, outputs=(Numerator,), inputs=(Filename,))
+    b = Stage(pipeline, outputs=(Denominator,), inputs=(Filename,))
+    with pytest.raises(sl.UnsatisfiedRequirement):
+        warm(a, b)
+
+
 def test_warm_skips_stages_that_are_already_warm(
     pipeline: sl.Pipeline, calls: Calls
 ) -> None:

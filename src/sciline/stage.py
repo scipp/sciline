@@ -257,7 +257,7 @@ def visualize_stages(
     show_held_ancestors: bool = True,
     **kwargs: Any,
 ) -> graphviz.Digraph:
-    """Draw the keys that stages of one pipeline use, styling the nodes of each part.
+    """Draw the keys that several stages use, styling the nodes of each part.
 
     Inputs that no stage computes are drawn as parameters. The styles used by
     :py:meth:`Stage.visualize` and :py:meth:`Aggregation.visualize` are in
@@ -266,7 +266,7 @@ def visualize_stages(
     Parameters
     ----------
     stages:
-        Stages built from one pipeline.
+        Stages that agree on every key they share, as for :py:func:`warm`.
     parts:
         For each part, by its label in the legend: a graphviz node style and the
         keys in the part. Where a key is in several parts, the styles are merged
@@ -298,15 +298,29 @@ def visualize_stages(
     return _to_graphviz_with_parts(graph, parts, show_legend=show_legend, **kwargs)
 
 
+def _same_provider(a: Provider, b: Provider) -> bool:
+    # Parameter and unsatisfied providers are rebuilt for each stage, so they are
+    # compared by what they return. Parameter values are held by reference, so
+    # identity tells whether they were set separately.
+    if a.kind != b.kind:
+        return False
+    if a.kind == 'parameter':
+        return a.func() is b.func()
+    if a.kind == 'unsatisfied':
+        return True
+    return a.func is b.func and tuple(a.arg_spec.keys()) == tuple(b.arg_spec.keys())
+
+
 def warm(*stages: Stage) -> None:
-    """Compute the held parts of several stages of one pipeline in one run.
+    """Compute the held parts of several stages in one run.
 
     Intermediate results shared by the held parts are computed once and released;
     each stage keeps only the values at its frontier, as when warmed on its own.
     Stages that are already warm are skipped.
 
-    All stages must be built from the same pipeline. The scheduler of the first
-    stage that is not yet warm is used.
+    The stages may be built from different pipelines, such as copies of one
+    pipeline with different parameter values, as long as they agree on every key
+    they share. The scheduler of the first stage that is not yet warm is used.
 
     May be called from several threads at once, also together with
     :py:meth:`Stage.compute`; each held part is computed once.
@@ -314,7 +328,13 @@ def warm(*stages: Stage) -> None:
     Parameters
     ----------
     stages:
-        Stages built from one pipeline.
+        Stages that agree on every key they share.
+
+    Raises
+    ------
+    ValueError
+        If two stages compute a shared key differently, for example from different
+        parameter values.
     """
     # Locks are taken in a fixed order, so that concurrent calls over overlapping
     # stages cannot deadlock.
@@ -328,7 +348,12 @@ def warm(*stages: Stage) -> None:
         graph: Graph = {}
         keys: dict[Key, None] = {}
         for stage in cold:
-            graph.update(stage._static_graph)
+            for key, provider in stage._static_graph.items():
+                if key in graph and not _same_provider(graph[key], provider):
+                    raise ValueError(
+                        f'Stages compute {key} differently; warm them separately'
+                    )
+                graph[key] = provider
             keys.update(dict.fromkeys(stage._frontier))
         values = _compute(graph, tuple(keys), cold[0]._scheduler)
         for stage in cold:
