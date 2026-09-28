@@ -6,12 +6,15 @@ that combine the contributions, and a finalize stage over the combined values.""
 from __future__ import annotations
 
 from collections.abc import Callable, Hashable, Iterable, Mapping
-from typing import Any, Generic, Protocol, TypeVar
+from typing import TYPE_CHECKING, Any, Generic, Protocol, TypeVar
 
 from .pipeline import Pipeline
 from .scheduler import Scheduler
-from .stage import Stage, warm
+from .stage import Stage, _display_graph, warm
 from .typing import Key
+
+if TYPE_CHECKING:
+    import graphviz
 
 T = TypeVar('T')
 
@@ -131,10 +134,11 @@ class Aggregation:
     """Combines the contributions of the rows of a table, computed from one pipeline.
 
     The rows of the table are the members, its columns the *member keys*. Two
-    :py:class:`Stage` objects are held: ``contribute_stage`` computes the
-    *accumulation keys* from the member keys, ``finalize_stage`` computes the
-    outputs from the accumulation keys. Between them, one accumulator per
-    accumulation key combines the contributions of the members.
+    :py:class:`Stage` objects are held: ``contribute_stage`` computes the values
+    of the *accumulation keys* from those of the member keys, ``finalize_stage``
+    computes the values of the outputs from those of the accumulation keys. Between
+    them, one accumulator per accumulation key combines the contributions of the
+    members.
 
     The aggregation holds its stages, not the contributions: whoever iterates over
     the members owns them. :py:meth:`compute` is that loop for a table.
@@ -168,12 +172,12 @@ class Aggregation:
             rather than instances, so that the aggregation holds no state between
             calls and whoever asks for accumulators owns their lifetime; ``combine``
             and ``compute`` use fresh ones. A key that does not depend on the members
-            is not accumulated; ``finalize`` computes it from the held part of the
-            graph. ``accumulation_keys`` lists the keys that are accumulated.
+            is not accumulated; ``finalize`` computes its value from the held part
+            of the graph. ``accumulation_keys`` lists the keys that are accumulated.
         outputs:
-            Keys computed by ``finalize`` from the accumulation keys. Omit for an
-            aggregation used only for its contributions, such as one of several
-            sharing a finalize stage.
+            Keys whose values ``finalize`` computes from the accumulation keys. Omit
+            for an aggregation used only for its contributions, such as one of
+            several sharing a finalize stage.
         scheduler:
             Scheduler for both stages. If not given,
             :py:class:`sciline.scheduler.DaskScheduler` is used if dask is installed,
@@ -254,7 +258,7 @@ class Aggregation:
         return {key: a.value for key, a in acc.items()}
 
     def finalize(self, contribution: Contribution) -> dict[Key, Any]:
-        """Compute the outputs from combined contributions.
+        """Compute the values of the outputs from combined contributions.
 
         Parameters
         ----------
@@ -300,11 +304,61 @@ class Aggregation:
             self.combine(self.contribute(row) for row in table.values())
         )
 
+    def visualize(self, show_legend: bool = True, **kwargs: Any) -> graphviz.Digraph:
+        """Draw the graph of both stages, with the member keys, the per-member part,
+        the accumulation keys, and the finalize part.
+
+        Parameters
+        ----------
+        show_legend:
+            If True, add a legend explaining the node styles.
+        kwargs:
+            Keyword arguments passed to :py:func:`sciline.visualize.to_graphviz`.
+        """
+        from .visualize import (
+            ACCUMULATION_STYLE,
+            DYNAMIC_STYLE,
+            FINALIZE_STYLE,
+            FRONTIER_STYLE,
+            HELD_STYLE,
+            INPUT_STYLE,
+            OUTPUT_STYLE,
+            to_graphviz_with_parts,
+        )
+
+        contribute = self.contribute_stage
+        finalize = () if self.finalize_stage is None else (self.finalize_stage,)
+        stages = (contribute, *finalize)
+        return to_graphviz_with_parts(
+            _display_graph(*stages),
+            {
+                'Held, computed once': (
+                    HELD_STYLE,
+                    {k for s in stages for k in s.keys - set(s.dynamic)},
+                ),
+                'Held value': (FRONTIER_STYLE, {k for s in stages for k in s.frontier}),
+                'Member key': (INPUT_STYLE, contribute.inputs),
+                'Computed per member': (
+                    DYNAMIC_STYLE,
+                    set(contribute.dynamic) - set(contribute.inputs),
+                ),
+                'Accumulation key': (ACCUMULATION_STYLE, self.accumulation_keys),
+                'Finalize': (
+                    FINALIZE_STYLE,
+                    {k for s in finalize for k in set(s.dynamic) - set(s.inputs)},
+                ),
+                'Output': (OUTPUT_STYLE, {k for s in finalize for k in s.outputs}),
+            },
+            show_legend=show_legend,
+            **kwargs,
+        )
+
 
 def compute_members(
     pipeline: Pipeline, *, members: Iterable[Key], key: Key, table: Table
 ) -> dict[Hashable, Any]:
-    """Compute a key that depends on the member keys for each row of a table.
+    """Compute the value of a key that depends on the member keys, for each row of a
+    table.
 
     Parameters
     ----------
@@ -313,7 +367,7 @@ def compute_members(
     members:
         The keys supplied per member, the columns of the table.
     key:
-        The key to compute.
+        The key whose value to compute.
     table:
         Rows of member-key values.
 

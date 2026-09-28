@@ -194,7 +194,7 @@ compute_members(pipeline, members=(Filename[SampleRun],), key=NormalizedQ[Sample
   With factories, whoever calls `accumulators()` owns the instances and decides their lifetime.
 - **Keys that do not depend on the members.**
   A key in `accumulators` that does not depend on the member keys is not accumulated.
-  The finalize stage computes it from the static part instead, and `accumulation_keys` leaves it out.
+  The finalize stage computes its value from the static part instead, and `accumulation_keys` leaves it out.
   This removes the need for essreflectometry's `try/except`.
   It also means that a key placed wrongly is silently treated as static.
   A consumer that knows which keys must be accumulated, such as a package test or the essapps binding, should compare its list with `accumulation_keys`.
@@ -211,7 +211,7 @@ compute_members(pipeline, members=(Filename[SampleRun],), key=NormalizedQ[Sample
 - **Member table.**
   A table is a `Mapping[label, Mapping[Key, value]]`, which `df.to_dict('index')` produces from a pandas DataFrame.
   Sciline does not depend on pandas, and the labels are chosen by the caller.
-- **`compute_members`** computes one key for each row of a table, without combining.
+- **`compute_members`** computes the value of one key for each row of a table, without combining.
   It replaces `compute_mapped`.
 
 ### What is deliberately not in `Aggregation`

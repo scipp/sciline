@@ -9,6 +9,12 @@ import sciline as sl
 from sciline import Aggregation, Buffered, Reduced, Stage, compute_members, warm
 from sciline.aggregation import Table
 from sciline.typing import Key
+from sciline.visualize import (
+    DYNAMIC_STYLE,
+    FINALIZE_STYLE,
+    FRONTIER_STYLE,
+    INPUT_STYLE,
+)
 
 Filename = NewType('Filename', str)
 Mask = NewType('Mask', str)
@@ -415,3 +421,30 @@ def test_two_aggregations_share_a_finalize_stage() -> None:
         background.contribute({File[BackgroundRun]: f}) for f in ['x', 'yz']
     )
     assert finalize.compute({**s, **b})[Result] == 5 - 3
+
+
+def test_aggregation_visualize_marks_members_accumulation_keys_and_finalize(
+    pipeline: sl.Pipeline,
+) -> None:
+    agg = Aggregation(
+        pipeline,
+        members=(Filename,),
+        accumulators={Numerator: Buffered(concat), Denominator: Reduced(add)},
+        outputs=(IofQ,),
+    )
+    source: str = agg.visualize().source
+
+    def node_line(key: type) -> str:
+        return next(
+            line
+            for line in reversed(source.splitlines())
+            if line.startswith(f'\t{key.__name__} [')
+        )
+
+    assert INPUT_STYLE['fillcolor'] in node_line(Filename)
+    assert DYNAMIC_STYLE['fillcolor'] in node_line(Masked)
+    assert 'shape=cylinder' in node_line(Numerator)
+    assert 'shape=cylinder' in node_line(Denominator)
+    assert FINALIZE_STYLE['fillcolor'] in node_line(IofQ)
+    assert 'peripheries=2' in node_line(IofQ)
+    assert FRONTIER_STYLE['penwidth'] in node_line(Scale)

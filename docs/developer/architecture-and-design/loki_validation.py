@@ -165,9 +165,16 @@ def show(label: str, t0: float) -> dict[str, int]:
 class SansReduction:
     """What esssans would return instead of a map/reduced pipeline.
 
+    It does two things that ``Aggregation.compute`` does not:
+
+    - Sample and background runs are two aggregations, one per run type, whose
+      accumulation keys feed one shared finalize stage. The finalize stage of a
+      single aggregation reads only that aggregation's accumulation keys.
+    - Contributions are held by filename, so adding a run computes only the new
+      run's contribution, and removing a run recomputes nothing.
+
     Built from a pipeline with all parameters set; to change a parameter, build a
-    new object. Holds one aggregation per run type, the finalize stage over the
-    accumulation keys of both, and the contributions by filename.
+    new object.
     """
 
     run_types = (SampleRun, BackgroundRun)

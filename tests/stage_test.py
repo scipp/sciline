@@ -6,6 +6,7 @@ import pytest
 
 import sciline as sl
 from sciline import Stage, warm
+from sciline.visualize import DYNAMIC_STYLE, FRONTIER_STYLE, HELD_STYLE, INPUT_STYLE
 
 Filename = NewType('Filename', str)
 Mask = NewType('Mask', str)
@@ -351,3 +352,29 @@ def test_warm_and_compute_from_threads_compute_static_part_once(calls: Calls) ->
         for w in warmed:
             w.result()
     assert calls['calibration'] == 1
+
+
+def node_line(source: str, key: type) -> str:
+    """The last statement for the node of ``key``, which carries its style."""
+    name = key.__name__
+    return next(
+        line for line in reversed(source.splitlines()) if line.startswith(f'\t{name} [')
+    )
+
+
+def test_stage_visualize_marks_inputs_held_and_per_call_nodes(
+    pipeline: sl.Pipeline,
+) -> None:
+    stage = Stage(pipeline, outputs=(Numerator,), inputs=(Filename,))
+    source: str = stage.visualize().source
+    assert INPUT_STYLE['fillcolor'] in node_line(source, Filename)
+    assert HELD_STYLE['fillcolor'] in node_line(source, Mask)
+    assert FRONTIER_STYLE['penwidth'] in node_line(source, Calibration)
+    assert DYNAMIC_STYLE['fillcolor'] in node_line(source, Masked)
+    assert 'peripheries=2' in node_line(source, Numerator)
+    assert 'cluster_legend' in source
+
+
+def test_stage_visualize_without_legend(pipeline: sl.Pipeline) -> None:
+    stage = Stage(pipeline, outputs=(Numerator,), inputs=(Filename,))
+    assert 'cluster_legend' not in stage.visualize(show_legend=False).source

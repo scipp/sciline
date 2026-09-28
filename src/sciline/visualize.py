@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright (c) 2023 Scipp contributors (https://github.com/scipp)
 import html
-from collections.abc import Hashable
+from collections.abc import Hashable, Iterable, Mapping
 from dataclasses import dataclass
 from typing import Any, Literal, get_args, get_origin
 
@@ -103,6 +103,60 @@ def to_graphviz(
                 origin = next(iter(subgraph.values())).ret.name.split('[')[0]
                 dot_subgraph.attr(label=f'{origin}')
             _add_subgraph(subgraph, dot, dot_subgraph, mode=mode)
+    return dot
+
+
+# Node styles for graphs cut into parts, such as the held and per-call parts of a
+# stage. Where a key is in several parts, the later part's style wins.
+HELD_STYLE = {'style': 'filled', 'fillcolor': '#e8e8e8'}
+FRONTIER_STYLE = {'style': 'filled', 'fillcolor': '#e8e8e8', 'penwidth': '2.5'}
+INPUT_STYLE = {'style': 'filled', 'fillcolor': '#90ee90', 'penwidth': '2.5'}
+DYNAMIC_STYLE = {'style': 'filled', 'fillcolor': '#d4f4d4'}
+ACCUMULATION_STYLE = {'style': 'filled', 'fillcolor': '#ffb347', 'shape': 'cylinder'}
+FINALIZE_STYLE = {'style': 'filled', 'fillcolor': '#dda0dd'}
+OUTPUT_STYLE = {'peripheries': '2'}
+
+
+def to_graphviz_with_parts(
+    graph: Graph,
+    parts: Mapping[str, tuple[Mapping[str, str], Iterable[Key]]],
+    show_legend: bool = True,
+    **kwargs: Any,
+) -> Digraph:
+    """Convert a graph to graphviz, styling the nodes of each part.
+
+    Parameters
+    ----------
+    graph:
+        Graph to draw.
+    parts:
+        For each part, by its label in the legend: the node style and the keys in
+        the part. Where a key is in several parts, the styles are merged in the order
+        of the parts.
+    show_legend:
+        If True, add a legend with one entry per part.
+    kwargs:
+        Keyword arguments passed to :py:func:`to_graphviz`.
+    """
+    dot = to_graphviz(graph, **kwargs)
+    styles: dict[Key, dict[str, str]] = {}
+    for style, keys in parts.values():
+        for key in keys:
+            styles.setdefault(key, {}).update(style)
+    for key, style in styles.items():
+        if key in graph:
+            dot.node(_format_type(key).name, **style)
+    if show_legend:
+        with dot.subgraph(name='cluster_legend') as legend:
+            legend.attr(label='Legend', style='rounded', color='black')
+            legend.attr('node', shape='rectangle')
+            previous = None
+            for i, (label, (style, _)) in enumerate(parts.items()):
+                name = f'legend_{i}'
+                legend.node(name, label, **style)
+                if previous is not None:
+                    legend.edge(previous, name, style='invis')
+                previous = name
     return dot
 
 

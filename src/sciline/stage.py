@@ -8,7 +8,7 @@ from __future__ import annotations
 import threading
 from collections.abc import Iterable, Mapping, Sequence
 from contextlib import ExitStack
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import networkx as nx
 
@@ -18,6 +18,9 @@ from .handler import HandleAsComputeTimeException
 from .pipeline import Pipeline
 from .scheduler import Scheduler, scheduler_or_default
 from .typing import Graph, Key
+
+if TYPE_CHECKING:
+    import graphviz
 
 
 def _dependency_graph(graph: Graph) -> nx.DiGraph:
@@ -65,7 +68,7 @@ class Stage:
         pipeline:
             Pipeline with all parameters set that the outputs need, except the inputs.
         outputs:
-            Keys computed by the stage.
+            Keys whose values the stage computes.
         inputs:
             Keys supplied on each call. Each must be needed by the outputs.
         scheduler:
@@ -138,7 +141,7 @@ class Stage:
 
     @property
     def outputs(self) -> tuple[Key, ...]:
-        """Keys computed by the stage."""
+        """Keys whose values the stage computes."""
         return self._outputs
 
     @property
@@ -176,8 +179,40 @@ class Stage:
         warm(self)
         return self._static
 
+    def visualize(self, show_legend: bool = True, **kwargs: Any) -> graphviz.Digraph:
+        """Draw the graph of the stage, with its inputs, held part, and per-call part.
+
+        Parameters
+        ----------
+        show_legend:
+            If True, add a legend explaining the node styles.
+        kwargs:
+            Keyword arguments passed to :py:func:`sciline.visualize.to_graphviz`.
+        """
+        from .visualize import (
+            DYNAMIC_STYLE,
+            FRONTIER_STYLE,
+            HELD_STYLE,
+            INPUT_STYLE,
+            OUTPUT_STYLE,
+            to_graphviz_with_parts,
+        )
+
+        return to_graphviz_with_parts(
+            _display_graph(self),
+            {
+                'Held, computed once': (HELD_STYLE, self._static_graph),
+                'Held value': (FRONTIER_STYLE, self._frontier),
+                'Input': (INPUT_STYLE, self._inputs),
+                'Computed per call': (DYNAMIC_STYLE, self._dynamic_graph),
+                'Output': (OUTPUT_STYLE, self._outputs),
+            },
+            show_legend=show_legend,
+            **kwargs,
+        )
+
     def compute(self, values: Mapping[Key, Any]) -> dict[Key, Any]:
-        """Compute the outputs for the given input values.
+        """Compute the values of the outputs from the values of the inputs.
 
         Parameters
         ----------
@@ -202,6 +237,21 @@ class Stage:
         for k, v in self.static().items():
             graph[k] = Provider.parameter(v)
         return _compute(graph, self._outputs, self._scheduler)
+
+
+def _display_graph(*stages: Stage) -> Graph:
+    """The providers of the keys the stages use, for drawing.
+
+    Inputs that no stage computes are drawn as parameters.
+    """
+    graph: Graph = {}
+    for stage in stages:
+        graph.update(stage._static_graph)
+        graph.update(stage._dynamic_graph)
+    for stage in stages:
+        for key in stage.inputs:
+            graph.setdefault(key, Provider.parameter(None))
+    return graph
 
 
 def warm(*stages: Stage) -> None:

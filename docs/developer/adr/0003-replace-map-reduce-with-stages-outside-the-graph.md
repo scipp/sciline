@@ -117,7 +117,7 @@ agg.finalize(agg.combine(contributions.values()))
 ```
 
 A member table is a plain `Mapping[label, Mapping[Key, value]]`; pandas is not needed.
-`compute_members` computes one key per member and replaces `compute_mapped`.
+`compute_members` computes the value of one key per member and replaces `compute_mapped`.
 
 ### Who owns what
 
