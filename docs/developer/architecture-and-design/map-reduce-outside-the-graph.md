@@ -339,25 +339,38 @@ The rewrite of the real class against its existing tests has not been done.
 ### 6.7 essapps
 
 essapps is the planned service for automatic, batch, and interactive data reduction.
-Its design is on the `architecture-sketch` branch (`docs/developer/architecture.md`), and `docs/developer/stages.md` there reads it against this proposal.
+Its design is on the `architecture-sketch` branch (`docs/developer/architecture.md`), and `docs/developer/stages.md` and `docs/developer/aggregation.md` there relate it to this proposal.
 In that design a workflow is described by a *spec* that declares its parameters and outputs, every run produces a stored *record*, and a *binding* connects a spec to the sciline workflow.
-Three of its mechanisms are stages and aggregations:
+A record holds only what was computed: the spec, every parameter value, and the outputs.
+Stages and aggregations are how it is computed.
+A session holds them as caches, and they never appear in a record.
+Only the binding knows the graph, so a spec does not say which parameters each part of the workflow reads.
+The essapps interface follows what sciline and the package objects provide, so that no problem is solved twice.
+It uses them in four places:
 
-- **Warm workflow (D8).**
-  For interactive work the spec declares cheap parameters, and a rerun after changing one of them should reuse everything upstream.
-  This is `Stage(pipeline, inputs=cheap_parameters, outputs=targets)`, with the cache being the frontier of the stage.
-  The cheap parameters stay declared, because they decide what the user interface offers as a slider.
-  A cheap parameter that the targets do not need is rejected when the stage is built.
-- **Declared additive combine (D15).**
-  A workflow can declare a contribution at its accumulation keys, and the service then runs contribute, combine, and finalize as separate steps, which are the three entry points of `Aggregation`.
-  Where the contributions are kept depends on how the service runs:
-  - In batch and automatic reduction, each new member of a series leads to a combine request in a short-lived process: `agg.finalize(agg.combine([previous, new]))`, with nothing held between requests.
-  - In an interactive session, the wrapper holds the contributions by member label; removing a member is a combine over the remaining ones.
-  - A long-running process (called a *fold* in essapps) holds accumulators from `agg.accumulators()`, pushes each new contribution, and writes `value` as a record every n contributions.
+- **Tuning.**
+  The caller names the stage as a *template*, whose blanks are the parameters that will move.
+  The session holds `Stage(pipeline, inputs=blanks, outputs=targets)` for it, so a rerun after changing a blank reuses everything upstream.
+  A blank that the targets do not need is dropped by the binding, because `Stage` refuses it.
+- **A sum over runs.**
+  A sum is one request whose run parameter is a list.
+  The binding wraps the package object (section 6.1) or its aggregation, and computes the sum in one process.
+  Values that differ per run are further columns of the member table.
+  Nested levels, such as runs times banks, stay in the package's driver (section 6.3), and mask files are a plain list parameter (section 6.4).
+  In a session, the held stage over the list keeps the accumulators, so a call whose list extends the previous one contributes only the new runs.
+  A long-lived runner that holds this stage for one series under a rule is called a *fold* in essapps.
+- **A sum spread over nodes.**
+  The workflow author splits the sum into two specs, and the binding builds both from one aggregation:
 
-  The spec still declares which parameters finalize reads (D13), because the service validates a combine request without importing workflow code.
-  The binding derives the actual split from `contribute_stage.keys` and `finalize_stage.keys` and rejects a spec whose declaration disagrees with the graph.
-  Structure inside one record, such as angle groups in a Bifrost run or chunks of an NMX file, has the shape of section 6.3.
+  ```python
+  def contribute(run):   # CONTRIBUTE: one run -> accumulation keys, exposed as outputs
+      return agg.contribute({Filename[SampleRun]: run})
+
+  def combine(parts):    # COMBINE: references to the outputs of CONTRIBUTE -> result
+      return agg.finalize(agg.combine(parts))
+  ```
+
+  Each record describes only its own computation, so no check that the parts agree is needed.
 - **Interactive applications (phase 3).**
   essapps compares three models for interactive work: a session that holds state, an application that holds state itself, and a stateless service that splits a workflow into two specs with the intermediate value stored as a record.
   In all three, the objects are the same: a stage, and a connector after it.
@@ -407,7 +420,7 @@ A generic object would either expose parameters for all of this or hide one choi
 It would also be a graph of stages with its own scheduler, which is nested workflows one level up (section 8.6).
 Each real use is a loop of under twenty lines over plain objects, and that loop is where the policy belongs.
 
-If package objects turn out to repeat the same code (for example esssans, essreflectometry, and the essapps wrapper), that repetition is the basis for a generalization of the package objects, not of `Aggregation`.
+If package objects turn out to repeat the same code (for example esssans, essreflectometry, and the essapps binding), that repetition is the basis for a generalization of the package objects, not of `Aggregation`.
 If essapps phase 3 needs connectors placed on process boundaries with pushes routed across them, that is a placement layer over the same stages and connectors, and should be designed with that case at hand.
 
 ### 8.3 No builder that derives stage boundaries (deferred)
@@ -457,7 +470,7 @@ Composition across stages is ordinary Python with connectors in between, so no g
 - **Aggregation** and **contribute/combine/finalize**, as in Spark, Flink, Beam, and pandas.
   `fold` was avoided because it means reshaping in scipp.
 - **Accumulator** for the stateful object, as in Beam, Flink, and Spark.
-- **Accumulation key**, matching the essapps term (formerly "accumulation point").
+- **Accumulation key**, matching the essapps term.
 - `Forwarder` is the working name in ess.reduce; the final name is ess.reduce's decision.
 
 ## 9. Validation
@@ -470,7 +483,7 @@ On the generics branch all tests also pass except the two that aggregate over a 
 
 The tests cover:
 
-- **Stage:** static part computed once and dynamic part per call; an intermediate input cuts off its ancestors; inputs the outputs do not need are rejected; pass-through of an output that is an input; snapshot behaviour; `warm` computes shared work once, skips warm stages, and rejects stages that compute a shared key differently; concurrent calls compute the static part once; an expensive load before a cheap parameter (the warm-workflow shape).
+- **Stage:** static part computed once and dynamic part per call; an intermediate input cuts off its ancestors; inputs the outputs do not need are rejected; pass-through of an output that is an input; snapshot behaviour; `warm` computes shared work once, skips warm stages, and rejects stages that compute a shared key differently; concurrent calls compute the static part once; an expensive load before a cheap parameter (the shape of tuning in essapps).
 - **Accumulators:** push order, the first push as result, reading without pushes.
 - **Aggregation:** equal to a manual loop; two accumulation keys with different accumulators; a two-column member table; a key that does not depend on the members; members the accumulation keys do not need are rejected; the three steps called separately, with chained combining; no outputs; grouping with pandas; snapshot of parameters and graph; `compute` pushes each contribution before making the next; generic keys with `TypeVar` providers; `compute_members`.
 - **Composition:** runs times banks with a per-run stage (section 6.3); two aggregations sharing a finalize stage; the `StreamProcessor` shape with a context update.
@@ -519,8 +532,7 @@ Not validated: the rewrite of `StreamProcessor` against its real tests.
     The package object uses the driver of section 6.3, with the triplets combined per run and the runs combined after.
     A list parameter with a provider that loops over the triplets would hide the loop inside a provider (section 8.5).
 - **esslivedata:** the bifrost bank fold becomes an `Aggregation` computed before the `StreamProcessor` is built (section 6.5).
-- **essapps:** the design text is updated as listed at the end of `stages.md`.
-  The fake workflow with two accumulation keys in the D3/D6 spike becomes an `Aggregation`.
+- **essapps:** the binding wraps the package objects and their aggregations instead of building its own (section 6.7).
 
 ### Findings of the survey that affect the migration
 
@@ -556,7 +568,7 @@ Not validated: the rewrite of `StreamProcessor` against its real tests.
 - **Static work across processes.**
   Stages in one process share their static work through `warm`.
   A contribute call in a short-lived process recomputes it.
-  This is the cost of essapps phase 3 that its stateless-service notes already measure, not a new cost.
+  This is the cost that essapps estimates for its stateless model of interactive work, not a new cost.
 - **`sciline.v2` or a major release?**
   A `v2` namespace would let esslivedata and external users keep the old `Pipeline` next to the new one.
   But it bundles two independent changes (generics and map/reduce) under one name, invites mixing old and new pipelines in one process with obscure failures, and guarantees a second rename later.

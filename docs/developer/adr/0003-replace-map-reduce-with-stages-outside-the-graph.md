@@ -43,7 +43,7 @@ run one part of a graph many times with different inputs, combine the results *o
 - `ess.reduce.streaming.StreamProcessor` does this for the chunks of a stream.
   Sciline gives it no way to split a graph, so it prunes branches by setting keys to `None`, grafts subgraphs, and patches provider annotations at run time.
   scipp/sciline#241 asks for proper support.
-- The planned reduction service (essapps) needs to cache everything upstream of a cheap parameter, to process members in separate processes and combine them later, and to run two halves of one graph in two processes.
+- The planned reduction service (essapps) needs to cache everything upstream of the parameters a user tunes, to add a run to a held sum without reducing the others again, and to reduce the runs of a sum in separate processes and combine them later.
 
 Map/reduce cannot serve these because the loop and the combined value live inside a single `compute` call.
 There is no way to push a new member later, to keep per-member results between calls, or to run members in different processes.
