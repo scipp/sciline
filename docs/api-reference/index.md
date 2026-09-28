@@ -35,6 +35,7 @@
    compute_mapped
    compute_members
    get_mapped_node_names
+   visualize_stages
    warm
 ```
 

@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Any, Generic, Protocol, TypeVar
 
 from .pipeline import Pipeline
 from .scheduler import Scheduler
-from .stage import Stage, _display_graph, warm
+from .stage import Stage, visualize_stages, warm
 from .typing import Key
 
 if TYPE_CHECKING:
@@ -304,7 +304,13 @@ class Aggregation:
             self.combine(self.contribute(row) for row in table.values())
         )
 
-    def visualize(self, show_legend: bool = True, **kwargs: Any) -> graphviz.Digraph:
+    def visualize(
+        self,
+        *,
+        show_legend: bool = True,
+        show_held_ancestors: bool = True,
+        **kwargs: Any,
+    ) -> graphviz.Digraph:
         """Draw the graph of both stages, with the member keys, the per-member part,
         the accumulation keys, and the finalize part.
 
@@ -312,6 +318,8 @@ class Aggregation:
         ----------
         show_legend:
             If True, add a legend explaining the node styles.
+        show_held_ancestors:
+            If False, draw the held values without what they were computed from.
         kwargs:
             Keyword arguments passed to :py:func:`sciline.visualize.to_graphviz`.
         """
@@ -323,20 +331,20 @@ class Aggregation:
             HELD_STYLE,
             INPUT_STYLE,
             OUTPUT_STYLE,
-            to_graphviz_with_parts,
         )
 
         contribute = self.contribute_stage
         finalize = () if self.finalize_stage is None else (self.finalize_stage,)
         stages = (contribute, *finalize)
-        return to_graphviz_with_parts(
-            _display_graph(*stages),
-            {
+        frontier = {k for s in stages for k in s.frontier}
+        return visualize_stages(
+            *stages,
+            parts={
                 'Held, computed once': (
                     HELD_STYLE,
-                    {k for s in stages for k in s.keys - set(s.dynamic)},
+                    {k for s in stages for k in s.keys - set(s.dynamic)} - frontier,
                 ),
-                'Held value': (FRONTIER_STYLE, {k for s in stages for k in s.frontier}),
+                'Held value': (FRONTIER_STYLE, frontier),
                 'Member key': (INPUT_STYLE, contribute.inputs),
                 'Computed per member': (
                     DYNAMIC_STYLE,
@@ -350,6 +358,7 @@ class Aggregation:
                 'Output': (OUTPUT_STYLE, {k for s in finalize for k in s.outputs}),
             },
             show_legend=show_legend,
+            show_held_ancestors=show_held_ancestors,
             **kwargs,
         )
 

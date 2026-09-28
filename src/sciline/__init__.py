@@ -25,7 +25,7 @@ from .handler import (
     UnsatisfiedRequirement,
 )
 from .pipeline import Pipeline, compute_mapped, get_mapped_node_names
-from .stage import Stage, warm
+from .stage import Stage, visualize_stages, warm
 from .task_graph import TaskGraph
 
 __all__ = [
@@ -46,6 +46,7 @@ __all__ = [
     "compute_members",
     "get_mapped_node_names",
     "scheduler",
+    "visualize_stages",
     "warm",
 ]
 

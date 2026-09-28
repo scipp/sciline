@@ -354,11 +354,15 @@ def test_warm_and_compute_from_threads_compute_static_part_once(calls: Calls) ->
     assert calls['calibration'] == 1
 
 
-def node_line(source: str, key: type) -> str:
-    """The last statement for the node of ``key``, which carries its style."""
-    name = key.__name__
+def node_line(source: str, key: type, attr: str = '') -> str:
+    """The last statement for the node of ``key`` that sets ``attr``.
+
+    Without ``attr``, this is the statement that sets the node's style.
+    """
     return next(
-        line for line in reversed(source.splitlines()) if line.startswith(f'\t{name} [')
+        line
+        for line in reversed(source.splitlines())
+        if line.lstrip('\t').startswith(f'{key.__name__} [{attr}')
     )
 
 
@@ -378,3 +382,25 @@ def test_stage_visualize_marks_inputs_held_and_per_call_nodes(
 def test_stage_visualize_without_legend(pipeline: sl.Pipeline) -> None:
     stage = Stage(pipeline, outputs=(Numerator,), inputs=(Filename,))
     assert 'cluster_legend' not in stage.visualize(show_legend=False).source
+
+
+def test_stage_visualize_can_hide_held_ancestors(pipeline: sl.Pipeline) -> None:
+    stage = Stage(pipeline, outputs=(Numerator,), inputs=(Filename,))
+    source: str = stage.visualize(show_held_ancestors=False).source
+    assert FRONTIER_STYLE['penwidth'] in node_line(source, Calibration)
+    assert 'Mask [' not in source
+    assert 'Held, computed once' not in source
+
+
+def test_visualize_stages_styles_parts_given_by_caller(pipeline: sl.Pipeline) -> None:
+    per_file = Stage(pipeline, outputs=(Numerator,), inputs=(Filename,))
+    final = Stage(pipeline, outputs=(IofQ,), inputs=(Numerator,))
+    source: str = sl.visualize_stages(
+        per_file,
+        final,
+        parts={'Context': ({'fillcolor': '#123456'}, (Calibration,))},
+    ).source
+    assert '#123456' in node_line(source, Calibration)
+    assert 'Context' in source
+    # Numerator is computed by per_file, so it is drawn with its provider.
+    assert 'via:' in node_line(source, Numerator, 'label=')

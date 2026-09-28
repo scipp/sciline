@@ -179,13 +179,21 @@ class Stage:
         warm(self)
         return self._static
 
-    def visualize(self, show_legend: bool = True, **kwargs: Any) -> graphviz.Digraph:
+    def visualize(
+        self,
+        *,
+        show_legend: bool = True,
+        show_held_ancestors: bool = True,
+        **kwargs: Any,
+    ) -> graphviz.Digraph:
         """Draw the graph of the stage, with its inputs, held part, and per-call part.
 
         Parameters
         ----------
         show_legend:
             If True, add a legend explaining the node styles.
+        show_held_ancestors:
+            If False, draw the held values without what they were computed from.
         kwargs:
             Keyword arguments passed to :py:func:`sciline.visualize.to_graphviz`.
         """
@@ -195,19 +203,22 @@ class Stage:
             HELD_STYLE,
             INPUT_STYLE,
             OUTPUT_STYLE,
-            to_graphviz_with_parts,
         )
 
-        return to_graphviz_with_parts(
-            _display_graph(self),
-            {
-                'Held, computed once': (HELD_STYLE, self._static_graph),
+        return visualize_stages(
+            self,
+            parts={
+                'Held, computed once': (
+                    HELD_STYLE,
+                    set(self._static_graph) - set(self._frontier),
+                ),
                 'Held value': (FRONTIER_STYLE, self._frontier),
                 'Input': (INPUT_STYLE, self._inputs),
                 'Computed per call': (DYNAMIC_STYLE, self._dynamic_graph),
                 'Output': (OUTPUT_STYLE, self._outputs),
             },
             show_legend=show_legend,
+            show_held_ancestors=show_held_ancestors,
             **kwargs,
         )
 
@@ -239,19 +250,52 @@ class Stage:
         return _compute(graph, self._outputs, self._scheduler)
 
 
-def _display_graph(*stages: Stage) -> Graph:
-    """The providers of the keys the stages use, for drawing.
+def visualize_stages(
+    *stages: Stage,
+    parts: Mapping[str, tuple[Mapping[str, str], Iterable[Key]]],
+    show_legend: bool = True,
+    show_held_ancestors: bool = True,
+    **kwargs: Any,
+) -> graphviz.Digraph:
+    """Draw the keys that stages of one pipeline use, styling the nodes of each part.
 
-    Inputs that no stage computes are drawn as parameters.
+    Inputs that no stage computes are drawn as parameters. The styles used by
+    :py:meth:`Stage.visualize` and :py:meth:`Aggregation.visualize` are in
+    :py:mod:`sciline.visualize`, for example ``sciline.visualize.INPUT_STYLE``.
+
+    Parameters
+    ----------
+    stages:
+        Stages built from one pipeline.
+    parts:
+        For each part, by its label in the legend: a graphviz node style and the
+        keys in the part. Where a key is in several parts, the styles are merged
+        in the order of the parts.
+    show_legend:
+        If True, add a legend with one entry per part that has a drawn node.
+    show_held_ancestors:
+        If False, draw the held values without what they were computed from.
+    kwargs:
+        Keyword arguments passed to :py:func:`sciline.visualize.to_graphviz`.
     """
+    from .visualize import _to_graphviz_with_parts
+
     graph: Graph = {}
     for stage in stages:
         graph.update(stage._static_graph)
         graph.update(stage._dynamic_graph)
+    if not show_held_ancestors:
+        frontier = {k for stage in stages for k in stage.frontier}
+        dynamic = {k for stage in stages for k in stage._dynamic_graph}
+        graph = {
+            k: Provider.parameter(None) if k in frontier else p
+            for k, p in graph.items()
+            if k in frontier or k in dynamic
+        }
     for stage in stages:
         for key in stage.inputs:
             graph.setdefault(key, Provider.parameter(None))
-    return graph
+    return _to_graphviz_with_parts(graph, parts, show_legend=show_legend, **kwargs)
 
 
 def warm(*stages: Stage) -> None:

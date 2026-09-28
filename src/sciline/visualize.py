@@ -117,7 +117,7 @@ FINALIZE_STYLE = {'style': 'filled', 'fillcolor': '#dda0dd'}
 OUTPUT_STYLE = {'peripheries': '2'}
 
 
-def to_graphviz_with_parts(
+def _to_graphviz_with_parts(
     graph: Graph,
     parts: Mapping[str, tuple[Mapping[str, str], Iterable[Key]]],
     show_legend: bool = True,
@@ -134,24 +134,28 @@ def to_graphviz_with_parts(
         the part. Where a key is in several parts, the styles are merged in the order
         of the parts.
     show_legend:
-        If True, add a legend with one entry per part.
+        If True, add a legend with one entry per part that has a node in the graph.
     kwargs:
         Keyword arguments passed to :py:func:`to_graphviz`.
     """
     dot = to_graphviz(graph, **kwargs)
+    drawn = {
+        label: (style, [k for k in keys if k in graph])
+        for label, (style, keys) in parts.items()
+    }
+    drawn = {label: part for label, part in drawn.items() if part[1]}
     styles: dict[Key, dict[str, str]] = {}
-    for style, keys in parts.values():
+    for style, keys in drawn.values():
         for key in keys:
             styles.setdefault(key, {}).update(style)
     for key, style in styles.items():
-        if key in graph:
-            dot.node(_format_type(key).name, **style)
+        dot.node(_format_type(key).name, **style)
     if show_legend:
         with dot.subgraph(name='cluster_legend') as legend:
             legend.attr(label='Legend', style='rounded', color='black')
             legend.attr('node', shape='rectangle')
             previous = None
-            for i, (label, (style, _)) in enumerate(parts.items()):
+            for i, (label, (style, _)) in enumerate(drawn.items()):
                 name = f'legend_{i}'
                 legend.node(name, label, **style)
                 if previous is not None:
