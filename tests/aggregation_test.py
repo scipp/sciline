@@ -295,25 +295,37 @@ def test_aggregation_groups_via_pandas(pipeline: sl.Pipeline) -> None:
     }
 
 
-def test_hierarchical_aggregation_banks_over_runs(pipeline: sl.Pipeline) -> None:
-    # One aggregation per bank on a pipeline with the bank set; the per-bank
-    # results are the members of an outer aggregation at its own accumulation key.
-    files, masks = ['ab', 'cd'], ['m', 'mm', 'mmm']
-    per_bank = {
-        m: Aggregation(
-            with_param(pipeline, Mask, m),
-            members=(Filename,),
-            accumulators=ACCUMULATORS,
-            outputs=(IofQ,),
-        ).compute(files_table(files))[IofQ]
-        for m in masks
-    }
-    banks = Aggregation(
-        pipeline, members=(IofQ,), accumulators={IofQ: Buffered(add)}, outputs=(IofQ,)
+def test_runs_times_banks_with_per_run_stage_loads_each_run_once(
+    pipeline: sl.Pipeline, calls: Calls
+) -> None:
+    # Mask plays the role of a detector bank. The driver computes the per-run part
+    # once per run and holds it only while the banks of that run contribute.
+    files, banks = ['ab', 'cd'], ['m', 'mm', 'mmm']
+    per_run = Stage(pipeline, outputs=(Loaded,), inputs=(Filename,))
+    per_bank = Aggregation(
+        pipeline,
+        members=(Loaded, Mask),
+        accumulators=ACCUMULATORS,
+        outputs=(IofQ,),
     )
-    expected = sum(reference(with_param(pipeline, Mask, m), files) for m in masks)
-    table: Table = {m: {IofQ: v} for m, v in per_bank.items()}
-    assert banks.compute(table)[IofQ] == pytest.approx(expected)
+    contributions = []
+    for f in files:
+        run = per_run.compute({Filename: f})
+        contributions += [per_bank.contribute({**run, Mask: b}) for b in banks]
+    result = per_bank.finalize(per_bank.combine(contributions))[IofQ]
+    assert calls['load'] == len(files)
+
+    flat = Aggregation(
+        pipeline,
+        members=(Filename, Mask),
+        accumulators=ACCUMULATORS,
+        outputs=(IofQ,),
+    )
+    calls.reset()
+    table: Table = {(f, b): {Filename: f, Mask: b} for f in files for b in banks}
+    assert flat.compute(table)[IofQ] == pytest.approx(result)
+    # A flat table loads each run once per bank.
+    assert calls['load'] == len(files) * len(banks)
 
 
 def test_aggregation_is_a_snapshot_of_the_pipeline_parameters(

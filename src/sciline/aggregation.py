@@ -146,6 +146,14 @@ class Aggregation:
     called separately, in different processes, with the contributions serialized
     between them.
 
+    Each row is contributed on its own, and nothing is held between rows. In a
+    table that is a product, such as runs times detector banks, work that depends
+    on the run alone is therefore computed once per bank, and an accumulation key
+    that depends on the run alone is pushed once per bank. A driver avoids this by
+    computing the per-run part with a :py:class:`Stage` in a loop over the runs,
+    using its outputs and the bank as the member keys, and pushing keys that depend
+    on the run alone once per run.
+
     Parameters are set on the pipeline before the aggregation is built; the
     aggregation is a snapshot of the pipeline at that time.
     """

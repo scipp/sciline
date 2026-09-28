@@ -132,8 +132,8 @@ In practice:
   A drop-in replacement for the map/reduced pipeline is a non-goal.
 - `StreamProcessor` in ess.reduce becomes a loop over three stages, with its existing accumulators and an object that holds the current context.
   The accumulators fit the `Accumulator` protocol once histogramming moves out of their base class.
-- Nested structures, such as banks within runs, are aggregations whose outputs feed other aggregations.
-  No graph contains another graph.
+- Nested structures, such as banks within runs, are a loop over the outer level that computes its part once with a stage and feeds an aggregation over the inner level.
+  No graph contains another graph, and the loop decides what is held and for how long.
 
 ### Rollout
 

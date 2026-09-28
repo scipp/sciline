@@ -83,7 +83,7 @@ warm(stage_a, stage_b)                # compute the static parts of both in one 
   The supplied and intermediate values are released when the call returns.
 - **Pass-through.**
   An output that is also an input is returned as supplied.
-  This makes a stage from a key to itself the identity, which an aggregation needs when its members are already values at its accumulation key (section 6.3).
+  This makes a stage from a key to itself the identity, which an aggregation needs when its members are already values at its accumulation key, such as results of other aggregations.
 - **Snapshot.**
   The stage is built from the task graph of the pipeline at construction time.
   Later changes to the pipeline do not affect it; to change a parameter, build a new stage.
@@ -257,16 +257,34 @@ Sample runs and background runs are two aggregations on the same pipeline.
 One `Stage` takes the accumulation keys of both as inputs and computes the final result.
 All three stages are warmed together, so work they share, such as reading a mask file, is done once.
 
-### 6.3 Hierarchy
+### 6.3 Runs times banks
 
-- **Banks over runs.**
-  One aggregation per bank, each on the pipeline with that bank selected, produces a result per bank.
-  A second aggregation takes these results as members.
-  Its member key is also its accumulation key, so its contribute stage is the pass-through identity from section 3.
-- **Groups within a run** (for example angle groups in Bifrost).
-  An inner aggregation's output is a member of the outer aggregation.
+Mapping over detector banks and runs at once (LoKI banks, Bifrost triplets) is a table that is a product.
+A flat table with one row per run and bank works, but each row is contributed on its own:
+work that depends on the run alone, such as loading monitors, is computed once per bank, and an accumulation key that depends on the run alone is pushed once per bank.
+One aggregation per bank over the runs has the same cost, since each bank's aggregation loads every run.
 
-In both cases, nothing is nested inside a graph.
+A driver avoids both by holding the per-run part for one iteration of a loop over the runs:
+
+```python
+per_run = Stage(pipeline, outputs=RUN_LEVEL, inputs=(Filename,))
+banks = Aggregation(pipeline, members=(*RUN_LEVEL, Bank), accumulators=...)
+acc = banks.accumulators()
+for filename in filenames:
+    run = per_run.compute({Filename: filename})
+    for bank in bank_names:
+        for key, value in banks.contribute({**run, Bank: bank}).items():
+            acc[key].push(value)
+```
+
+`RUN_LEVEL` lists the keys that the per-bank work reads and that depend on the run but not on the bank.
+It is chosen by the package author; a key left out is recomputed per bank, which costs time but does not change the result, and `Stage.visualize` shows what is held.
+Memory is bounded by one run, whatever the graph looks like.
+
+If banks and runs are combined differently (Bifrost folds triplets into one detector and would concatenate runs), the bank combination is finalized per run by a `Stage` whose inputs are the bank accumulation keys and the per-run keys that the result also reads, and its output is pushed into a run accumulator.
+
+Groups within a run, such as angle groups in Bifrost, have the same shape.
+In all cases, nothing is nested inside a graph.
 
 ### 6.4 A reduce inside per-member work (esssans pixel masks)
 
@@ -339,7 +357,7 @@ Three of its mechanisms are stages and aggregations:
 
   The spec still declares which parameters finalize reads (D13), because the service validates a combine request without importing workflow code.
   The binding derives the actual split from `contribute_stage.keys` and `finalize_stage.keys` and rejects a spec whose declaration disagrees with the graph.
-  Structure inside one record, such as angle groups in a Bifrost run or chunks of an NMX file, is an inner aggregation (section 6.3).
+  Structure inside one record, such as angle groups in a Bifrost run or chunks of an NMX file, has the shape of section 6.3.
 - **Interactive applications (phase 3).**
   essapps compares three models for interactive work: a session that holds state, an application that holds state itself, and a stateless service that splits a workflow into two specs with the intermediate value stored as a record.
   In all three, the objects are the same: a stage, and a connector after it.
@@ -409,6 +427,12 @@ On LoKI it gave no measurable benefit: the wavelength conversion reads the param
 Holding more would require a second tier of parameters declared as rarely changing, which is what `StreamProcessor` calls context.
 The draft was stripped down to the current `Aggregation`, and the package object (section 6.1) does not take parameter changes: a new parameter value means a new object.
 
+A later variant held, within one `compute`, the work that depends on a single member key, once per distinct value, so that a flat runs-times-banks table would cost what map/reduce costs.
+It was dropped for the same reason.
+What it holds is decided by the shape of the graph, not by the author: if the per-bank work reads a whole loaded run, every run stays in memory until the table is done.
+It also made `compute` behave differently from a loop over `contribute`, and depended on member values being hashable.
+The driver in section 6.3 holds the same values for one run at a time, visibly.
+
 ### 8.5 No bridge back into a pipeline
 
 Another draft had `as_pipeline()`, which added providers for the accumulation keys so that the `with_*` helpers could keep returning a pipeline.
@@ -446,10 +470,10 @@ On the generics branch all tests also pass except the two that aggregate over a 
 
 The tests cover:
 
-- **Stage:** static part computed once and dynamic part per call; an intermediate input cuts off its ancestors; inputs the outputs do not need are rejected; pass-through of an output that is an input; snapshot behaviour; `warm` computes shared work once and skips warm stages; concurrent calls compute the static part once; an expensive load before a cheap parameter (the warm-workflow shape).
+- **Stage:** static part computed once and dynamic part per call; an intermediate input cuts off its ancestors; inputs the outputs do not need are rejected; pass-through of an output that is an input; snapshot behaviour; `warm` computes shared work once, skips warm stages, and rejects stages that compute a shared key differently; concurrent calls compute the static part once; an expensive load before a cheap parameter (the warm-workflow shape).
 - **Accumulators:** push order, the first push as result, reading without pushes.
 - **Aggregation:** equal to a manual loop; two accumulation keys with different accumulators; a two-column member table; a key that does not depend on the members; members the accumulation keys do not need are rejected; the three steps called separately, with chained combining; no outputs; grouping with pandas; snapshot of parameters and graph; `compute` pushes each contribution before making the next; generic keys with `TypeVar` providers; `compute_members`.
-- **Composition:** banks over runs; two aggregations sharing a finalize stage; the `StreamProcessor` shape with a context update.
+- **Composition:** runs times banks with a per-run stage (section 6.3); two aggregations sharing a finalize stage; the `StreamProcessor` shape with a context update.
 
 ### LoKI multi-run reduction
 
@@ -491,8 +515,9 @@ Not validated: the rewrite of `StreamProcessor` against its real tests.
   - The pixel-mask folds in esssans and essdiffraction become a list parameter with providers (section 6.4).
   - `with_banks` in esssans, which maps without reducing, becomes a loop or `compute_members`.
   - essreflectometry drops the `try/except` around each reduce, since `accumulation_keys` reports keys that are not accumulated, and its `BatchProcessor` loses the fallback for mapped pipelines.
-  - In bifrost, `NeXusData` depends on the run, so a bank fold inside a multi-run reduction sits inside per-run work, as with the esssans masks.
-    The package object then either holds a bank aggregation per run, or the banks become a list parameter with a provider that loops.
+  - In bifrost, `NeXusData` depends on the run, so a bank fold inside a multi-run reduction sits inside per-run work.
+    The package object uses the driver of section 6.3, with the triplets combined per run and the runs combined after.
+    A list parameter with a provider that loops over the triplets would hide the loop inside a provider (section 8.5).
 - **esslivedata:** the bifrost bank fold becomes an `Aggregation` computed before the `StreamProcessor` is built (section 6.5).
 - **essapps:** the design text is updated as listed at the end of `stages.md`.
   The fake workflow with two accumulation keys in the D3/D6 spike becomes an `Aggregation`.
