@@ -324,6 +324,27 @@ def test_warm_stages_with_the_same_missing_parameter_raises_unsatisfied() -> Non
         warm(a, b)
 
 
+def test_warm_rejects_stage_holding_a_value_from_a_parameter_another_varies(
+    pipeline: sl.Pipeline,
+) -> None:
+    per_file = Stage(pipeline, outputs=(Denominator,), inputs=(Filename,))
+    # Holds Masked, loaded from the Filename set on the pipeline.
+    per_bins = Stage(pipeline, outputs=(Numerator,), inputs=(Bins,))
+    with pytest.raises(
+        ValueError, match=r'stages\[1\] holds .*Filename.*which stages\[0\] takes'
+    ):
+        warm(per_file, per_bins)
+
+
+def test_warm_allows_stage_taking_a_value_that_another_stage_holds(
+    pipeline: sl.Pipeline, calls: Calls
+) -> None:
+    loading = Stage(pipeline, outputs=(Calibration, Loaded), inputs=(Filename,))
+    masking = Stage(pipeline, outputs=(Masked,), inputs=(Loaded, Calibration))
+    warm(loading, masking)
+    assert calls['calibration'] == 1
+
+
 def test_warm_skips_stages_that_are_already_warm(
     pipeline: sl.Pipeline, calls: Calls
 ) -> None:

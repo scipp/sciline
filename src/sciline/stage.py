@@ -385,8 +385,26 @@ def warm(*stages: Stage) -> None:
     ------
     ValueError
         If two stages compute a shared key differently, for example from different
-        parameter values.
+        parameter values, or if a stage holds a value that depends on a parameter
+        that another stage takes as input. The held value is for the one value of
+        the parameter set on the pipeline, or for none, while the driver varies it.
+        Such a stage belongs inside the loop over that input, see
+        :py:func:`enclose`.
     """
+    for i, held in enumerate(stages):
+        params = {
+            k
+            for k, p in held._static_graph.items()
+            if p.kind in ('parameter', 'unsatisfied')
+        }
+        for j, other in enumerate(stages):
+            varied = params & set(other.inputs)
+            if other is not held and varied:
+                raise ValueError(
+                    f'stages[{i}] holds values that depend on '
+                    f'{sorted(varied, key=str)}, which stages[{j}] takes as inputs. '
+                    f'Enclose stages[{i}] in the loop over them'
+                )
     # Locks are taken in a fixed order, so that concurrent calls over overlapping
     # stages cannot deadlock.
     unique = tuple(dict.fromkeys(stages))

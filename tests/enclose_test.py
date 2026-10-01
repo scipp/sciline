@@ -176,6 +176,19 @@ def test_stage_left_out_of_a_loop_rejects_what_the_loop_computes(
         c.compute({**a_out, **b_out, C: 4})
 
 
+@pytest.mark.parametrize('a_set', [True, False], ids=['A set', 'A not set'])
+def test_warm_rejects_stage_left_out_of_a_loop(
+    pipeline: sl.Pipeline, a_set: bool
+) -> None:
+    if a_set:
+        pipeline[A] = 1
+    c = Stage(pipeline, outputs=(CValue,), inputs=(C,))
+    b, c = enclose(pipeline, [c], inputs=(B,))
+    a, b = enclose(pipeline, [b], inputs=(A,))
+    with pytest.raises(ValueError, match=r'stages\[2\] holds .*A\]'):
+        warm(a, b, c)
+
+
 class Recording(sl.scheduler.NaiveScheduler):
     def __init__(self) -> None:
         self.calls = 0

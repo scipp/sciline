@@ -231,11 +231,12 @@ A stage built for the inner loop alone holds these values at its frontier.
   Each stage gets everything that the stages of the enclosing loops returned, `{**held_outer, **held_inner, Bank: b}`.
   `Stage.compute` ignores values for keys the stage does not use, so the driver does not select them.
   This also catches a stage left out of an `enclose` call: the stage still holds the forwarded value, and receiving it from the driver raises `The stage uses [...] but does not take them as inputs`.
-- **Mistakes found when the stages run.**
+- **Mistakes found when the stages are warmed or run.**
   `enclose` sees the stages of one loop, not the whole nesting.
-  A stage enclosed twice over the same inputs, or left out of an `enclose` call, fails in the driver, as above.
-  A stage that holds a value depending on the inputs of a loop, because it was left out or because it is outside that loop, fails in `warm` with `UnsatisfiedRequirement` if those inputs are not set on the pipeline.
-  If they are set, the stage holds the value for the one member set on the pipeline, without an error (section 6.1).
+  `warm`, given all stages of a driver, rejects a stage that holds a value depending on a parameter that another stage takes as input.
+  This catches a stage left out of an `enclose` call, and a stage outside a loop that reads a value depending on the inputs of that loop (section 6.1).
+  The stage would hold the value for the one member set on the pipeline, or fail if none is set.
+  A stage enclosed twice over the same inputs fails in the driver, as above.
 - **One level.**
   A single loop needs no `enclose`.
   A driver that builds a `Stage` directly pushes only `stage.dynamic_outputs`.
@@ -286,7 +287,7 @@ It holds one contribute stage per run type (sample and background), one finalize
 
 The background stage reads `DetectorMasks`, which in esssans depends on the detector IDs of the sample run set on the pipeline.
 The validation script reproduces this: the background stage holds the masks for the sample run set on the pipeline.
-The background loop is not inside the sample loop, so no `enclose` call involves both, and nothing rejects this (section 11).
+The background loop is not inside the sample loop, so no `enclose` call involves both, but `warm` over both stages rejects this: the background stage holds a value that depends on `Filename[SampleRun]`, which the sample stage takes as input (section 11).
 
 ### 6.2 Several loops, one final stage
 
@@ -484,8 +485,9 @@ For three loops with a per-run step after combining, `split` and `enclose` build
 
 The cost of `enclose` is that some mistakes are found when the stages run, not when they are built.
 `split` saw all loops at once and rejected, at construction, a read from a loop that does not enclose the reader and a part whose enclosing part was not given.
-`enclose` sees one loop at a time, so these mistakes surface in the driver or in `warm` (section 5).
-A stage outside a loop that reads a value depending on the inputs of that loop raises no error if those inputs are set on the pipeline: it holds the value for the one member set there (section 6.1).
+`enclose` sees one loop at a time, so `warm` takes over these checks: it sees all stages of a driver and rejects a stage that holds a value depending on a parameter that another stage takes as input (section 5).
+This relies on the driver warming its stages together, which it does anyway so that shared work is done once.
+A stage enclosed twice over the same inputs is found only in the driver.
 
 ### 8.4 No state in the objects sciline provides
 
@@ -559,8 +561,8 @@ An earlier version of the stage tests was run on the generics branch and passed;
 
 The tests cover:
 
-- **Stage:** static part computed once and dynamic part per call; an intermediate input cuts off its ancestors; inputs the outputs do not need are rejected; pass-through of an output that is an input; `compute` rejects a missing input and a value for a key the stage uses but does not take as input, and ignores a value for a key it does not use; snapshot behaviour; `warm` computes shared work once, skips warm stages, and rejects stages that compute a shared key differently; concurrent calls compute the static part once; an expensive load before a cheap parameter (the shape of tuning in essapps); the default scheduler follows a replacement of `sciline.task_graph.DaskScheduler`; the `StreamProcessor` shape with a context update; `visualize_stages` applies the styles of groups given by the caller.
-- **enclose:** three nested loops give the result of plain loops over `Pipeline.compute`; a value is computed by the innermost loop whose inputs it depends on, also skipping a loop; a loop inside a stage whose input is an accumulation key reads from that stage; a value that depends on no loop stays held; per-iteration work runs once per iteration of its loop; `outputs` of the outer stage that an inner stage reads are output once; the outer stage uses the given scheduler and the inner stages keep theirs; a stage left out of a loop rejects what the loop computes when the driver passes it on; an output that does not vary with the inputs of its stage, a loop that no stage reads from, a pipeline changed since the stages were built, unknown outputs, and unneeded inputs are rejected; `visualize_stages` fills what each stage computes with the color of that stage.
+- **Stage:** static part computed once and dynamic part per call; an intermediate input cuts off its ancestors; inputs the outputs do not need are rejected; pass-through of an output that is an input; `compute` rejects a missing input and a value for a key the stage uses but does not take as input, and ignores a value for a key it does not use; snapshot behaviour; `warm` rejects a stage that holds a value depending on a parameter that another stage takes as input, and allows a stage that takes as input a value that another stage holds; `warm` computes shared work once, skips warm stages, and rejects stages that compute a shared key differently; concurrent calls compute the static part once; an expensive load before a cheap parameter (the shape of tuning in essapps); the default scheduler follows a replacement of `sciline.task_graph.DaskScheduler`; the `StreamProcessor` shape with a context update; `visualize_stages` applies the styles of groups given by the caller.
+- **enclose:** three nested loops give the result of plain loops over `Pipeline.compute`; a value is computed by the innermost loop whose inputs it depends on, also skipping a loop; a loop inside a stage whose input is an accumulation key reads from that stage; a value that depends on no loop stays held; per-iteration work runs once per iteration of its loop; `outputs` of the outer stage that an inner stage reads are output once; the outer stage uses the given scheduler and the inner stages keep theirs; a stage left out of a loop is rejected by `warm`, and rejects what the loop computes when the driver passes it on; an output that does not vary with the inputs of its stage, a loop that no stage reads from, a pipeline changed since the stages were built, unknown outputs, and unneeded inputs are rejected; `visualize_stages` fills what each stage computes with the color of that stage.
   The user guide on stages (`docs/user-guide/stages.ipynb`) runs two and three nested loops and a per-file step after combining the banks, and shows that each file is read once and each calibration is loaded once.
 - **Accumulators:** push order, the first push as result, reading without pushes, pushing combined values gives the same result.
 
@@ -652,7 +654,7 @@ Not validated: the rewrite of `StreamProcessor` against its real tests.
   Either each package object implements it, or one generic object is built from a registry that maps member keys to accumulation keys; this is decided when the second package migrates.
 - **Which run's detector IDs do the esssans background masks use?**
   `DetectorMasks` reads the detector IDs of the sample run set on the pipeline, and the background runs read it too (section 6.1).
-  With several sample runs this is not defined, and nothing in sciline detects it (section 8.3); esssans decides when it migrates, for example detector IDs from the geometry or from a run chosen by a parameter.
+  With several sample runs this is not defined, and `warm` rejects it (section 6.1); esssans decides when it migrates, for example detector IDs from the geometry or from a run chosen by a parameter.
 - **Static work across processes.**
   Stages in one process share their static work through `warm`; a contribute call in a short-lived process recomputes it.
   This is the cost that essapps estimates for its stateless model of interactive work, not a new cost.

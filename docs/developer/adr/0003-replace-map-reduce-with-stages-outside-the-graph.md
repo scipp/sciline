@@ -210,8 +210,8 @@ A `sciline.v2` namespace that keeps the old `Pipeline` would serve them equally,
 - A map/reduce inside the per-member work of another one (the pixel masks in esssans) becomes a list parameter and a provider.
 - A one-level driver that builds stages by hand must push only `stage.dynamic_outputs`; other keys are counted once per member. For nested loops, `enclose` is needed: a run-level key in a stage with inputs `(Filename, Bank)` is dynamic and still counted once per bank.
 - Each loop is inside at most one other: bank-only work is computed once per run and bank, and a `StreamProcessor` context update recomputes all context-derived values (in esslivedata compute only; no accumulators reset).
-- `enclose` sees one loop at a time, so some mistakes surface in the driver or in `warm`, not when the stages are built: a stage left out of an `enclose` call, or enclosed twice over the same inputs.
-- Nothing detects the esssans background stage reading the masks of the one sample run set on the pipeline; esssans has to decide which run's detector IDs the background masks use.
+- `enclose` sees one loop at a time, so some mistakes are found when the stages are warmed or run, not when they are built: `warm` rejects a stage left out of an `enclose` call, and a stage enclosed twice over the same inputs fails in the driver.
+- `warm` rejects the esssans background stage reading the masks of the one sample run set on the pipeline; esssans has to decide which run's detector IDs the background masks use.
 - esslivedata selects its scheduler by replacing `sciline.task_graph.DaskScheduler`; sciline keeps that working for stages, until it offers a public way.
 - Stages keep their held values, and package objects keep contributions (binned events for some workflows), so package objects need a way to clear them.
 - Visualization of mapped pipelines (`compact=`) goes; `Stage.visualize` and `visualize_stages` replace it in part.
