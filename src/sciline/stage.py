@@ -16,7 +16,8 @@ from ._provider import Provider
 from .data_graph import to_task_graph
 from .handler import HandleAsComputeTimeException
 from .pipeline import Pipeline
-from .scheduler import Scheduler, scheduler_or_default
+from .scheduler import Scheduler
+from .task_graph import scheduler_or_default
 from .typing import Graph, Key
 
 if TYPE_CHECKING:

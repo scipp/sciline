@@ -205,6 +205,17 @@ def test_stage_uses_given_scheduler(scheduler: sl.scheduler.Scheduler) -> None:
     assert stage.compute({str: 'abcd'})[complex] == 2.0 + 0.0j
 
 
+def test_replacing_task_graph_dask_scheduler_changes_default_of_stage_and_pipeline(
+    pipeline: sl.Pipeline, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # ESSlivedata selects its scheduler by replacing this name.
+    monkeypatch.setattr(sl.task_graph, 'DaskScheduler', sl.scheduler.NaiveScheduler)
+    stage = Stage(pipeline, outputs=(Denominator,), inputs=(Filename,))
+    assert isinstance(stage._scheduler, sl.scheduler.NaiveScheduler)
+    graph = pipeline.get(Calibration)
+    assert isinstance(graph._scheduler, sl.scheduler.NaiveScheduler)
+
+
 def test_stage_rejects_object_that_is_not_a_scheduler(pipeline: sl.Pipeline) -> None:
     with pytest.raises(ValueError, match='Scheduler'):
         Stage(
