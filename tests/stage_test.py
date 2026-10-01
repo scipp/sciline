@@ -1,11 +1,14 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright (c) 2026 Scipp contributors (https://github.com/scipp)
-from typing import NewType
+from collections.abc import Hashable
+from typing import Any, NewType
 
 import pytest
 
 import sciline as sl
 from sciline import Stage, warm
+from sciline.reporter import Reporter
+from sciline.typing import Graph
 from sciline.visualize import DYNAMIC_STYLE, FRONTIER_STYLE, HELD_STYLE, INPUT_STYLE
 
 Filename = NewType('Filename', str)
@@ -208,12 +211,24 @@ def test_stage_uses_given_scheduler(scheduler: sl.scheduler.Scheduler) -> None:
 def test_replacing_task_graph_dask_scheduler_changes_default_of_stage_and_pipeline(
     pipeline: sl.Pipeline, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    used: list[str] = []
+
+    class Recording(sl.scheduler.NaiveScheduler):
+        def get(
+            self, graph: Graph, keys: list[Hashable], reporter: Reporter | None = None
+        ) -> tuple[Any, ...]:
+            used.append('get')
+            return super().get(graph, keys, reporter)
+
     # ESSlivedata selects its scheduler by replacing this name.
-    monkeypatch.setattr(sl.task_graph, 'DaskScheduler', sl.scheduler.NaiveScheduler)
-    stage = Stage(pipeline, outputs=(Denominator,), inputs=(Filename,))
-    assert isinstance(stage._scheduler, sl.scheduler.NaiveScheduler)
-    graph = pipeline.get(Calibration)
-    assert isinstance(graph._scheduler, sl.scheduler.NaiveScheduler)
+    monkeypatch.setattr(sl.task_graph, 'DaskScheduler', Recording)
+    Stage(pipeline, outputs=(Denominator,), inputs=(Filename,)).compute(
+        {Filename: 'ab'}
+    )
+    assert used
+    used.clear()
+    pipeline.compute(Calibration)
+    assert used
 
 
 def test_stage_rejects_object_that_is_not_a_scheduler(pipeline: sl.Pipeline) -> None:

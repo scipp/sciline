@@ -1,13 +1,15 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright (c) 2026 Scipp contributors (https://github.com/scipp)
-from collections.abc import Mapping
+from collections import Counter
+from collections.abc import Hashable, Mapping
 from typing import Any, NewType
 
 import pytest
 
 import sciline as sl
 from sciline import Part, Reduced, Stage, split, warm
-from sciline.typing import Key
+from sciline.reporter import Reporter
+from sciline.typing import Graph, Key
 
 A = NewType('A', int)  # outer loop
 B = NewType('B', int)  # middle loop
@@ -130,7 +132,7 @@ def test_output_that_does_not_vary_in_its_part_is_rejected(
 
 def test_output_that_depends_on_no_part_is_rejected(pipeline: sl.Pipeline) -> None:
     a = Part(inputs=(A,), outputs=(AValue, Offset))
-    with pytest.raises(ValueError, match='Offset.* on no part'):
+    with pytest.raises(ValueError, match='Offset.* on none of its ancestors'):
         split(pipeline, a)
 
 
@@ -165,6 +167,76 @@ def test_parts_compare_by_identity() -> None:
 def test_split_uses_given_scheduler(
     pipeline: sl.Pipeline, parts: tuple[Part, ...]
 ) -> None:
-    scheduler = sl.scheduler.NaiveScheduler()
-    stages = split(pipeline, *parts, scheduler=scheduler)
-    assert all(s._scheduler is scheduler for s in stages)
+    used: list[str] = []
+
+    class Recording(sl.scheduler.NaiveScheduler):
+        def get(
+            self, graph: Graph, keys: list[Hashable], reporter: Reporter | None = None
+        ) -> tuple[Any, ...]:
+            used.append('get')
+            return super().get(graph, keys, reporter)
+
+    stages = split(pipeline, *parts, scheduler=Recording())
+    for stage in stages:
+        used.clear()
+        stage.static()
+        assert used
+
+
+def test_per_iteration_work_runs_once_per_iteration_of_its_loop() -> None:
+    calls: Counter[str] = Counter()
+
+    def counted_a_value(a: A, offset: Offset) -> AValue:
+        calls['a_value'] += 1
+        return a_value(a, offset)
+
+    def counted_b_value(x: AValue, b: B) -> BValue:
+        calls['b_value'] += 1
+        return b_value(x, b)
+
+    pipeline = sl.Pipeline(
+        [counted_a_value, counted_b_value, c_value], params={Offset: 7}
+    )
+    a = Part(inputs=(A,))
+    b = Part(inputs=(B,), parent=a)
+    c = Part(inputs=(C,), outputs=(CValue,), parent=b)
+    a_stage, b_stage, c_stage = split(pipeline, a, b, c)
+    for a_ in range(2):
+        a_out = a_stage.compute({A: a_})
+        for b_ in range(3):
+            b_out = b_stage.compute({**pick(b_stage, a_out), B: b_})
+            for c_ in range(4):
+                c_stage.compute({**pick(c_stage, a_out, b_out), C: c_})
+    assert calls == {'a_value': 2, 'b_value': 2 * 3}
+
+
+def test_output_of_a_part_that_a_descendant_reads_is_output_once(
+    pipeline: sl.Pipeline,
+) -> None:
+    a = Part(inputs=(A,))
+    b = Part(inputs=(B,), outputs=(BValue,), parent=a)
+    c = Part(inputs=(C,), outputs=(CValue,), parent=b)
+    _, b_stage, c_stage = split(pipeline, a, b, c)
+    assert b_stage.outputs == (BValue,)
+    assert BValue in c_stage.inputs
+
+
+def test_output_not_in_pipeline_is_rejected(pipeline: sl.Pipeline) -> None:
+    Unknown = NewType('Unknown', int)
+    with pytest.raises(ValueError, match='not in the pipeline'):
+        split(pipeline, Part(inputs=(A,), outputs=(Unknown,)))
+
+
+def test_input_not_needed_by_any_output_is_rejected(pipeline: sl.Pipeline) -> None:
+    Unknown = NewType('Unknown', int)
+    a = Part(inputs=(A,))
+    b = Part(inputs=(B, Unknown), outputs=(BValue,), parent=a)
+    with pytest.raises(ValueError, match='not needed'):
+        split(pipeline, a, b)
+
+
+def test_part_given_twice_is_rejected(
+    pipeline: sl.Pipeline, parts: tuple[Part, ...]
+) -> None:
+    with pytest.raises(ValueError, match='once'):
+        split(pipeline, *parts, parts[1])

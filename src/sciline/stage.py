@@ -365,7 +365,7 @@ def warm(*stages: Stage) -> None:
 
 @dataclass(frozen=True, eq=False)
 class Part:
-    """A stage of a driver's loop, for :py:func:`split`.
+    """One level of a driver's loop, for :py:func:`split`.
 
     The driver supplies the values of ``inputs`` on each iteration of the part's loop,
     or on each update of a stream. ``parent`` is the part of the enclosing loop, whose
@@ -423,16 +423,22 @@ def split(
     Raises
     ------
     ValueError
-        If the ancestor of a part is not given, if a part has no outputs and no
+        If a part is given twice, if the ancestor of a part is not given, if an
+        output is not in the pipeline, if a part has no outputs and no
         descendant reads from it, if an output of a part does not depend on the
         part's inputs (it would be pushed once per iteration of a loop that it does
         not vary in), or if a part reads a value that depends on the inputs of a part
         that is not its ancestor.
     """
+    if len(set(parts)) != len(parts):
+        raise ValueError('Each part must be given once')
     for part in parts:
         if any(p not in parts for p in part._path()):
             raise ValueError(f'An ancestor of {part} is not among the parts')
-    targets = tuple(dict.fromkeys(k for p in parts for k in (*p.outputs, *p.inputs)))
+    targets = tuple(dict.fromkeys(k for p in parts for k in p.outputs))
+    unknown = [k for k in targets if k not in pipeline.underlying_graph]
+    if unknown:
+        raise ValueError(f'Outputs {unknown} are not in the pipeline')
     full = _dependency_graph(
         to_task_graph(pipeline, targets=targets, handler=HandleAsComputeTimeException())
     )
@@ -447,7 +453,8 @@ def split(
         constant = [k for k in part.outputs if not _upstream(deps, k) & set(part.inputs)]
         if constant:
             owners = ', '.join(
-                f'{k} on {_owner(deps, k, path[:-1]) or "no part"}' for k in constant
+                f'{k} on {_owner(deps, k, path[:-1]) or "none of its ancestors"}'
+                for k in constant
             )
             raise ValueError(
                 f'Outputs {constant} of {part} do not depend on its inputs. '
@@ -456,18 +463,20 @@ def split(
         outputs = (*part.outputs, *for_descendants[part])
         if not outputs:
             raise ValueError(f'{part} has no outputs and no part reads from it')
-        probe = Stage(pipeline, outputs=outputs, inputs=part.inputs)
+        probe = Stage(
+            pipeline, outputs=outputs, inputs=part.inputs, scheduler=scheduler
+        )
         for key in probe.frontier:
             foreign = (all_inputs - path_inputs) & _upstream(deps, key)
             if foreign:
                 raise ValueError(
-                    f'{part} reads {key}, which depends on {sorted(map(str, foreign))}, '
+                    f'{part} reads {key}, which depends on {sorted(foreign, key=str)}, '
                     'the inputs of a part that is not its ancestor'
                 )
             owner = _owner(deps, key, path[:-1])
             if owner is not None:
                 from_ancestors[part].append(key)
-                if key not in for_descendants[owner]:
+                if key not in (*owner.outputs, *for_descendants[owner]):
                     for_descendants[owner].append(key)
     return tuple(
         Stage(
@@ -489,7 +498,9 @@ def _cut(graph: nx.DiGraph, keys: Iterable[Key]) -> nx.DiGraph:
 
 
 def _upstream(deps: nx.DiGraph, key: Key) -> set[Key]:
-    return nx.ancestors(deps, key) | {key} if key in deps else {key}
+    if key not in deps:
+        return {key}
+    return {key, *nx.ancestors(deps, key)}
 
 
 def _owner(deps: nx.DiGraph, key: Key, ancestors: Sequence[Part]) -> Part | None:

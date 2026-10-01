@@ -192,7 +192,7 @@ A driver over several levels, such as banks within runs, needs to know which val
 - **What the driver pushes and passes.**
   The outputs of a part's stage are the part's outputs, followed by the values its descendants read from it; the driver pushes only the part's outputs.
   `Stage.compute` takes exactly its inputs, so the driver selects them from the results of the ancestors' stages.
-  Getting either wrong fails loudly, with a `KeyError` or a missing input.
+  In a driver that keys its accumulators by the part's outputs, as below, getting either wrong fails loudly, with a `KeyError` or a missing input.
 - **One level.**
   `split` with a single part is a `Stage` with the output check; a caller that builds a `Stage` directly gets the check from `stage.dynamic_outputs`.
 
@@ -295,13 +295,15 @@ Chunks of a stream cannot be recomputed, the accumulators are reused between fin
 context = Part(inputs=context_keys, outputs=context_only_targets)
 chunks = [Part(inputs=keys, outputs=acc_keys, parent=context)
           for keys, acc_keys in groups]          # accumulators by the dynamic keys they read
-finalize = Part(inputs=(*all_acc_keys, *bypass_keys), outputs=targets, parent=context)
+finalize = Part(inputs=(*all_acc_keys, *bypass_keys), outputs=accumulated_targets,
+                parent=context)
 context_stage, *chunk_stages, finalize_stage = split(pipeline, context, *chunks, finalize)
 ```
 
 `set_context` calls the context stage and holds its result in a forwarder; `accumulate` calls the stage of each chunk part whose inputs the chunk supplies and pushes into the accumulators; `finalize` calls the finalize stage.
 What the chunk and finalize stages read from the context, today found by `_find_descendants` and `_find_parents`, is derived by `split`.
 A target that depends on the context alone is an output of the context part, and `allow_bypass` becomes an explicit input of the finalize part.
+A target that depends on no input fits no part, since `split` rejects it everywhere; a plain `Stage` without inputs computes it.
 The accumulator classes, the grouping of accumulators by dynamic keys, the validation of key sets, `on_finalize`, `clear`, and `visualize` stay.
 The module shrinks to its policy, which values are transient and which are held, as scipp/ess#732 proposed.
 
@@ -401,7 +403,7 @@ If package objects turn out to repeat the same code, that repetition is the basi
 
 Three callers need the same boundary: the context frontier of `StreamProcessor`, runs times banks in esssans, and runs times triplets in Bifrost.
 Chosen by hand, it fails silently: a run-level key left out is recomputed per bank, which costs time but gives the right result.
-`split` derives it with one rule (section 5), and the prototype drivers with it are shorter than hand-written ones (section 9).
+`split` derives it with one rule (section 5).
 
 The accumulation keys are declared, not derived: the combine happens outside the graph, so the graph cannot tell that a key such as `NormalizedDetector` comes after combining the triplets.
 An output declared on the wrong part raises an error instead of being moved to the part it varies in, where the driver may have no loop or accumulator for it.
@@ -474,18 +476,15 @@ An earlier version of the stage tests was run on the generics branch and passed;
 The tests cover:
 
 - **Stage:** static part computed once and dynamic part per call; an intermediate input cuts off its ancestors; inputs the outputs do not need are rejected; pass-through of an output that is an input; snapshot behaviour; `warm` computes shared work once, skips warm stages, and rejects stages that compute a shared key differently; concurrent calls compute the static part once; an expensive load before a cheap parameter (the shape of tuning in essapps); the default scheduler follows a replacement of `sciline.task_graph.DaskScheduler`; the `StreamProcessor` shape with a context update.
-- **split:** three nested levels give the result of flat computes; a value is computed by the deepest level it depends on, also skipping a level; a part under a part after combining reads from it (the cut at the accumulation keys; this test fails without the cut); a value that depends on no part is held; outputs that do not vary in their part, outputs that depend on no part, and reads from a non-ancestor are rejected.
+- **split:** three nested levels give the result of flat computes; a value is computed by the deepest level it depends on, also skipping a level; a part under a part after combining reads from it (the cut at the accumulation keys; this test fails without the cut); a value that depends on no part is held; per-iteration work runs once per iteration of its loop; an output that a descendant also reads is output once; outputs that do not vary in their part, outputs that depend on no part, reads from a non-ancestor, unknown outputs, unneeded inputs, and a part given twice are rejected.
 - **Accumulators:** push order, the first push as result, reading without pushes, pushing combined values gives the same result.
 
 ### Nested drivers
 
-Prototype drivers with `split` ran on fake workflows with the dependency structure of esssans and Bifrost and the features of `StreamProcessor`, checked against plain loops over `Pipeline.compute`:
-
-| Case | Result | Provider calls | Driver lines |
-|---|---|---|---|
-| LoKI: 3 sample and 2 background runs times 4 banks, shared final stage | equal | ideal, except the per-bank lookup table: 20 calls instead of 4, as in the hand-written driver | 21 (hand-written: 27, derived by hand-written helpers: 39) |
-| Bifrost: 2 runs times 3 triplets, per-run finalize, concatenation over runs | equal | ideal | 19 (hand-written: 32 and 34) |
-| `StreamProcessor`: two dynamic keys in separate chunks, a context key, a context-only target, `allow_bypass` | equal to `ess.reduce.streaming.StreamProcessor` | context work once per update | about 40 for the class |
+Prototype drivers with `split` ran on fake workflows with the dependency structure of esssans (banks times sample and background runs) and Bifrost (triplets times runs, with a per-run step after combining the triplets), and gave the results of plain loops over `Pipeline.compute`.
+Per-iteration work ran once per iteration of its loop, except work that depends on the bank alone (section 8.7); `tests/split_test.py` checks this for three levels.
+A `StreamProcessor` on `split` gave the results of `ess.reduce.streaming.StreamProcessor` for two dynamic keys in separate chunks, a context key, a context-only target, and `allow_bypass`.
+These prototypes need esssans and ess.reduce and are not part of this repository; the `StreamProcessor` rewrite is validated against its own tests.
 
 ### LoKI multi-run reduction
 

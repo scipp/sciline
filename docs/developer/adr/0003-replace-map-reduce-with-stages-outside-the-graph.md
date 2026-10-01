@@ -187,7 +187,7 @@ Keeping the old `Pipeline` in a separate namespace would serve them equally, but
 - The widgets need one interface across the package objects, a base class or one generic object, decided when the second package migrates.
 - Parallelism over members is the caller's job; with map/reduce, dask ran members in threads for free (about 1.7 s on LoKI).
 - A map/reduce inside the per-member work of another one (the pixel masks in esssans) becomes a list parameter and a provider.
-- A driver that builds stages by hand must push only `stage.dynamic_outputs`; other keys are counted once per member.
+- A one-level driver that builds stages by hand must push only `stage.dynamic_outputs`; other keys are counted once per member. For nested loops, `split` is needed: a run-level key in a stage with inputs `(Filename, Bank)` is dynamic and still counted once per bank.
 - Parts have one parent: bank-only work is computed once per run and bank, and a `StreamProcessor` context update recomputes all context-derived values (in esslivedata compute only; no accumulators reset).
 - `split` rejects the esssans background reading the masks of the one sample run set on the pipeline; esssans has to decide which run's detector IDs the background masks use.
 - esslivedata selects its scheduler by replacing `sciline.task_graph.DaskScheduler`; sciline keeps that working for stages, until it offers a public way.
