@@ -409,8 +409,9 @@ class Part:
 
     The driver supplies the values of ``inputs`` on each iteration of the part's loop,
     or on each update of a stream. ``parent`` is the part of the enclosing loop, whose
-    values for the current iteration the driver also holds. Parts compare by
-    identity.
+    values for the current iteration the driver also holds. The order in which loops
+    are nested is a choice of the driver, not a property of the pipeline, so
+    :py:func:`split` does not infer it. Parts compare by identity.
     """
 
     inputs: tuple[Key, ...]
