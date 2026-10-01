@@ -151,7 +151,8 @@ class Stage:
         """Keys the stage uses: those of the held part and of the per-call part.
 
         Ancestors that an intermediate input cuts off are not included, so a
-        parameter is in ``keys`` exactly when changing it would change the stage.
+        parameter that is not an input is in ``keys`` exactly when changing it on the
+        pipeline would change the results of the stage.
         """
         return self._keys
 
@@ -423,18 +424,27 @@ def split(
     Raises
     ------
     ValueError
-        If a part is given twice, if the ancestor of a part is not given, if an
-        output is not in the pipeline, if a part has no outputs and no
-        descendant reads from it, if an output of a part does not depend on the
-        part's inputs (it would be pushed once per iteration of a loop that it does
-        not vary in), or if a part reads a value that depends on the inputs of a part
-        that is not its ancestor.
+        If a part is given twice, if the ancestor of a part is not given, if a part
+        has an input of one of its ancestors, if an output is not in the pipeline,
+        if a part has no outputs and no descendant reads from it, if an input of a
+        part is needed neither by its outputs nor by what its descendants read from
+        it, if an output of a part does not depend on the part's inputs (it would be
+        pushed once per iteration of a loop that it does not vary in), or if a part
+        reads a value that depends on the inputs of a part that is not its ancestor.
+        Messages name a part by its position in ``parts``.
     """
     if len(set(parts)) != len(parts):
         raise ValueError('Each part must be given once')
+    name = {p: f'parts[{i}] {p}' for i, p in enumerate(parts)}
     for part in parts:
         if any(p not in parts for p in part._path()):
-            raise ValueError(f'An ancestor of {part} is not among the parts')
+            raise ValueError(f'An ancestor of {name[part]} is not among the parts')
+        # The part would compute what the ancestor holds, once per iteration.
+        repeated = set(part.inputs) & {k for p in part._path()[:-1] for k in p.inputs}
+        if repeated:
+            raise ValueError(
+                f'{name[part]} has inputs {sorted(repeated, key=str)} of an ancestor'
+            )
     targets = tuple(dict.fromkeys(k for p in parts for k in p.outputs))
     unknown = [k for k in targets if k not in pipeline.underlying_graph]
     if unknown:
@@ -452,17 +462,17 @@ def split(
         deps = _cut(full, path_inputs)
         constant = [k for k in part.outputs if not _upstream(deps, k) & set(part.inputs)]
         if constant:
-            owners = ', '.join(
-                f'{k} on {_owner(deps, k, path[:-1]) or "none of its ancestors"}'
-                for k in constant
+            owners = {k: _owner(deps, k, path[:-1]) for k in constant}
+            advice = ', '.join(
+                f'{k} on {name[o]}' for k, o in owners.items() if o is not None
             )
             raise ValueError(
-                f'Outputs {constant} of {part} do not depend on its inputs. '
-                f'Declare each on the part whose inputs it depends on: {owners}'
+                f'Outputs {constant} of {name[part]} do not depend on its inputs.'
+                + (f' Declare them on an ancestor: {advice}' if advice else '')
             )
         outputs = (*part.outputs, *for_descendants[part])
         if not outputs:
-            raise ValueError(f'{part} has no outputs and no part reads from it')
+            raise ValueError(f'{name[part]} has no outputs and no part reads from it')
         probe = Stage(
             pipeline, outputs=outputs, inputs=part.inputs, scheduler=scheduler
         )
@@ -470,7 +480,8 @@ def split(
             foreign = (all_inputs - path_inputs) & _upstream(deps, key)
             if foreign:
                 raise ValueError(
-                    f'{part} reads {key}, which depends on {sorted(foreign, key=str)}, '
+                    f'{name[part]} reads {key}, which depends on '
+                    f'{sorted(foreign, key=str)}, '
                     'the inputs of a part that is not its ancestor'
                 )
             owner = _owner(deps, key, path[:-1])

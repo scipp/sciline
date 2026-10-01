@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright (c) 2026 Scipp contributors (https://github.com/scipp)
-"""Accumulators combine the values computed per member of a loop, such as the
-contributions of the files of a run, before a stage computes the rest."""
+"""Accumulators combine the values computed per member of a loop, such as per file,
+before a stage computes the rest."""
 
 from __future__ import annotations
 
@@ -14,9 +14,9 @@ T = TypeVar('T')
 class Accumulator(Protocol[T]):
     """Combines pushed values; satisfied by any object with ``push`` and ``value``.
 
-    A driver pushes the contribution of each member of a loop and reads the combined
-    value. Whether an accumulator holds the pushed values or a running result is its
-    own choice.
+    A driver pushes the value of each member at one accumulation key and reads the
+    combined value. Whether an accumulator holds the pushed values or a running result
+    is its own choice.
 
     To combine in groups or as a chain, for example in separate processes, a driver
     pushes combined values into a new accumulator. For that, ``value`` must be
@@ -79,10 +79,10 @@ class Reduced(Generic[T]):
     in push order, and holds only the result. This suits a sum of large arrays, where
     buffering would hold one array per member.
 
-    The function must be associative, so that combining contributions in groups and
-    then combining the group results gives the same value as combining them all at
-    once. It must not modify its arguments: the first pushed value becomes the
-    result, and pushed values are owned by the caller.
+    The function must be associative, so that combining values in groups and then
+    combining the group results gives the same value as combining them all at once.
+    It must not modify its arguments: the first pushed value becomes the result, and
+    pushed values are owned by the driver.
     """
 
     def __init__(self, func: Callable[[T, T], T]) -> None:

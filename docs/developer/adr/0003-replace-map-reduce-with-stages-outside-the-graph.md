@@ -69,7 +69,7 @@ stage.compute({Filename: 'run2.nxs'})  # -> {Result: ...}, calibration not loade
 A stage splits the graph needed for the outputs into two parts:
 
 - The *static* part does not depend on the inputs, for example loading a calibration.
-  It is computed once, on first use, and the stage keeps the values that the dynamic part reads (`stage.frontier`).
+  It is computed once, on first use, and the stage keeps the values that the dynamic part reads, plus outputs that do not depend on the inputs (`stage.frontier`).
 - The *dynamic* part depends on the inputs.
   It is computed on every call, and nothing of it is kept after the call returns.
 
@@ -88,9 +88,10 @@ Terms, using multiple runs as the example:
 - A **member** is one run, given by the values of the inputs of a stage, such as `Filename[SampleRun]`.
 - An **accumulation key** is a key at which the per-member values are combined, such as `DetectorData`.
 - A **contribution** is the dict of values at the accumulation keys for one member.
-- An **accumulator** combines contributions: `push(value)` adds one, `value` returns the combination (`Accumulator` protocol).
+- An **accumulator** combines the values of all members at one accumulation key: `push(value)` adds one member's value, `value` returns the combination (`Accumulator` protocol).
   `Buffered(func)` keeps all pushed values and applies an n-ary function, like the `func` of `reduce` today.
   `Reduced(func)` keeps only a running result of a binary function, which saves memory for sums of large arrays.
+- The **driver** is the loop that calls the stages and pushes into the accumulators.
 
 The replacement for `map(...).reduce(...)` is a loop over a stage with accumulators, and a stage for the rest:
 
@@ -119,14 +120,16 @@ run_stage, bank_stage, final_stage = split(pipeline, run, bank, final)
 ```
 
 Each value a part reads is computed by the deepest ancestor whose inputs it depends on and passed to the part's stage as an input.
-`split` returns plain stages, and the driver writes the loops and holds the values between them; it raises an error where a combined value would otherwise be silently wrong: an output that does not vary in its part (a run-level key pushed once per bank), and a value read from a part that is not an ancestor.
+`split` returns plain stages.
+The driver writes the loops and holds the values between them.
+`split` raises an error where a combined value would otherwise be silently wrong: an output that does not vary in its part (a run-level key pushed once per bank), and a value read from a part that is not an ancestor.
 
 ### Who owns what
 
-Sciline provides the mechanism: splitting a graph and combining contributions.
-Stages hold their static values but no contributions and no member list, and they do not react to parameter changes; a changed parameter means new stages.
+Sciline provides the mechanism: splitting a graph and combining the values of members.
+Stages hold the values at their frontier but no contributions and no member list, and they do not react to parameter changes; a changed parameter means new stages.
 
-Everything stateful belongs to the caller: which members exist, which contributions are kept, what a parameter change invalidates, and whether members run in parallel:
+Everything stateful belongs to the driver: which members exist, which contributions are kept, what a parameter change invalidates, and whether members run in parallel:
 
 - Each reduction package returns its own small object in place of the map/reduced pipeline.
   For esssans it holds a contribute stage per run type, a finalize stage, and the contributions by filename.
@@ -139,9 +142,9 @@ Everything stateful belongs to the caller: which members exist, which contributi
 
 `Stage`, `warm`, `split`, and the accumulators are added in a minor release.
 The ESS packages then migrate one at a time while map/reduce still exists.
-The removal comes last, in a major release.
+The removal comes last, in a major release (recommended; a `sciline.v2` namespace is the open alternative, see below).
 Users who depend on map/reduce and do not need the new generics can stay on the last release before the removal.
-Keeping the old `Pipeline` in a separate namespace would serve them equally, but nobody intends to maintain it, so pinning is the offer.
+A `sciline.v2` namespace that keeps the old `Pipeline` would serve them equally, but nobody intends to maintain it.
 
 ## Alternatives considered
 
@@ -176,22 +179,23 @@ Keeping the old `Pipeline` in a separate namespace would serve them equally, but
 - Sciline drops map/reduce and cyclebane, and the PEP 695 generics can land.
 - Users outside ESS keep a documented replacement; the parameter-tables guide becomes a guide on stages.
 - `StreamProcessor` is expected to lose its graph manipulation and keep only its policy.
-- The same terms (stage, accumulator, accumulation key, contribution, contribute/combine) apply in sciline, ess.reduce, and essapps, following Beam, Flink, and Spark.
-- Every parameter is set on one flat pipeline, and everything held is a plain object that the caller can inspect, clear, or serialize.
+- The same terms (stage, accumulator, accumulation key, contribution, contribute/combine) apply in sciline, ess.reduce, and essapps.
+  Accumulator, contribution, and contribute/combine follow Beam, Flink, and Spark.
+- Every parameter is set on one flat pipeline, and everything held is a plain object that the driver can inspect, clear, or serialize.
 - The prototype reproduces the LoKI multi-run reduction with identical results and provider calls, and adding a run costs only that run's contribution.
-  Prototype drivers with `split` for banks or triplets times runs give the results of plain loops, and a `StreamProcessor` on `split` gives those of the real class.
+  Prototype drivers with `split`, which are not in this repository, gave the results of plain loops for banks or triplets times runs, and a `StreamProcessor` on `split` gave those of the real class.
 
 ### Negative
 
 - Breaking for the `with_*` helpers in esssans, essreflectometry, and bifrost, for `ess.reduce.parameter_mappers` and the widgets built on it, for essreflectometry's `BatchProcessor`, for notebooks, and for the bifrost bank fold in esslivedata.
 - The widgets need one interface across the package objects, a base class or one generic object, decided when the second package migrates.
-- Parallelism over members is the caller's job; with map/reduce, dask ran members in threads for free (about 1.7 s on LoKI).
+- Parallelism over members is the driver's job; with map/reduce, dask ran members in threads for free (about 1.7 s of 7.5 s in the LoKI validation script).
 - A map/reduce inside the per-member work of another one (the pixel masks in esssans) becomes a list parameter and a provider.
 - A one-level driver that builds stages by hand must push only `stage.dynamic_outputs`; other keys are counted once per member. For nested loops, `split` is needed: a run-level key in a stage with inputs `(Filename, Bank)` is dynamic and still counted once per bank.
 - Parts have one parent: bank-only work is computed once per run and bank, and a `StreamProcessor` context update recomputes all context-derived values (in esslivedata compute only; no accumulators reset).
 - `split` rejects the esssans background reading the masks of the one sample run set on the pipeline; esssans has to decide which run's detector IDs the background masks use.
 - esslivedata selects its scheduler by replacing `sciline.task_graph.DaskScheduler`; sciline keeps that working for stages, until it offers a public way.
-- Stages keep their static values, and package objects keep contributions (binned events for some workflows), so package objects need a way to clear them.
+- Stages keep their held values, and package objects keep contributions (binned events for some workflows), so package objects need a way to clear them.
 - Visualization of mapped pipelines (`compact=`) goes; `Stage.visualize` and `visualize_stages` replace it in part.
   Progress reporting through `Stage` is not implemented yet.
 - networkx becomes a direct dependency; today it comes through cyclebane.

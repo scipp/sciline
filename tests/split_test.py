@@ -126,13 +126,13 @@ def test_output_that_does_not_vary_in_its_part_is_rejected(
     a = Part(inputs=(A,))
     b = Part(inputs=(B,), outputs=(BValue, AValue), parent=a)
     # Pushed per iteration of b, AValue would be counted once per value of B.
-    with pytest.raises(ValueError, match=r'AValue.* on Part\(inputs=\(.*A,\)'):
+    with pytest.raises(ValueError, match=r'AValue.* on parts\[0\]'):
         split(pipeline, a, b)
 
 
 def test_output_that_depends_on_no_part_is_rejected(pipeline: sl.Pipeline) -> None:
     a = Part(inputs=(A,), outputs=(AValue, Offset))
-    with pytest.raises(ValueError, match='Offset.* on none of its ancestors'):
+    with pytest.raises(ValueError, match=r'Offset.*do not depend on its inputs\.$'):
         split(pipeline, a)
 
 
@@ -165,8 +165,14 @@ def test_parts_compare_by_identity() -> None:
 
 
 def test_split_uses_given_scheduler(
-    pipeline: sl.Pipeline, parts: tuple[Part, ...]
+    pipeline: sl.Pipeline, parts: tuple[Part, ...], monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    class Refusing(sl.scheduler.NaiveScheduler):
+        def get(
+            self, graph: Graph, keys: list[Hashable], reporter: Reporter | None = None
+        ) -> tuple[Any, ...]:
+            raise AssertionError('The default scheduler was used')
+
     used: list[str] = []
 
     class Recording(sl.scheduler.NaiveScheduler):
@@ -176,11 +182,13 @@ def test_split_uses_given_scheduler(
             used.append('get')
             return super().get(graph, keys, reporter)
 
-    stages = split(pipeline, *parts, scheduler=Recording())
-    for stage in stages:
-        used.clear()
-        stage.static()
-        assert used
+    monkeypatch.setattr(sl.task_graph, 'DaskScheduler', Refusing)
+    a, b, c, after_c = split(pipeline, *parts, scheduler=Recording())
+    a_out = a.compute({A: 1})
+    b_out = b.compute({**pick(b, a_out), B: 2})
+    c_out = c.compute({**pick(c, a_out, b_out), C: 3})
+    after_c.compute({**pick(after_c, a_out, b_out), CValue: c_out[CValue]})
+    assert used
 
 
 def test_per_iteration_work_runs_once_per_iteration_of_its_loop() -> None:
@@ -240,3 +248,11 @@ def test_part_given_twice_is_rejected(
 ) -> None:
     with pytest.raises(ValueError, match='once'):
         split(pipeline, *parts, parts[1])
+
+
+def test_part_with_an_input_of_an_ancestor_is_rejected(pipeline: sl.Pipeline) -> None:
+    a = Part(inputs=(A,), outputs=(AValue,))
+    # b would compute AValue from A on each of its iterations.
+    b = Part(inputs=(B, A), outputs=(BValue,), parent=a)
+    with pytest.raises(ValueError, match=r'parts\[1\].*inputs .*A\] of an ancestor'):
+        split(pipeline, a, b)
