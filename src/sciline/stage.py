@@ -460,7 +460,9 @@ def split(
         path = part._path()
         path_inputs = {k for p in path for k in p.inputs}
         deps = _cut(full, path_inputs)
-        constant = [k for k in part.outputs if not _upstream(deps, k) & set(part.inputs)]
+        constant = [
+            k for k in part.outputs if not _upstream(deps, k) & set(part.inputs)
+        ]
         if constant:
             owners = {k: _owner(deps, k, path[:-1]) for k in constant}
             advice = ', '.join(
