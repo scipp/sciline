@@ -38,8 +38,7 @@ A caller that needs repetition cuts the pipeline into *stages*, calls them from 
                                  (accumulator or forwarder)
 ```
 
-Sciline provides the stages and the `Accumulator` protocol with two ready-made accumulators.
-It also provides `Aggregation`, which packages the most common arrangement: a stage per member, accumulators, and a final stage.
+Sciline provides the stages, `split`, which builds the stages of nested loops from one pipeline, and the `Accumulator` protocol with two ready-made accumulators.
 Everything else, in particular what is kept between calls and when it is discarded, is decided by the code that runs the loop.
 
 Terms used in this document:
@@ -52,9 +51,10 @@ Terms used in this document:
 | connector | An object between stages with `push(value)` and `value`. |
 | accumulator | A connector that combines all pushed values (`sciline.Accumulator`). |
 | forwarder | A connector that holds the last pushed value until the next push. Lives in ess.reduce. |
-| member | One repetition, for example one run. Given as a row of values for the *member keys*. |
+| member | One repetition, for example one run, given by the values of the inputs of a stage. |
 | accumulation key | A key at which the values of the members are combined. |
 | contribution | The values at the accumulation keys for one member, as a dict. |
+| part | One level of a driver's loop, given to `split` (`sciline.Part`): the inputs supplied per iteration, the outputs needed per iteration, and the part of the enclosing loop. |
 | driver | The loop that calls stages and pushes into connectors. |
 | package object | What a reduction package returns to users in place of today's map/reduced pipeline. It is a driver. |
 
@@ -83,7 +83,7 @@ warm(stage_a, stage_b)                # compute the static parts of both in one 
   The supplied and intermediate values are released when the call returns.
 - **Pass-through.**
   An output that is also an input is returned as supplied.
-  This makes a stage from a key to itself the identity, which an aggregation needs when its members are already values at its accumulation key, such as results of other aggregations.
+  This makes a stage from a key to itself the identity, which a driver needs when its members are already values at its accumulation keys, such as results of other loops.
 - **Snapshot.**
   The stage is built from the task graph of the pipeline at construction time.
   Later changes to the pipeline do not affect it; to change a parameter, build a new stage.
@@ -103,7 +103,7 @@ warm(stage_a, stage_b)                # compute the static parts of both in one 
 
 The stage builds its task graph with `to_task_graph` and `HandleAsComputeTimeException`.
 Keys without a value, such as the inputs, thus become nodes that fail only if they are computed, instead of failing when the stage is built.
-The scheduler default is the same as for `Pipeline`.
+The scheduler default is the same as for `Pipeline` (section 8.8).
 
 ### Why it is in sciline
 
@@ -126,14 +126,16 @@ Sciline provides two factories:
   The first pushed value becomes the result, and each further push replaces it by `func(result, value)`.
   `func` must be associative and must not modify its arguments, because the pushed values belong to the caller.
   Since the update is not in place, a sum briefly holds the old result, the new result, and the pushed value.
-  An accumulator that updates in place has to be written by the workflow author, who then owns the copy of the first value.
-  The accumulators in ess.reduce are such objects.
+  An accumulator that updates in place has to be written by the workflow author, who then owns the copy of the first value; the accumulators in ess.reduce are such objects.
+
+For concatenation, `Buffered` and `Reduced` cost about the same memory; for a sum of large dense arrays, a running result holds one array instead of one per member.
+Both are factories: each call returns a new, empty accumulator, and a driver makes new accumulators for each computation.
+An accumulator kept from an earlier computation adds the new members to the old result, without an error.
 
 ### Combining combined values
 
-`Aggregation.combine` accepts combined values as well as individual contributions.
-This allows combining in groups or as a chain, for example one new member at a time onto a previous result.
-It requires two things of an accumulator:
+A driver may push combined values into a new accumulator, to combine in groups or as a chain, for example one new member at a time onto a previous result, or contributions computed in separate processes.
+This requires two things of an accumulator:
 
 1. What `value` returns can be pushed again.
 2. The result does not depend on how the pushes were grouped.
@@ -143,89 +145,81 @@ It requires two things of an accumulator:
 An ess.reduce accumulator satisfies both if its `push` accepts what its `value` returns.
 The histogramming accumulators must keep this property once `maybe_hist` moves out of their base class (see below).
 
-### Which one to use
-
-For concatenation, buffering and a running result cost about the same memory, roughly twice the total, and `Buffered` is the natural choice.
-For a sum of large dense arrays, a running result holds one array instead of one per member, and `Reduced` or a custom in-place accumulator is better.
-
 ### Relation to the ess.reduce accumulators
 
-An accumulator in an aggregation over a table and an accumulator in a stream are the same kind of object.
-Whether the values come from many members or from one input over time only matters to the driver.
-The driver also owns everything else about the values: their lifetime (`clear`), their identity (contributions by label), and whether the result may depend on the order of pushes.
+An accumulator over runs and an accumulator in a stream are the same kind of object; whether the values come from many members or from one input over time only matters to the driver.
+The driver also owns their lifetime (`clear`), their identity (contributions by label), and whether the result may depend on the order of pushes.
 
 The accumulators of `ess.reduce.streaming` satisfy the protocol once `maybe_hist`, which histograms in the base class `push`, moves to the subclasses that need it.
 The base class then adds nothing to the protocol, and a forwarder built on it does not histogram.
-Their `clear` method stays an ess.reduce convention for accumulators that are reused between finalizations.
-No base class beyond the protocol is shared between sciline and ess.reduce.
-`Accumulator` is in sciline because `Aggregation` consumes it; `Forwarder` stays in ess.reduce because nothing in sciline consumes one.
+Their `clear` method stays an ess.reduce convention; no base class beyond the protocol is shared.
+`Accumulator` is in sciline because `Buffered` and `Reduced` return it and drivers use it to type their accumulators; `Forwarder` stays in ess.reduce because nothing in sciline returns or consumes one.
 
-## 5. `Aggregation`
+## 5. `split`
 
 ```python
-agg = Aggregation(
-    pipeline,
-    members=(Filename[SampleRun],),
-    accumulators={CleanSummedQ[SampleRun, Numerator]: Buffered(merge_contributions), ...},
-    outputs=(IofQ,),
-)
-agg.accumulation_keys           # the keys in `accumulators` that depend on the members
-agg.contribute(row)             # one member -> contribution
-agg.accumulators()              # new accumulators, for a caller that pushes itself
-agg.combine(contributions)      # push into new accumulators, return the combined contribution
-agg.finalize(combined)          # accumulation keys -> outputs
-agg.compute(table)              # all of the above for a table
-compute_members(pipeline, members=(Filename[SampleRun],), key=NormalizedQ[SampleRun, Numerator], table=table)
+run = Part(inputs=(Filename,))
+bank = Part(inputs=(Bank,), outputs=(Numerator, Denominator), parent=run)
+final = Part(inputs=(Numerator, Denominator), outputs=(IofQ,))
+run_stage, bank_stage, final_stage = split(pipeline, run, bank, final)
+# run_stage:  Filename -> what the bank part reads that depends on the run
+# bank_stage: those values and Bank -> Numerator, Denominator
+# final_stage: Numerator, Denominator -> IofQ
 ```
+
+A driver over several levels, such as banks within runs, needs to know which values the inner level reads from the outer one, so that it computes them once per outer iteration instead of once per inner member.
+`split` derives this from the graph and returns one ordinary `Stage` per part.
 
 ### Behaviour
 
-- **Structure.**
-  An aggregation consists of two stages of one pipeline: `contribute_stage` from the member keys to the accumulation keys, and `finalize_stage` from the accumulation keys to the outputs.
-  Between them sits one accumulator per accumulation key.
-- **Parameters.**
-  All parameters are set on the pipeline before the aggregation is built.
-  Like a stage, the aggregation is a snapshot.
-  A changed parameter means a new aggregation, which costs a walk of the graph but no computation until it is used.
-- **Factories, not instances.**
-  `accumulators` maps each accumulation key to a factory.
-  `combine` and `compute` make new accumulators on every call, so no state survives between calls.
-  With instances and a `clear` method, the aggregation would have to either forbid combining in batches over several calls or silently add to old state, and `combine` could not safely run concurrently.
-  With factories, whoever calls `accumulators()` owns the instances and decides their lifetime.
-- **Keys that do not depend on the members.**
-  A key in `accumulators` that does not depend on the member keys is not accumulated.
-  The finalize stage computes its value from the static part instead, and `accumulation_keys` leaves it out.
-  This removes the need for essreflectometry's `try/except`.
-  It also means that a key placed wrongly is silently treated as static.
-  A consumer that knows which keys must be accumulated, such as a package test or the essapps binding, should compare its list with `accumulation_keys`.
-- **No outputs.**
-  `outputs` is optional.
-  Without outputs there is no finalize stage, which is useful when several aggregations share one finalize stage (section 6.2).
-- **Separate steps.**
-  `contribute`, `combine`, and `finalize` can be called at different times and in different processes.
-  A contribution is a plain dict and can be serialized between them.
-- **`compute(table)`.**
-  This is the loop for a caller that keeps nothing.
-  It warms both stages, contributes row by row, and pushes each contribution before the next one is computed, so the peak memory depends on the accumulators, not on the aggregation.
-  It then finalizes.
-- **Member table.**
-  A table is a `Mapping[label, Mapping[Key, value]]`, which `df.to_dict('index')` produces from a pandas DataFrame.
-  Sciline does not depend on pandas, and the labels are chosen by the caller.
-- **`compute_members`** computes the value of one key for each row of a table, without combining.
-  It replaces `compute_mapped`.
+- **Parts.**
+  A `Part` names the inputs the driver supplies on each iteration of its loop, the outputs the driver needs on each iteration (usually accumulation keys), and its `parent`, the part of the enclosing loop.
+  A part may have several children, such as the per-bank work and a per-run step after the banks are combined, but only one parent (section 8.7).
+- **The deepest-level rule.**
+  A part reads values that do not depend on its inputs.
+  Each such value belongs to the deepest ancestor whose inputs it depends on.
+  That ancestor's stage outputs it, once per iteration of the ancestor's loop, and the part's stage takes it as an input; it may skip levels in between.
+  A value that depends on the inputs of no part is held by the stage that reads it, as by any stage.
+- **The cut at the inputs on the path.**
+  Dependencies are taken in the graph cut at the inputs of the part and its ancestors.
+  A per-run step after the banks are combined takes accumulation keys as inputs.
+  In the uncut graph it depends on the bank through them, because the combine happens outside the graph; cut at them, it does not.
+- **Declared outputs are checked, not derived.**
+  An output of a part that does not depend on the part's inputs raises an error that names the part it does depend on.
+  Without the check the driver would push it once per iteration of a loop it does not vary in, and the combined value would be wrong without any error: a key that depends on the run alone, pushed in the bank loop, is counted once per bank; a key that depends on no input is counted once per member.
+- **Reads from other branches are rejected.**
+  A part that reads a value depending on the inputs of a part that is not its ancestor raises an error: a final step after combining over runs cannot read a per-run value, since there is no single run it could come from.
+- **What the driver pushes and passes.**
+  The outputs of a part's stage are the part's outputs, followed by the values its descendants read from it; the driver pushes only the part's outputs.
+  `Stage.compute` takes exactly its inputs, so the driver selects them from the results of the ancestors' stages.
+  Getting either wrong fails loudly, with a `KeyError` or a missing input.
+- **One level.**
+  `split` with a single part is a `Stage` with the output check; a caller that builds a `Stage` directly gets the check from `stage.dynamic_outputs`.
 
-### What is deliberately not in `Aggregation`
+A driver for runs times banks:
 
-- **Grouping.**
-  `groupby` is a grouping of the table followed by one aggregation per group.
-  The caller can do this in a few lines.
+```python
+warm(run_stage, bank_stage, final_stage)
+acc = {Numerator: Buffered(concat)(), Denominator: Reduced(add)()}
+for filename in filenames:
+    run_values = run_stage.compute({Filename: filename})
+    for name in bank_names:
+        inputs = {k: run_values[k] for k in bank_stage.inputs if k in run_values}
+        out = bank_stage.compute({**inputs, Bank: name})
+        for key in bank.outputs:
+            acc[key].push(out[key])
+result = final_stage.compute({k: a.value for k, a in acc.items()})
+```
+
+### What is deliberately not in `split`
+
+- **Loops, held values, and accumulators.**
+  The driver decides what is held, for how long, and when accumulators are made and discarded, so memory is bounded by what it holds, for example one run.
 - **Parallelism over members.**
-  `contribute` is a plain function call, so the caller can map it over rows with threads, processes, or dask, and push results as they arrive.
-  The user guide shows an example.
+  A stage call is a plain function call, so the caller can map it over members with threads, processes, or dask.
   This is the one thing that computing everything in one graph provided for free.
-- **State.**
-  The aggregation holds its stages and nothing else: no contributions, no member table, no rules for parameter changes.
-  Section 8.4 explains why.
+- **Parameter changes.**
+  Parameters are set before `split` is called, and the stages are snapshots; a changed parameter means new stages.
 
 ## 6. Composition
 
@@ -238,103 +232,86 @@ esssans users today set parameters, call `with_sample_runs` and `with_background
 To keep this experience, esssans returns its own object instead of a pipeline.
 The validation script contains such an object, `SansReduction`, in about 50 lines.
 It is built from a pipeline with all parameters set, so setting the runs is the last step of the setup.
-To change a parameter, the user builds a new object.
-Nearly every parameter is read per run, so this costs no more than rebuilding only the affected stages would.
-It holds:
+To change a parameter, the user builds a new object; nearly every parameter is read per run, so this costs no more than rebuilding only the affected stages would.
+It holds one contribute stage per run type (sample and background), one finalize stage from the accumulation keys of both to the outputs, and the contributions of each run type by filename.
+`set_runs(run_type, runs)` records the runs and drops the contributions of runs no longer listed.
+`compute()` warms all stages together, contributes the runs that have no contribution yet, pushes the held contributions into new accumulators, and finalizes.
 
-- one aggregation per run type (sample and background), each without outputs,
-- one finalize stage from the accumulation keys of both aggregations to the outputs,
-- the contributions of each run type, by filename.
+The background stage reads `DetectorMasks`, which in esssans depends on the detector IDs of the sample run set on the pipeline.
+The validation script reproduces this, but `split` rejects it: the background part reads a value that depends on `Filename[SampleRun]`, the input of a part that is not its ancestor (section 11).
 
-Its methods:
+### 6.2 Several loops, one final stage
 
-- `set_runs(run_type, runs)` records the runs and drops the contributions of runs no longer listed.
-- `compute()` warms all stages together, contributes the runs that have no contribution yet, combines, and finalizes.
-
-### 6.2 Several aggregations, one final stage
-
-Sample runs and background runs are two aggregations on the same pipeline.
-One `Stage` takes the accumulation keys of both as inputs and computes the final result.
-All three stages are warmed together, so work they share, such as reading a mask file, is done once.
+Sample runs and background runs are two loops on the same pipeline, and a final part without parent takes the accumulation keys of both as inputs.
+All stages are warmed together, so work they share, such as reading a mask file, is done once.
 
 ### 6.3 Runs times banks
 
-Mapping over detector banks and runs at once (LoKI banks, Bifrost triplets) is a table that is a product.
-A flat table with one row per run and bank works, but each row is contributed on its own:
-work that depends on the run alone, such as loading monitors, is computed once per bank, and an accumulation key that depends on the run alone is pushed once per bank.
-One aggregation per bank over the runs has the same cost, since each bank's aggregation loads every run.
+Mapping over detector banks and runs at once (LoKI banks, Bifrost triplets) needs two levels.
+A flat loop over (run, bank) pairs computes run-level work, such as loading monitors, once per bank, and pushes a run-level accumulation key once per bank; a loop per bank over the runs loads every run once per bank.
+With `split`, a run part and a bank part under it hold the per-run values for one iteration of the run loop (section 5), and a run-level key declared on the bank part raises an error.
 
-A driver avoids both by holding the per-run part for one iteration of a loop over the runs:
+Bifrost merges the triplets of one run into one detector and concatenates the runs.
+The per-run step after merging is a second part under the run part:
 
 ```python
-per_run = Stage(pipeline, outputs=RUN_LEVEL, inputs=(Filename,))
-banks = Aggregation(pipeline, members=(*RUN_LEVEL, Bank), accumulators=...)
-acc = banks.accumulators()
-for filename in filenames:
-    run = per_run.compute({Filename: filename})
-    for bank in bank_names:
-        for key, value in banks.contribute({**run, Bank: bank}).items():
-            acc[key].push(value)
+run = Part(inputs=(Filename,))
+triplet = Part(inputs=(NeXusDetectorName,), outputs=(EmptyDetector, NeXusData), parent=run)
+run_final = Part(inputs=(EmptyDetector, NeXusData), outputs=(NormalizedDetector,), parent=run)
+final = Part(inputs=(NormalizedDetector,), outputs=(EnergyQDetector,))
 ```
 
-`RUN_LEVEL` lists the keys that the per-bank work reads and that depend on the run but not on the bank.
-It is chosen by the package author; a key left out is recomputed per bank, which costs time but does not change the result, and `Stage.visualize` shows what is held.
-Memory is bounded by one run, whatever the graph looks like.
-
-If banks and runs are combined differently (Bifrost folds triplets into one detector and would concatenate runs), the bank combination is finalized per run by a `Stage` whose inputs are the bank accumulation keys and the per-run keys that the result also reads, and its output is pushed into a run accumulator.
-
-Groups within a run, such as angle groups in Bifrost, have the same shape.
-In all cases, nothing is nested inside a graph.
+The run stage outputs what both children read from the run: `NeXusFile` and `PrimaryGraph` for the triplets, and the angles, monitor, and proton charge for `run_final`.
+Each file is therefore opened once per run; two separate two-level splits would open it twice.
+Work that depends on the bank alone, such as LoKI's per-bank lookup table, is computed once per run and bank (section 8.7).
+Groups within a run, such as angle groups in Bifrost, are a further level, and nothing is nested inside a graph.
 
 ### 6.4 A reduce inside per-member work (esssans pixel masks)
 
-In esssans, `DetectorMasks` reads the detector IDs of the sample run.
-With map/reduce, the graph therefore computes the mask fold once per sample run.
-This is not an aggregation, because the combined value is needed inside the work for each member.
-
+In esssans, `DetectorMasks` reads the detector IDs of the sample run, so with map/reduce the graph computes the mask fold once per sample run.
+This is not a loop with an accumulator, because the combined value is needed inside the work for each member.
 Outside the graph it becomes a list parameter, `PixelMaskFilenames`, and two providers: one reads all mask files (static and shared by all runs), and one builds the masks for a given run.
-Aggregations are meant for members that are expensive to compute or whose individual results users want to see.
-A handful of small files combined by union is neither.
+Loops over members are meant for members that are expensive to compute or whose individual results users want to see; a handful of small files combined by union is neither.
 
 ### 6.5 Passing a result from one driver to another
 
-A result enters another driver as an ordinary parameter of the flat pipeline.
-For example, the bifrost bank fold in esslivedata becomes:
+A result enters another driver as an ordinary parameter of the flat pipeline; the bifrost bank fold in esslivedata becomes:
 
 ```python
-pipeline[EmptyDetector] = banks.compute(table)[EmptyDetector]
+banks = Stage(pipeline, outputs=(EmptyDetector,), inputs=(NeXusDetectorName,))
+acc = Buffered(combine_banks)()
+for name in bank_names:
+    acc.push(banks.compute({NeXusDetectorName: name})[EmptyDetector])
+pipeline[EmptyDetector] = acc.value
 processor = StreamProcessor(pipeline, ...)
 ```
 
 ### 6.6 `StreamProcessor`
 
-`StreamProcessor` is not an aggregation.
-Its members (chunks of a stream) cannot be recomputed, its accumulators are reused between finalizations and need not be associative (rolling windows), and a change of context, such as a new detector position, must not discard what was accumulated.
-
-It is three stages and two kinds of connector.
-This is also its structure today, but the boundary of the context part is now derived from the graph instead of found by hand:
+Chunks of a stream cannot be recomputed, the accumulators are reused between finalizations and need not be associative (rolling windows), and a change of context, such as a new detector position, must not discard what was accumulated.
+`StreamProcessor` is one context part, one chunk part per group of dynamic keys, and one finalize part, all under the context part:
 
 ```python
-per_chunk = Stage(pipeline, outputs=accumulator_keys, inputs=dynamic_keys)
-context_frontier = Stage(pipeline, outputs=per_chunk.frontier, inputs=context_keys).dynamic_outputs
-context_stage = Stage(pipeline, outputs=context_frontier, inputs=context_keys)
-chunk_stage = Stage(pipeline, outputs=accumulator_keys, inputs=dynamic_keys + context_frontier)
-finalize_stage = Stage(pipeline, outputs=target_keys, inputs=accumulator_keys + context_targets)
-context = Forwarder()
-accumulators = {key: EternalAccumulator() for key in accumulator_keys}
+context = Part(inputs=context_keys, outputs=context_only_targets)
+chunks = [Part(inputs=keys, outputs=acc_keys, parent=context)
+          for keys, acc_keys in groups]          # accumulators by the dynamic keys they read
+finalize = Part(inputs=(*all_acc_keys, *bypass_keys), outputs=targets, parent=context)
+context_stage, *chunk_stages, finalize_stage = split(pipeline, context, *chunks, finalize)
 ```
 
-- `set_context` calls the context stage and pushes the result into the forwarder.
-- `accumulate` calls the chunk stage with a chunk and the forwarder's value, and pushes into the accumulators.
-- `finalize` calls the finalize stage.
-
-The accumulator classes, the validation of key sets, `on_finalize`, `clear`, and `visualize` stay.
-`visualize` classifies nodes from `Stage.frontier` and `Stage.dynamic`; whatever else it needs from sciline is added with the rewrite.
-`allow_bypass` becomes a derived property: a dynamic key that is also an input of the finalize stage.
+`set_context` calls the context stage and holds its result in a forwarder; `accumulate` calls the stage of each chunk part whose inputs the chunk supplies and pushes into the accumulators; `finalize` calls the finalize stage.
+What the chunk and finalize stages read from the context, today found by `_find_descendants` and `_find_parents`, is derived by `split`.
+A target that depends on the context alone is an output of the context part, and `allow_bypass` becomes an explicit input of the finalize part.
+The accumulator classes, the grouping of accumulators by dynamic keys, the validation of key sets, `on_finalize`, `clear`, and `visualize` stay.
 The module shrinks to its policy, which values are transient and which are held, as scipp/ess#732 proposed.
 
-`test_stream_of_chunks_with_context_held_between_changes` in `tests/stage_test.py` runs this shape, including a context update that keeps the accumulator.
-The rewrite of the real class against its existing tests has not been done.
+With one context part, an update of any context key recomputes all context-derived values, where `StreamProcessor` today recomputes only what depends on the updated keys.
+In esslivedata this costs compute and changes no results.
+The only reset tied to the context, the reset-on-move of `NoCopyAccumulator`, compares coordinate values on each push, and values recomputed from unchanged inputs are identical; nothing inspects which context nodes were recomputed.
+The extra work is at most one rebuild of the detector projection when a rare key (an ROI edit, or a wavelength lookup table after a chopper change) is updated in a job with moving detector geometry.
+The calls inside `StreamProcessor` must also honour esslivedata's choice of scheduler (section 8.8).
+
+`test_stream_of_chunks_with_context_held_between_changes` in `tests/stage_test.py` runs this shape with stages built by hand, including a context update that keeps the accumulator.
 
 ### 6.7 essapps
 
@@ -342,40 +319,42 @@ essapps is the planned service for automatic, batch, and interactive data reduct
 Its design is on the `architecture-sketch` branch (`docs/developer/architecture.md`), and `docs/developer/stages.md` and `docs/developer/aggregation.md` there relate it to this proposal.
 In that design a workflow is described by a *spec* that declares its parameters and outputs, every run produces a stored *record*, and a *binding* connects a spec to the sciline workflow.
 A record holds only what was computed: the spec, every parameter value, and the outputs.
-Stages and aggregations are how it is computed.
-A session holds them as caches, and they never appear in a record.
+Stages and accumulators are how it is computed; a session holds them as caches, and they never appear in a record.
 Only the binding knows the graph, so a spec does not say which parameters each part of the workflow reads.
 The essapps interface follows what sciline and the package objects provide, so that no problem is solved twice.
 It uses them in four places:
 
 - **Tuning.**
-  The caller names the stage as a *template*, whose blanks are the parameters that will move.
-  The session holds `Stage(pipeline, inputs=blanks, outputs=targets)` for it, so a rerun after changing a blank reuses everything upstream.
-  A blank that the targets do not need is dropped by the binding, because `Stage` refuses it.
+  The caller names the stage as a *template*, whose blanks are the parameters that will move, and the session holds `Stage(pipeline, inputs=blanks, outputs=targets)` for it.
+  A rerun after changing a blank reuses everything upstream; a blank that the targets do not need is dropped by the binding, because `Stage` refuses it.
 - **A sum over runs.**
   A sum is one request whose run parameter is a list.
-  The binding wraps the package object (section 6.1) or its aggregation, and computes the sum in one process.
-  Values that differ per run are further columns of the member table.
-  Nested levels, such as runs times banks, stay in the package's driver (section 6.3), and mask files are a plain list parameter (section 6.4).
-  In a session, the held stage over the list keeps the accumulators, so a call whose list extends the previous one contributes only the new runs.
-  A long-lived runner that holds this stage for one series under a rule is called a *fold* in essapps.
+  The binding wraps the package object (section 6.1) and computes the sum in one process.
+  Values that differ per run are further inputs of the contribute stage; nested levels stay in the package's driver (section 6.3).
+  In a session, the contribute stage and the contributions by run are kept, so a call whose list extends the previous one contributes only the new runs.
+  A long-lived runner that holds this state for one series under a rule is called a *fold* in essapps.
 - **A sum spread over nodes.**
-  The workflow author splits the sum into two specs, and the binding builds both from one aggregation:
+  The workflow author splits the sum into two specs, and the binding builds both from the stages of one split:
 
   ```python
+  run = Part(inputs=(Filename[SampleRun],), outputs=ACC_KEYS)
+  final = Part(inputs=ACC_KEYS, outputs=(IofQ,))
+  contribute_stage, final_stage = split(pipeline, run, final)
+
   def contribute(run):   # CONTRIBUTE: one run -> accumulation keys, exposed as outputs
-      return agg.contribute({Filename[SampleRun]: run})
+      return contribute_stage.compute({Filename[SampleRun]: run})
 
   def combine(parts):    # COMBINE: references to the outputs of CONTRIBUTE -> result
-      return agg.finalize(agg.combine(parts))
+      acc = {k: make() for k, make in ACCUMULATORS.items()}
+      for part in parts:
+          for k, a in acc.items(): a.push(part[k])
+      return final_stage.compute({k: a.value for k, a in acc.items()})
   ```
 
   Each record describes only its own computation, so no check that the parts agree is needed.
 - **Interactive applications (phase 3).**
-  essapps compares three models for interactive work: a session that holds state, an application that holds state itself, and a stateless service that splits a workflow into two specs with the intermediate value stored as a record.
-  In all three, the objects are the same: a stage, and a connector after it.
-  The models differ only in where these objects live and whether the value between the stages is written as a record.
-  Choosing a model is therefore a question of placement, not of a new mechanism.
+  essapps compares three models: a session that holds state, an application that holds state itself, and a stateless service that splits a workflow into two specs with the intermediate value stored as a record.
+  In all three the objects are the same, a stage and a connector after it, so choosing a model is a question of placement, not of a new mechanism.
 
 ## 7. Changes to `Pipeline`
 
@@ -400,76 +379,87 @@ With demand-driven generics, `underlying_graph` and `output_keys()` only contain
 Callers that ask whether a stage uses a key must therefore test against `stage.keys`, not against the pipeline's graph.
 
 **Tests and docs:** of the current 238 tests, 16 use map/reduce and are removed; the map-related tests of the generics branch are trimmed; the rest are ported.
-The parameter-tables guide is replaced by the guide on stages and aggregations, and the generic-providers guide loses `constraints=`.
+The parameter-tables guide is replaced by the guide on stages, and the generic-providers guide loses `constraints=`.
 
 ## 8. Design choices
 
 ### 8.1 Connectors as separate objects, not tiers inside `Stage`
 
-The alternative was a `Stage` with several tiers of inputs and a policy per tier for what to hold, deriving all boundaries itself.
-It carries the same information, but hides it inside one class and puts policy into sciline.
-With separate connectors, every held value is an object the driver can inspect, clear, serialize, or send to another process.
-This is the explicit lifetime that scipp/sciline#241 asks for.
+The alternative was a `Stage` with several tiers of inputs and a policy per tier for what to hold, which hides the held values inside one class and puts policy into sciline.
+`split` derives the same boundaries but returns one plain stage per part, so every held value is an object the driver can inspect, clear, serialize, or send to another process: the explicit lifetime that scipp/sciline#241 asks for.
 `Stage` holds only its frontier, which is a forwarder from a stage without inputs, kept inside because it is the common case.
 
 ### 8.2 No generic network object (deferred)
 
 A general object could hold stages and connectors and route pushes through them.
-The real uses disagree on exactly this routing: a chunk runs immediately because it cannot be kept, a context update runs immediately but must not touch the accumulators, a table aggregation can run lazily, `clear` discards accumulators but keeps the context, and rolling windows and `on_finalize` add their own rules.
-A generic object would either expose parameters for all of this or hide one choice.
-It would also be a graph of stages with its own scheduler, which is nested workflows one level up (section 8.6).
+The real uses disagree on exactly this routing: a chunk runs immediately because it cannot be kept, a context update runs immediately but must not touch the accumulators, a loop over runs can run lazily, `clear` discards accumulators but keeps the context, and rolling windows and `on_finalize` add their own rules.
+A generic object would either expose parameters for all of this or hide one choice, and it would be a graph of stages with its own scheduler, which is nested workflows one level up (section 8.9).
 Each real use is a loop of under twenty lines over plain objects, and that loop is where the policy belongs.
+If package objects turn out to repeat the same code, that repetition is the basis for a generalization of the package objects; if essapps phase 3 needs connectors on process boundaries, that is a placement layer over the same stages and connectors.
 
-If package objects turn out to repeat the same code (for example esssans, essreflectometry, and the essapps binding), that repetition is the basis for a generalization of the package objects, not of `Aggregation`.
-If essapps phase 3 needs connectors placed on process boundaries with pushes routed across them, that is a placement layer over the same stages and connectors, and should be designed with that case at hand.
+### 8.3 Boundaries between levels are derived
 
-### 8.3 No builder that derives stage boundaries (deferred)
+Three callers need the same boundary: the context frontier of `StreamProcessor`, runs times banks in esssans, and runs times triplets in Bifrost.
+Chosen by hand, it fails silently: a run-level key left out is recomputed per bank, which costs time but gives the right result.
+`split` derives it with one rule (section 5), and the prototype drivers with it are shorter than hand-written ones (section 9).
 
-A function could derive the boundaries from ordered groups of inputs.
-Only one caller needs a derived boundary today, the context frontier of `StreamProcessor`, and it takes two lines (section 6.6).
-The accumulation keys of an aggregation are declared, not derived.
-The function should be extracted when a second caller appears.
+The accumulation keys are declared, not derived: the combine happens outside the graph, so the graph cannot tell that a key such as `NormalizedDetector` comes after combining the triplets.
+An output declared on the wrong part raises an error instead of being moved to the part it varies in, where the driver may have no loop or accumulator for it.
 
-### 8.4 An aggregation without state
+### 8.4 No state in the objects sciline provides
 
-An earlier draft put member tables with groups, the held contributions (matched to rows by comparing values), a held per-member frontier, and invalidation rules in `__setitem__` into the aggregation.
-It rebuilt the map/reduced pipeline in another form, and it was the hardest part of the design to reason about: to predict the cost of a parameter change, one had to know which of five held things read the key.
+An earlier draft put member tables with groups, the held contributions, a held per-member frontier, and invalidation rules in `__setitem__` into an aggregation object.
+It rebuilt the map/reduced pipeline in another form: to predict the cost of a parameter change, one had to know which of five held things read the key.
 
-The per-member frontier was meant to avoid reloading runs when a parameter changes.
-On LoKI it gave no measurable benefit: the wavelength conversion reads the parameter `WavelengthBins`, so the per-member frontier lies upstream of the conversion and holding it saves little.
-Holding more would require a second tier of parameters declared as rarely changing, which is what `StreamProcessor` calls context.
-The draft was stripped down to the current `Aggregation`, and the package object (section 6.1) does not take parameter changes: a new parameter value means a new object.
+The per-member frontier was meant to avoid reloading runs when a parameter changes, but on LoKI it gave no measurable benefit: the wavelength conversion reads the parameter `WavelengthBins`, so the frontier lies upstream of the conversion.
+The package object (section 6.1) therefore does not take parameter changes: a new parameter value means a new object.
 
-A later variant held, within one `compute`, the work that depends on a single member key, once per distinct value, so that a flat runs-times-banks table would cost what map/reduce costs.
-It was dropped for the same reason.
-What it holds is decided by the shape of the graph, not by the author: if the per-bank work reads a whole loaded run, every run stays in memory until the table is done.
-It also made `compute` behave differently from a loop over `contribute`, and depended on member values being hashable.
+A later variant held, within one computation over a flat runs-times-banks table, the work that depends on a single member key, once per distinct value.
+What it held was decided by the shape of the graph, not by the author: if the per-bank work reads a whole loaded run, every run stays in memory until the table is done.
 The driver in section 6.3 holds the same values for one run at a time, visibly.
 
-### 8.5 No bridge back into a pipeline
+### 8.5 No `Aggregation`
+
+`Aggregation` packaged a contribute stage, accumulator factories, and a finalize stage, with `contribute`, `combine`, `finalize`, and `compute(table)`.
+It was prototyped and dropped:
+
+- No real driver used its finalize stage or `compute`: the SANS finalize reads the accumulation keys of two run types, the per-run finalize of Bifrost also reads run-level values, and nested drivers push inside their own loops instead of calling `combine`.
+- `compute(table)` invited the flat runs-times-banks table, which counts a run-level accumulation key once per bank without an error.
+- Its one guarantee, that a key not depending on the members is not accumulated, is `split` with a single part, or `Stage.dynamic_outputs`.
+
+Its accumulator factories remain as `Buffered` and `Reduced`, and their reason remains: a driver makes new accumulators per computation (section 4).
+
+### 8.6 No bridge back into a pipeline
 
 Another draft had `as_pipeline()`, which added providers for the accumulation keys so that the `with_*` helpers could keep returning a pipeline.
-It was dropped for three reasons.
-It turned out to be the only way two aggregations could be composed, so it was the actual mechanism, not a convenience.
-It fixed the member table when the pipeline was built.
-And it hid a loop inside a provider, with no per-member errors, progress, or visualization.
+It was the only way two aggregations could be composed, so it was the actual mechanism, not a convenience; it fixed the members when the pipeline was built; and it hid a loop inside a provider, with no per-member errors, progress, or visualization.
 The trap to avoid remains: a hand-written provider that runs a pipeline.
 
-### 8.6 Not nested workflows
+### 8.7 One parent per part
 
-Nested workflows, sub-workflows with their own parameters inside a node of an outer workflow, were considered and rejected earlier.
-The problems were plumbing, since parameters had to be passed across boundaries, and opacity, since a boundary hid what was inside.
+Two cases would need a part with several parents:
 
-Here the author writes one flat graph.
-Stages are cut from it by the caller, from the keys the caller names, at the time they are used.
-Every parameter is set on the flat pipeline and reaches every stage, and nothing is added to the author's graph.
-Composition across stages is ordinary Python with connectors in between, so no graph contains another graph.
+- Work that depends on the bank alone, held across all runs; with runs as the outer level, it is computed once per run and bank.
+- Context keys updated independently in `StreamProcessor`; with one context part, any update recomputes all context-derived values (section 6.6).
 
-### 8.7 Names
+Both cost compute only, and little: the per-bank lookup table in LoKI is cheap, and the extra context work in esslivedata is at most one rebuild of the detector projection on a rare update.
+Several parents would make the owner of a value ambiguous when it depends on both, and holding values across all iterations of another loop is a memory decision that belongs to the driver.
 
-- **Aggregation** and **contribute/combine/finalize**, as in Spark, Flink, Beam, and pandas.
-  `fold` was avoided because it means reshaping in scipp.
-- **Accumulator** for the stateful object, as in Beam, Flink, and Spark.
+### 8.8 Default scheduler
+
+`scheduler_or_default` lives in `sciline.task_graph` and looks up `DaskScheduler` in that module on each call, for pipelines and stages alike.
+esslivedata replaces `sciline.task_graph.DaskScheduler` to select its scheduler, including for the calls inside `StreamProcessor` that it cannot pass a scheduler to; a sciline test checks that this changes the default of both.
+A public way to set the default scheduler would be cleaner, and should come before esslivedata relies on the replacement for stages.
+
+### 8.9 Not nested workflows
+
+Nested workflows, sub-workflows with their own parameters inside a node of an outer workflow, were rejected earlier for plumbing (parameters passed across boundaries) and opacity (a boundary hid what was inside).
+Here the author writes one flat graph, and stages are cut from it by the caller, from the keys the caller names.
+Every parameter is set on the flat pipeline and reaches every stage, and composition across stages is ordinary Python, so no graph contains another graph.
+
+### 8.10 Names
+
+- **Accumulator**, **contribution**, and *contribute*/*combine*, as in Beam, Flink, and Spark, and in essapps; `fold` was avoided because it means reshaping in scipp.
 - **Accumulation key**, matching the essapps term.
 - `Forwarder` is the working name in ess.reduce; the final name is ess.reduce's decision.
 
@@ -477,34 +467,41 @@ Composition across stages is ordinary Python with connectors in between, so no g
 
 ### Unit tests
 
-The prototype is in `src/sciline/stage.py` and `src/sciline/aggregation.py`, tested in `tests/stage_test.py` and `tests/aggregation_test.py`.
+The implementation is in `src/sciline/stage.py` and `src/sciline/accumulators.py`, tested in `tests/stage_test.py`, `tests/split_test.py`, and `tests/accumulators_test.py`.
 It runs on sciline `main`.
-On the generics branch all tests also pass except the two that aggregate over a generic key; these fail in a check inside `map` and would pass once `map` is removed.
+An earlier version of the stage tests was run on the generics branch and passed; `split` has not been run there.
 
 The tests cover:
 
-- **Stage:** static part computed once and dynamic part per call; an intermediate input cuts off its ancestors; inputs the outputs do not need are rejected; pass-through of an output that is an input; snapshot behaviour; `warm` computes shared work once, skips warm stages, and rejects stages that compute a shared key differently; concurrent calls compute the static part once; an expensive load before a cheap parameter (the shape of tuning in essapps).
-- **Accumulators:** push order, the first push as result, reading without pushes.
-- **Aggregation:** equal to a manual loop; two accumulation keys with different accumulators; a two-column member table; a key that does not depend on the members; members the accumulation keys do not need are rejected; the three steps called separately, with chained combining; no outputs; grouping with pandas; snapshot of parameters and graph; `compute` pushes each contribution before making the next; generic keys with `TypeVar` providers; `compute_members`.
-- **Composition:** runs times banks with a per-run stage (section 6.3); two aggregations sharing a finalize stage; the `StreamProcessor` shape with a context update.
+- **Stage:** static part computed once and dynamic part per call; an intermediate input cuts off its ancestors; inputs the outputs do not need are rejected; pass-through of an output that is an input; snapshot behaviour; `warm` computes shared work once, skips warm stages, and rejects stages that compute a shared key differently; concurrent calls compute the static part once; an expensive load before a cheap parameter (the shape of tuning in essapps); the default scheduler follows a replacement of `sciline.task_graph.DaskScheduler`; the `StreamProcessor` shape with a context update.
+- **split:** three nested levels give the result of flat computes; a value is computed by the deepest level it depends on, also skipping a level; a part under a part after combining reads from it (the cut at the accumulation keys; this test fails without the cut); a value that depends on no part is held; outputs that do not vary in their part, outputs that depend on no part, and reads from a non-ancestor are rejected.
+- **Accumulators:** push order, the first push as result, reading without pushes, pushing combined values gives the same result.
+
+### Nested drivers
+
+Prototype drivers with `split` ran on fake workflows with the dependency structure of esssans and Bifrost and the features of `StreamProcessor`, checked against plain loops over `Pipeline.compute`:
+
+| Case | Result | Provider calls | Driver lines |
+|---|---|---|---|
+| LoKI: 3 sample and 2 background runs times 4 banks, shared final stage | equal | ideal, except the per-bank lookup table: 20 calls instead of 4, as in the hand-written driver | 21 (hand-written: 27, derived by hand-written helpers: 39) |
+| Bifrost: 2 runs times 3 triplets, per-run finalize, concatenation over runs | equal | ideal | 19 (hand-written: 32 and 34) |
+| `StreamProcessor`: two dynamic keys in separate chunks, a context key, a context-only target, `allow_bypass` | equal to `ess.reduce.streaming.StreamProcessor` | context work once per update | about 40 for the class |
 
 ### LoKI multi-run reduction
 
 `loki_validation.py`, next to this document, runs the esssans multi-run test workflow with one mask file, two sample runs, and two background runs.
 
 - **Reference:** `with_pixel_mask_filenames`, `with_sample_runs`, and `with_background_runs`, using map/reduce.
-- **Prototype:** `SansReduction` (section 6.1) with two aggregations on the flat pipeline, and the masks as a list parameter (section 6.4).
+- **Prototype:** `SansReduction` (section 6.1) with a contribute stage per run type and one finalize stage on the flat pipeline, and the masks as a list parameter (section 6.4).
 
 Results:
 
 - `BackgroundSubtractedIofQ` and `BackgroundSubtractedIofQxy` are identical to the reference (`assert_identical`).
-- Per-member `NormalizedQ` equals both a single-run computation and `compute_mapped`.
-- Calling contribute, combine, and finalize separately on plain aggregations gives the same result as `SansReduction.compute`.
-- Provider call counts equal the reference, including a single read of the mask file.
-  This requires `warm` over all three stages; without it, each stage reads the file.
-- Wall time with the naive scheduler: 6.9 s for the prototype, 7.2 s for the reference.
-  With sciline's default dask scheduler the reference is about 1.7 s faster, because the single graph computes the two sample runs in parallel threads.
-  In the prototype this parallelism would be up to the caller (by mapping `contribute` over the runs) and is not used.
+- Per-run `NormalizedQ` equals both a single-run computation and `compute_mapped`.
+- Contributing, combining, and finalizing as separate calls, with the sample runs combined as a chain, gives the same result as `SansReduction.compute`.
+- Provider call counts equal the reference, including a single read of the mask file, which requires `warm` over all three stages.
+- Wall time with the naive scheduler: 6.9 to 7.3 s for the prototype and 7.5 s for the reference, in two runs.
+  With sciline's default dask scheduler the reference is about 1.7 s faster, because the single graph computes the two sample runs in parallel threads; over stages this parallelism is up to the caller.
 - Adding a second sample run after computing with one costs one contribution: one more `apply_pixel_masks` call and no second read of the mask file.
 - Changing `QBins` means a new `SansReduction`, which makes the same provider calls as the reference.
 
@@ -514,25 +511,25 @@ Not validated: the rewrite of `StreamProcessor` against its real tests.
 
 ### What changes for each project
 
-- **sciline:** adds `Stage`, `warm`, `Accumulator`, `Buffered`, `Reduced`, `Aggregation`, `compute_members`, and `Pipeline.provide`, and later removes what section 7 lists.
-  `Aggregation` belongs in sciline because it is mechanism, not policy: it holds no contributions, no member table, and no invalidation rules, and users outside ESS need a documented replacement for `map(...).reduce(...)`.
-  It ships without an "experimental" label; the staged rollout below is its trial period.
+- **sciline:** adds `Stage`, `warm`, `Part`, `split`, `Accumulator`, `Buffered`, `Reduced`, and `Pipeline.provide`, and later removes what section 7 lists.
+  `split` belongs in sciline because it needs the dependency graph of the pipeline, and users outside ESS need a documented replacement for `map(...).reduce(...)`: a loop over a stage with accumulators, and `split` for nested loops.
+  No "experimental" label; the staged rollout below is the trial period.
   `Stage` also needs a `reporter` argument, so that progress reaches the ESS widgets.
 - **ess.reduce:** the accumulators satisfy `sciline.Accumulator` once `maybe_hist` moves out of their base class, and a `Forwarder` is added.
-  `StreamProcessor` is rewritten on `Stage` against its existing tests (section 6.6).
+  `StreamProcessor` is rewritten on `split` against its existing tests (section 6.6).
   `parameter_mappers`, which maps a list-valued parameter to a `with_*` helper that returns a pipeline, is replaced by a common interface of the package objects (section 11).
   `get_parameters` is unaffected, because it works on the flat pipeline.
 - **Reduction packages** (esssans, essreflectometry, essspectroscopy, essdiffraction, essnmx): the `with_*` helpers that fold are replaced by package objects, built from a configured pipeline, on which users set members and compute (section 6.1).
   Notebooks and tests change accordingly, and `visualize(compact=)` is dropped from notebooks.
   Specific points:
   - The pixel-mask folds in esssans and essdiffraction become a list parameter with providers (section 6.4).
-  - `with_banks` in esssans, which maps without reducing, becomes a loop or `compute_members`.
-  - essreflectometry drops the `try/except` around each reduce, since `accumulation_keys` reports keys that are not accumulated, and its `BatchProcessor` loses the fallback for mapped pipelines.
+  - `with_banks` in esssans, which maps without reducing, becomes a loop over a stage.
+  - essreflectometry drops the `try/except` around each reduce: `Stage.dynamic_outputs` lists the keys that vary per run, and `split` rejects the others. Its `BatchProcessor` loses the fallback for mapped pipelines.
   - In bifrost, `NeXusData` depends on the run, so a bank fold inside a multi-run reduction sits inside per-run work.
-    The package object uses the driver of section 6.3, with the triplets combined per run and the runs combined after.
-    A list parameter with a provider that loops over the triplets would hide the loop inside a provider (section 8.5).
-- **esslivedata:** the bifrost bank fold becomes an `Aggregation` computed before the `StreamProcessor` is built (section 6.5).
-- **essapps:** the binding wraps the package objects and their aggregations instead of building its own (section 6.7).
+    The package object uses the parts of section 6.3, with the triplets combined per run and the runs combined after.
+    A list parameter with a provider that loops over the triplets would hide the loop inside a provider (section 8.6).
+- **esslivedata:** the bifrost bank fold becomes a loop over a stage with an accumulator, computed before the `StreamProcessor` is built (section 6.5).
+- **essapps:** the binding wraps the package objects and their stages instead of building its own (section 6.7).
 
 ### Findings of the survey that affect the migration
 
@@ -546,15 +543,17 @@ Not validated: the rewrite of `StreamProcessor` against its real tests.
 - essnmx notebooks import `cyclebane.graph.NodeName` and `IndexValues` directly to name mapped nodes.
 - essimaging uses map/reduce only through `visualize(compact=)` in two notebooks.
 - esslivedata pins `cyclebane>=26.9.0` directly, for a leak with self-referential graphs; the pin goes when sciline drops cyclebane.
+- esslivedata replaces `sciline.task_graph.DaskScheduler` to select its scheduler and checks at service startup that the replacement takes effect (section 8.8).
 - Tracking: one issue in scipp/sciline for the sciline releases, one in scipp/ess for ess.reduce and the reduction packages.
 
 ### Order
 
-1. sciline releases the additive part in a minor version, with the user guide on stages and aggregations.
+1. sciline releases the additive part in a minor version, with the user guide on stages.
 2. The packages migrate one at a time, each in its own pull request, while map/reduce still exists.
    esssans goes first, because it is the validated case and sets the pattern for package objects and for the interface that replaces `parameter_mappers`.
    The other packages depend only on the additive release and can then migrate in parallel.
    The `StreamProcessor` rewrite follows independently, but needs `Pipeline.provide` and the `reporter` argument of `Stage` in a sciline release first.
+   It must keep honouring esslivedata's replacement of `sciline.task_graph.DaskScheduler`, or sciline first offers a public way to set the default scheduler and esslivedata switches to it.
    esslivedata follows the `StreamProcessor` rewrite through the essreduce version bump.
 3. The last minor release of sciline deprecates `map`, `reduce`, `compute_mapped`, `get_mapped_node_names`, `constraints=`, and `visualize(compact=)`, once esslivedata has migrated.
 4. Once no ESS package or esslivedata uses map/reduce, a major release of sciline removes it together with cyclebane, and the PEP 695 generics land.
@@ -563,11 +562,12 @@ Not validated: the rewrite of `StreamProcessor` against its real tests.
 
 - **One package object per package, or one generic object?**
   The widgets need a common interface (set a parameter, set the members, compute).
-  Either each package object implements it, or one generic object is built from a registry that maps member keys to accumulation keys.
-  This is decided when the second package migrates, when it is clear how much code the package objects share.
+  Either each package object implements it, or one generic object is built from a registry that maps member keys to accumulation keys; this is decided when the second package migrates.
+- **Which run's detector IDs do the esssans background masks use?**
+  `DetectorMasks` reads the detector IDs of the sample run set on the pipeline, and the background runs read it too (section 6.1).
+  With several sample runs this is not defined, and `split` rejects it; esssans decides when it migrates, for example detector IDs from the geometry or from a run chosen by a parameter.
 - **Static work across processes.**
-  Stages in one process share their static work through `warm`.
-  A contribute call in a short-lived process recomputes it.
+  Stages in one process share their static work through `warm`; a contribute call in a short-lived process recomputes it.
   This is the cost that essapps estimates for its stateless model of interactive work, not a new cost.
 - **`sciline.v2` or a major release?**
   A `v2` namespace would let esslivedata and external users keep the old `Pipeline` next to the new one.

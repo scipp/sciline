@@ -1,11 +1,11 @@
-"""Validate the Aggregation prototype on the esssans LoKI multi-run reduction.
+"""Validate stages and accumulators on the esssans LoKI multi-run reduction.
 
 Reference: with_pixel_mask_filenames + with_sample_runs + with_background_runs
 (sciline map/reduce). Prototype: SansReduction, the object esssans would return
-instead of a map/reduced pipeline, holding one Aggregation per run type, their
-shared finalize stage, and the contributions; the pixel masks are a
-list parameter read by one provider instead of an aggregation, since the point at
-which they would be combined sits inside the per-run work.
+instead of a map/reduced pipeline, holding one contribute stage per run type, their
+shared finalize stage, and the contributions; the pixel masks are a list parameter
+read by one provider instead of a combined value, since the point at which they
+would be combined sits inside the per-run work.
 
 Run from this directory with
     python loki_validation.py
@@ -16,6 +16,7 @@ Run from this directory with
 from __future__ import annotations
 
 import time
+from collections.abc import Iterable
 from typing import Any, NewType
 
 import ess.loki.data  # noqa: F401
@@ -57,7 +58,7 @@ from ess.sans.workflow import _merge, merge_contributions
 from scipp.testing import assert_allclose, assert_identical
 
 import sciline
-from sciline import Aggregation, Buffered, Stage, compute_members, warm
+from sciline import Buffered, Stage, warm
 
 OUTPUTS = (BackgroundSubtractedIofQ, BackgroundSubtractedIofQxy)
 SCHEDULER = sciline.scheduler.NaiveScheduler()
@@ -157,6 +158,29 @@ def accumulators_for(run_type: type) -> dict[Any, Any]:
     }
 
 
+def contribute_stage(pipeline: sciline.Pipeline, run_type: type) -> Stage:
+    stage = Stage(
+        pipeline,
+        outputs=tuple(accumulators_for(run_type)),
+        inputs=(Filename[run_type],),
+        scheduler=SCHEDULER,
+    )
+    # A key that does not vary per run would be pushed once per run.
+    if stage.dynamic_outputs != stage.outputs:
+        raise ValueError(
+            f'Not varying per run: {set(stage.outputs) - set(stage.dynamic_outputs)}'
+        )
+    return stage
+
+
+def combine(run_type: type, contributions: Iterable[dict[Any, Any]]) -> dict[Any, Any]:
+    acc = {k: make() for k, make in accumulators_for(run_type).items()}
+    for contribution in contributions:
+        for k, a in acc.items():
+            a.push(contribution[k])
+    return {k: a.value for k, a in acc.items()}
+
+
 def show(label: str, t0: float) -> dict[str, int]:
     print(f'  {label}: {time.perf_counter() - t0:.1f} s, calls {calls}')
     return dict(calls)
@@ -165,13 +189,9 @@ def show(label: str, t0: float) -> dict[str, int]:
 class SansReduction:
     """What esssans would return instead of a map/reduced pipeline.
 
-    It does two things that ``Aggregation.compute`` does not:
-
-    - Sample and background runs are two aggregations, one per run type, whose
-      accumulation keys feed one shared finalize stage. The finalize stage of a
-      single aggregation reads only that aggregation's accumulation keys.
-    - Contributions are held by filename, so adding a run computes only the new
-      run's contribution, and removing a run recomputes nothing.
+    Sample and background runs each have a contribute stage, whose outputs feed one
+    shared finalize stage. Contributions are held by filename, so adding a run
+    computes only the new run's contribution, and removing a run recomputes nothing.
 
     Built from a pipeline with all parameters set; to change a parameter, build a
     new object.
@@ -184,21 +204,11 @@ class SansReduction:
         self._contributions: dict[type, dict[str, Any]] = {
             rt: {} for rt in self.run_types
         }
-        self._aggregations = {
-            rt: Aggregation(
-                pipeline,
-                members=(Filename[rt],),
-                accumulators=accumulators_for(rt),
-                scheduler=SCHEDULER,
-            )
-            for rt in self.run_types
-        }
+        self._contribute = {rt: contribute_stage(pipeline, rt) for rt in self.run_types}
         self._finalize = Stage(
             pipeline,
             outputs=OUTPUTS,
-            inputs=tuple(
-                k for agg in self._aggregations.values() for k in agg.accumulation_keys
-            ),
+            inputs=tuple(k for s in self._contribute.values() for k in s.outputs),
             scheduler=SCHEDULER,
         )
 
@@ -208,17 +218,14 @@ class SansReduction:
         self._contributions[run_type] = {f: c for f, c in held.items() if f in runs}
 
     def compute(self) -> dict[Any, Any]:
-        warm(
-            *(agg.contribute_stage for agg in self._aggregations.values()),
-            self._finalize,
-        )
+        warm(*self._contribute.values(), self._finalize)
         combined: dict[Any, Any] = {}
-        for run_type, agg in self._aggregations.items():
+        for run_type, stage in self._contribute.items():
             held = self._contributions[run_type]
             for run in self._runs[run_type]:
                 if run not in held:
-                    held[run] = agg.contribute({Filename[run_type]: run})
-            combined |= agg.combine(held.values())
+                    held[run] = stage.compute({Filename[run_type]: run})
+            combined |= combine(run_type, held.values())
         return self._finalize.compute(combined)
 
 
@@ -255,13 +262,13 @@ def main() -> None:
     ref_calls = show('reference', t0)
     calls.clear()
 
-    # --- Prototype: the package object over two aggregations --------------------
+    # --- Prototype: the package object over stages and accumulators --------------
     flat = base.copy()
     flat.insert(read_mask_files)
     flat.insert(detector_masks)
     flat[PixelMaskFilenames] = tuple(masks)
-    # Filename[SampleRun] stays set on the pipeline: it is the member key of the
-    # sample aggregation, and an ordinary parameter for the background aggregation,
+    # Filename[SampleRun] stays set on the pipeline: it is the input of the sample
+    # contribute stage, and an ordinary parameter for the background stage,
     # whose DetectorMasks read the detector IDs of that one run (as in the reference).
     t0 = time.perf_counter()
     reduction = SansReduction(flat)
@@ -291,12 +298,11 @@ def main() -> None:
 
     # --- Per-member intermediate ----------------------------------------------
     key = NormalizedQ[SampleRun, Numerator]
-    members = compute_members(
-        flat,
-        members=(Filename[SampleRun],),
-        key=key,
-        table={i: {Filename[SampleRun]: f} for i, f in enumerate(sample_runs)},
-    )
+    per_run = Stage(flat, outputs=(key,), inputs=(Filename[SampleRun],))
+    members = {
+        i: per_run.compute({Filename[SampleRun]: f})[key]
+        for i, f in enumerate(sample_runs)
+    }
     single = sans.with_pixel_mask_filenames(base, masks)
     print('per-member NormalizedQ[SampleRun, Numerator] vs single-run compute:')
     for (m, value), filename in zip(members.items(), sample_runs, strict=True):
@@ -307,36 +313,31 @@ def main() -> None:
     for (m, value), (_, expected) in zip(members.items(), mapped.items(), strict=True):
         compare(f'member {m}', value, expected)
 
-    # --- Three-entry-point form, as a framework would call it -------------------
+    # --- Contribute, combine, finalize as separate calls, as a framework would ----
     calls.clear()
-    aggs = {
-        rt: Aggregation(
-            flat,
-            members=(Filename[rt],),
-            accumulators=accumulators_for(rt),
-            scheduler=SCHEDULER,
-        )
-        for rt in (SampleRun, BackgroundRun)
-    }
+    stages = {rt: contribute_stage(flat, rt) for rt in (SampleRun, BackgroundRun)}
     finalize = Stage(
         flat,
         outputs=OUTPUTS,
-        inputs=aggs[SampleRun].accumulation_keys
-        + aggs[BackgroundRun].accumulation_keys,
+        inputs=stages[SampleRun].outputs + stages[BackgroundRun].outputs,
         scheduler=SCHEDULER,
     )
-    warm(*(agg.contribute_stage for agg in aggs.values()), finalize)
-    sample = aggs[SampleRun].contribute({Filename[SampleRun]: sample_runs[0]})
+    warm(*stages.values(), finalize)
+    # Sample runs combined as a chain, one new run onto the previous result.
+    sample = stages[SampleRun].compute({Filename[SampleRun]: sample_runs[0]})
     for run in sample_runs[1:]:
-        sample = aggs[SampleRun].combine(
-            [sample, aggs[SampleRun].contribute({Filename[SampleRun]: run})]
-        )
-    background = aggs[BackgroundRun].combine(
-        aggs[BackgroundRun].contribute({Filename[BackgroundRun]: run})
-        for run in background_runs
+        new = stages[SampleRun].compute({Filename[SampleRun]: run})
+        sample = combine(SampleRun, [sample, new])
+    background_stage = stages[BackgroundRun]
+    background = combine(
+        BackgroundRun,
+        (
+            background_stage.compute({Filename[BackgroundRun]: r})
+            for r in background_runs
+        ),
     )
     staged = finalize.compute({**sample, **background})
-    print(f'three-entry-point form (calls {calls}):')
+    print(f'separate calls (calls {calls}):')
     for key in OUTPUTS:
         compare(key.__name__, staged[key], results[key])
 

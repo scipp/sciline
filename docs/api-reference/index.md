@@ -17,8 +17,8 @@
    scheduler.NaiveScheduler
    TaskGraph
    Stage
+   Part
    Accumulator
-   Aggregation
    Buffered
    Reduced
    HandleAsBuildTimeException
@@ -33,8 +33,8 @@
    :recursive:
 
    compute_mapped
-   compute_members
    get_mapped_node_names
+   split
    visualize_stages
    warm
 ```

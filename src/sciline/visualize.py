@@ -112,8 +112,6 @@ HELD_STYLE = {'style': 'filled', 'fillcolor': '#e8e8e8'}
 FRONTIER_STYLE = {'style': 'filled', 'fillcolor': '#e8e8e8', 'penwidth': '2.5'}
 INPUT_STYLE = {'style': 'filled', 'fillcolor': '#90ee90', 'penwidth': '2.5'}
 DYNAMIC_STYLE = {'style': 'filled', 'fillcolor': '#d4f4d4'}
-ACCUMULATION_STYLE = {'style': 'filled', 'fillcolor': '#ffb347', 'shape': 'cylinder'}
-FINALIZE_STYLE = {'style': 'filled', 'fillcolor': '#dda0dd'}
 OUTPUT_STYLE = {'peripheries': '2'}
 
 

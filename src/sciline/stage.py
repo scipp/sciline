@@ -8,6 +8,7 @@ from __future__ import annotations
 import threading
 from collections.abc import Iterable, Mapping, Sequence
 from contextlib import ExitStack
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 import networkx as nx
@@ -261,8 +262,8 @@ def visualize_stages(
     """Draw the keys that several stages use, styling the nodes of each part.
 
     Inputs that no stage computes are drawn as parameters. The styles used by
-    :py:meth:`Stage.visualize` and :py:meth:`Aggregation.visualize` are in
-    :py:mod:`sciline.visualize`, for example ``sciline.visualize.INPUT_STYLE``.
+    :py:meth:`Stage.visualize` are in :py:mod:`sciline.visualize`, for example
+    ``sciline.visualize.INPUT_STYLE``.
 
     Parameters
     ----------
@@ -360,3 +361,138 @@ def warm(*stages: Stage) -> None:
         for stage in cold:
             stage._static = {k: values[k] for k in stage._frontier}
             stage._warm = True
+
+
+@dataclass(frozen=True, eq=False)
+class Part:
+    """A stage of a driver's loop, for :py:func:`split`.
+
+    The driver supplies the values of ``inputs`` on each iteration of the part's loop,
+    or on each update of a stream. ``parent`` is the part of the enclosing loop, whose
+    values for the current iteration the driver also holds. Parts compare by
+    identity.
+    """
+
+    inputs: tuple[Key, ...]
+    """Keys whose values the driver supplies on each iteration."""
+    outputs: tuple[Key, ...] = ()
+    """Keys the driver needs on each iteration, such as accumulation keys. Each must
+    depend on ``inputs``."""
+    parent: Part | None = field(default=None, repr=False)
+    """The part of the enclosing loop, if any."""
+
+    def _path(self) -> tuple[Part, ...]:
+        return (*(self.parent._path() if self.parent else ()), self)
+
+
+def split(
+    pipeline: Pipeline, *parts: Part, scheduler: Scheduler | None = None
+) -> tuple[Stage, ...]:
+    """Build a stage per part of nested loops, holding per-iteration work per level.
+
+    A part reads values that do not depend on its inputs. Each such value is
+    computed by the deepest ancestor whose inputs it depends on, once per iteration
+    of that ancestor's loop, and passed to the part as an input. A value that
+    depends on no part's inputs is held by the stage that reads it, as by any
+    :py:class:`Stage`. Dependencies are taken with the graph cut at the inputs of
+    the part and its ancestors: a part whose inputs are accumulation keys, such as
+    one that runs after combining the members of an inner loop, does not depend on
+    the inner loop's inputs.
+
+    The stage of a part takes the values it reads from its ancestors and the part's
+    inputs. Its outputs are those of the part, then the values its descendants read
+    from it. The driver pushes only the outputs of the part.
+
+    Parameters
+    ----------
+    pipeline:
+        Pipeline with all parameters set that the outputs need, except the inputs of
+        the parts.
+    parts:
+        The parts, including the ancestors of each.
+    scheduler:
+        Scheduler for all stages. If not given,
+        :py:class:`sciline.scheduler.DaskScheduler` is used if dask is installed,
+        otherwise :py:class:`sciline.scheduler.NaiveScheduler`.
+
+    Returns
+    -------
+    :
+        A stage per part, in the order of ``parts``.
+
+    Raises
+    ------
+    ValueError
+        If the ancestor of a part is not given, if a part has no outputs and no
+        descendant reads from it, if an output of a part does not depend on the
+        part's inputs (it would be pushed once per iteration of a loop that it does
+        not vary in), or if a part reads a value that depends on the inputs of a part
+        that is not its ancestor.
+    """
+    for part in parts:
+        if any(p not in parts for p in part._path()):
+            raise ValueError(f'An ancestor of {part} is not among the parts')
+    targets = tuple(dict.fromkeys(k for p in parts for k in (*p.outputs, *p.inputs)))
+    full = _dependency_graph(
+        to_task_graph(pipeline, targets=targets, handler=HandleAsComputeTimeException())
+    )
+    all_inputs = {k for p in parts for k in p.inputs}
+    from_ancestors: dict[Part, list[Key]] = {p: [] for p in parts}
+    for_descendants: dict[Part, list[Key]] = {p: [] for p in parts}
+    # Descendants first, so that the outputs of a part are known when it is reached.
+    for part in sorted(parts, key=lambda p: len(p._path()), reverse=True):
+        path = part._path()
+        path_inputs = {k for p in path for k in p.inputs}
+        deps = _cut(full, path_inputs)
+        constant = [k for k in part.outputs if not _upstream(deps, k) & set(part.inputs)]
+        if constant:
+            owners = ', '.join(
+                f'{k} on {_owner(deps, k, path[:-1]) or "no part"}' for k in constant
+            )
+            raise ValueError(
+                f'Outputs {constant} of {part} do not depend on its inputs. '
+                f'Declare each on the part whose inputs it depends on: {owners}'
+            )
+        outputs = (*part.outputs, *for_descendants[part])
+        if not outputs:
+            raise ValueError(f'{part} has no outputs and no part reads from it')
+        probe = Stage(pipeline, outputs=outputs, inputs=part.inputs)
+        for key in probe.frontier:
+            foreign = (all_inputs - path_inputs) & _upstream(deps, key)
+            if foreign:
+                raise ValueError(
+                    f'{part} reads {key}, which depends on {sorted(map(str, foreign))}, '
+                    'the inputs of a part that is not its ancestor'
+                )
+            owner = _owner(deps, key, path[:-1])
+            if owner is not None:
+                from_ancestors[part].append(key)
+                if key not in for_descendants[owner]:
+                    for_descendants[owner].append(key)
+    return tuple(
+        Stage(
+            pipeline,
+            outputs=(*p.outputs, *for_descendants[p]),
+            inputs=(*from_ancestors[p], *p.inputs),
+            scheduler=scheduler,
+        )
+        for p in parts
+    )
+
+
+def _cut(graph: nx.DiGraph, keys: Iterable[Key]) -> nx.DiGraph:
+    cut = graph.copy()
+    for key in keys:
+        if key in cut:
+            cut.remove_edges_from(list(cut.in_edges(key)))
+    return cut
+
+
+def _upstream(deps: nx.DiGraph, key: Key) -> set[Key]:
+    return nx.ancestors(deps, key) | {key} if key in deps else {key}
+
+
+def _owner(deps: nx.DiGraph, key: Key, ancestors: Sequence[Part]) -> Part | None:
+    """The deepest of the ancestors whose inputs the key depends on."""
+    upstream = _upstream(deps, key)
+    return next((p for p in reversed(ancestors) if upstream & set(p.inputs)), None)
