@@ -17,7 +17,6 @@
    scheduler.NaiveScheduler
    TaskGraph
    Stage
-   Part
    Accumulator
    Buffered
    Reduced
@@ -33,8 +32,8 @@
    :recursive:
 
    compute_mapped
+   enclose
    get_mapped_node_names
-   split
    visualize_stages
    warm
 ```

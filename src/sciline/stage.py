@@ -8,7 +8,6 @@ from __future__ import annotations
 import threading
 from collections.abc import Iterable, Mapping, Sequence
 from contextlib import ExitStack
-from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 import networkx as nx
@@ -271,7 +270,7 @@ def visualize_stages(
     show_held_ancestors: bool = True,
     **kwargs: Any,
 ) -> graphviz.Digraph:
-    """Draw the keys that several stages use, such as the stages of :py:func:`split`.
+    """Draw the keys that several stages use, such as the stages of :py:func:`enclose`.
 
     By default, the nodes that each stage computes per call are filled with a color
     per stage, labeled in the legend by the inputs of the stage. The
@@ -413,178 +412,117 @@ def warm(*stages: Stage) -> None:
             stage._warm = True
 
 
-@dataclass(frozen=True, eq=False)
-class Part:
-    """One level of a driver's loop, for :py:func:`split`.
-
-    The driver supplies the values of ``inputs`` on each iteration of the part's loop,
-    or on each update of a stream. The pipeline does not say which loop encloses
-    which; that is a choice of the driver, declared with ``parent``: the part of the
-    enclosing loop, whose values for the current iteration the driver also holds.
-    Parts compare by identity.
-    """
-
-    inputs: tuple[Key, ...]
-    """Keys whose values the driver supplies on each iteration."""
-    outputs: tuple[Key, ...] = ()
-    """Keys the driver needs on each iteration, such as accumulation keys. Each must
-    depend on ``inputs``."""
-    parent: Part | None = field(default=None, repr=False)
-    """The part of the enclosing loop, if any."""
-
-    def _path(self) -> tuple[Part, ...]:
-        return (*(self.parent._path() if self.parent else ()), self)
-
-
-def split(
-    pipeline: Pipeline, *parts: Part, scheduler: Scheduler | None = None
+def enclose(
+    pipeline: Pipeline,
+    stages: Iterable[Stage],
+    *,
+    inputs: Iterable[Key],
+    outputs: Iterable[Key] = (),
+    scheduler: Scheduler | None = None,
 ) -> tuple[Stage, ...]:
-    """Build a stage per part of nested loops, holding per-iteration work per level.
+    """Put stages inside a loop over ``inputs``.
 
-    A part reads values that do not depend on its inputs. Each such value is
-    computed by the deepest ancestor whose inputs it depends on, once per iteration
-    of that ancestor's loop, and passed to the part as an input. A value that
-    depends on no part's inputs is held by the stage that reads it, as by any
-    :py:class:`Stage`. Dependencies are taken with the graph cut at the inputs of
-    the part and its ancestors: a part whose inputs are accumulation keys, such as
-    one that runs after combining the members of an inner loop, does not depend on
-    the inner loop's inputs.
+    A stage holds the values at its frontier. Some of them may depend on ``inputs``,
+    such as the content of a file, held by a stage that loops over the banks of the
+    file. The returned outer stage computes these values from ``inputs``, once per
+    iteration of the new loop. The returned inner stages take them as inputs, so the
+    driver passes what the outer stage returned on to them. Values that do not depend
+    on ``inputs`` stay held by the stages that read them.
 
-    The stage of a part takes the values it reads from its ancestors and the part's
-    inputs. Its outputs are those of the part, then the values its descendants read
-    from it. The driver pushes only the outputs of the part, and passes everything
-    the stages of the ancestors returned to the stage of the part, which ignores the
-    values it does not use.
+    Nested loops are built from the inside out: build the stages of the innermost
+    loop, enclose them, then enclose the result. Pass every stage inside the new loop
+    each time, not only those of the next inner loop, since any of them may read a
+    value that depends on ``inputs``. Enclose all stages of a loop in one call: a
+    stage returned by ``enclose`` takes the forwarded values as inputs, and enclosing
+    it again in a loop over the same inputs does not forward them.
 
     Parameters
     ----------
     pipeline:
-        Pipeline with all parameters set that the outputs need, except the inputs of
-        the parts.
-    parts:
-        The parts, including the ancestors of each.
+        The pipeline the stages were built from.
+    stages:
+        The stages inside the new loop.
+    inputs:
+        Keys whose values the driver supplies on each iteration of the new loop.
+    outputs:
+        Keys the driver needs on each iteration of the new loop, such as accumulation
+        keys, in addition to what the inner stages read.
     scheduler:
-        Scheduler for all stages. If not given,
-        :py:class:`sciline.scheduler.DaskScheduler` is used if dask is installed,
-        otherwise :py:class:`sciline.scheduler.NaiveScheduler`.
+        Scheduler for the outer stage. The inner stages keep their schedulers.
 
     Returns
     -------
     :
-        A stage per part, in the order of ``parts``.
+        The outer stage, then the given stages rebuilt, in the given order.
 
     Raises
     ------
     ValueError
-        If a part is given twice, if the ancestor of a part is not given, if a part
-        has an input of one of its ancestors, if an output is not in the pipeline,
-        if a part has no outputs and no descendant reads from it, if an input of a
-        part is needed neither by its outputs nor by what its descendants read from
-        it, if an output of a part does not depend on the part's inputs (it would be
-        pushed once per iteration of a loop that it does not vary in), or if a part
-        reads a value that depends on the inputs of a part that is not its ancestor.
-        Messages name a part by its position in ``parts``.
+        If no stage reads a value that depends on ``inputs`` and ``outputs`` is empty,
+        or if an output of a stage depends on ``inputs`` but not on the inputs of that
+        stage. The driver would push such an output once per iteration of a loop that
+        it does not vary in.
 
     Examples
     --------
-    Sum ``Numerator`` and ``Denominator`` over the detector banks of several runs,
-    loading each run once:
+    Sum ``Total`` over the detector banks of several files, reading each file once:
 
     .. code-block:: python
 
-        run = Part(inputs=(Filename,))
-        bank = Part(inputs=(Bank,), outputs=(Numerator, Denominator), parent=run)
-        final = Part(inputs=(Numerator, Denominator), outputs=(IofQ,))
-        run_stage, bank_stage, final_stage = split(pipeline, run, bank, final)
-        warm(run_stage, bank_stage, final_stage)
+        bank_stage = Stage(pipeline, outputs=(Total,), inputs=(Bank,))
+        file_stage, bank_stage = enclose(pipeline, [bank_stage], inputs=(Filename,))
 
-        acc = {key: Reduced(operator.add)() for key in bank.outputs}
+        total = Reduced(operator.add)()
         for filename in filenames:
-            held = run_stage.compute({Filename: filename})
-            for name in bank_names:
-                values = bank_stage.compute({**held, Bank: name})
-                for key in bank.outputs:
-                    acc[key].push(values[key])
-        result = final_stage.compute({k: a.value for k, a in acc.items()})
-
-    ``run_stage`` computes what the bank part reads that depends on the run alone,
-    such as the loaded run. :py:func:`visualize_stages` draws the three stages.
+            held = file_stage.compute({Filename: filename})
+            for bank in banks:
+                total.push(bank_stage.compute({**held, Bank: bank})[Total])
     """
-    if len(set(parts)) != len(parts):
-        raise ValueError('Each part must be given once')
-    name = {p: f'parts[{i}] {p}' for i, p in enumerate(parts)}
-    for part in parts:
-        if any(p not in parts for p in part._path()):
-            raise ValueError(f'An ancestor of {name[part]} is not among the parts')
-        # The part would compute what the ancestor holds, once per iteration.
-        repeated = set(part.inputs) & {k for p in part._path()[:-1] for k in p.inputs}
-        if repeated:
-            raise ValueError(
-                f'{name[part]} has inputs {sorted(repeated, key=str)} of an ancestor'
-            )
-    targets = tuple(dict.fromkeys(k for p in parts for k in p.outputs))
-    unknown = [k for k in targets if k not in pipeline.underlying_graph]
-    if unknown:
-        raise ValueError(f'Outputs {unknown} are not in the pipeline')
-    full = _dependency_graph(
-        to_task_graph(pipeline, targets=targets, handler=HandleAsComputeTimeException())
+    stages = tuple(stages)
+    inputs = tuple(inputs)
+    outputs = tuple(outputs)
+    frontier = tuple(dict.fromkeys(k for s in stages for k in s.frontier))
+    graph = to_task_graph(
+        pipeline, targets=frontier, handler=HandleAsComputeTimeException()
     )
-    all_inputs = {k for p in parts for k in p.inputs}
-    from_ancestors: dict[Part, list[Key]] = {p: [] for p in parts}
-    for_descendants: dict[Part, list[Key]] = {p: [] for p in parts}
-    # Descendants first, so that the outputs of a part are known when it is reached.
-    for part in sorted(parts, key=lambda p: len(p._path()), reverse=True):
-        path = part._path()
-        path_inputs = {k for p in path for k in p.inputs}
-        deps = _cut(full, path_inputs)
-        constant = [
-            k for k in part.outputs if not _upstream(deps, k) & set(part.inputs)
-        ]
+    deps = _dependency_graph(graph)
+    varying = [k for k in frontier if _upstream(deps, k) & set(inputs)]
+    if not varying and not outputs:
+        raise ValueError(f'No stage reads a value that depends on {inputs}')
+    for i, stage in enumerate(stages):
+        constant = [k for k in stage.outputs if k in varying]
         if constant:
-            owners = {k: _owner(deps, k, path[:-1]) for k in constant}
-            advice = ', '.join(
-                f'{k} on {name[o]}' for k, o in owners.items() if o is not None
-            )
             raise ValueError(
-                f'Outputs {constant} of {name[part]} do not depend on its inputs.'
-                + (f' Declare them on an ancestor: {advice}' if advice else '')
+                f'Outputs {constant} of stages[{i}] depend on {inputs} but not on '
+                f'the inputs of that stage. Remove them from its outputs and pass '
+                'them as outputs of the enclosing stage'
             )
-        outputs = (*part.outputs, *for_descendants[part])
-        if not outputs:
-            raise ValueError(f'{name[part]} has no outputs and no part reads from it')
-        probe = Stage(
-            pipeline, outputs=outputs, inputs=part.inputs, scheduler=scheduler
-        )
-        for key in probe.frontier:
-            foreign = (all_inputs - path_inputs) & _upstream(deps, key)
-            if foreign:
-                raise ValueError(
-                    f'{name[part]} reads {key}, which depends on '
-                    f'{sorted(foreign, key=str)}, '
-                    'the inputs of a part that is not its ancestor'
-                )
-            owner = _owner(deps, key, path[:-1])
-            if owner is not None:
-                from_ancestors[part].append(key)
-                if key not in (*owner.outputs, *for_descendants[owner]):
-                    for_descendants[owner].append(key)
-    return tuple(
+    outer = Stage(
+        pipeline,
+        outputs=(*outputs, *(k for k in varying if k not in outputs)),
+        inputs=inputs,
+        scheduler=scheduler,
+    )
+    inner = tuple(
         Stage(
             pipeline,
-            outputs=(*p.outputs, *for_descendants[p]),
-            inputs=(*from_ancestors[p], *p.inputs),
-            scheduler=scheduler,
+            outputs=s.outputs,
+            inputs=(*(k for k in varying if k in s.frontier), *s.inputs),
+            scheduler=s._scheduler,
         )
-        for p in parts
+        for s in stages
     )
-
-
-def _cut(graph: nx.DiGraph, keys: Iterable[Key]) -> nx.DiGraph:
-    cut = graph.copy()
-    for key in keys:
-        if key in cut:
-            cut.remove_edges_from(list(cut.in_edges(key)))
-    return cut
+    # Stages are snapshots, so a pipeline changed since the given stages were built
+    # would give stages that disagree with them.
+    built = {k: p for s in stages for k, p in _graph(s).items()}
+    for stage in (outer, *inner):
+        for key, provider in _graph(stage).items():
+            if key in built and not _same_provider(built[key], provider):
+                raise ValueError(
+                    f'The pipeline computes {key} differently than when the stages '
+                    'were built'
+                )
+    return (outer, *inner)
 
 
 def _upstream(deps: nx.DiGraph, key: Key) -> set[Key]:
@@ -593,7 +531,5 @@ def _upstream(deps: nx.DiGraph, key: Key) -> set[Key]:
     return {key, *nx.ancestors(deps, key)}
 
 
-def _owner(deps: nx.DiGraph, key: Key, ancestors: Sequence[Part]) -> Part | None:
-    """The deepest of the ancestors whose inputs the key depends on."""
-    upstream = _upstream(deps, key)
-    return next((p for p in reversed(ancestors) if upstream & set(p.inputs)), None)
+def _graph(stage: Stage) -> Graph:
+    return {**stage._static_graph, **stage._dynamic_graph}
