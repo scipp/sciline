@@ -508,7 +508,7 @@ def test_stage_visualize_can_hide_held_ancestors(pipeline: sl.Pipeline) -> None:
     source: str = stage.visualize(show_held_ancestors=False).source
     assert FRONTIER_STYLE['penwidth'] in node_line(source, Calibration)
     assert 'Mask [' not in source
-    assert 'Held, computed once' not in source
+    assert 'Computed once, not kept' not in source
 
 
 def test_visualize_stages_styles_groups_given_by_caller(pipeline: sl.Pipeline) -> None:

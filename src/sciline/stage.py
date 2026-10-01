@@ -211,7 +211,7 @@ class Stage:
         return visualize_stages(
             self,
             groups={
-                'Held, computed once': (
+                'Computed once, not kept': (
                     HELD_STYLE,
                     set(self._static_graph) - set(self._frontier),
                 ),
@@ -331,7 +331,7 @@ def _groups_by_stage(
     computed = {k for stage in stages for k in stage._dynamic_graph}
     frontier = {k for stage in stages for k in stage.frontier}
     groups: dict[str, tuple[Mapping[str, str], Iterable[Key]]] = {
-        'Held, computed once': (
+        'Computed once, not kept': (
             HELD_STYLE,
             {k for stage in stages for k in stage._static_graph} - frontier,
         ),
@@ -512,8 +512,8 @@ def enclose(
         if constant:
             raise ValueError(
                 f'Outputs {constant} of stages[{i}] depend on {inputs} but not on '
-                f'the inputs of that stage. Remove them from its outputs and pass '
-                'them as outputs of the enclosing stage'
+                'the inputs of that stage. Remove them from its outputs and pass '
+                'them to enclose as outputs of the outer stage'
             )
     outer = Stage(
         pipeline,
