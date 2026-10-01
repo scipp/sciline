@@ -470,13 +470,13 @@ def test_stage_visualize_can_hide_held_ancestors(pipeline: sl.Pipeline) -> None:
     assert 'Held, computed once' not in source
 
 
-def test_visualize_stages_styles_parts_given_by_caller(pipeline: sl.Pipeline) -> None:
+def test_visualize_stages_styles_groups_given_by_caller(pipeline: sl.Pipeline) -> None:
     per_file = Stage(pipeline, outputs=(Numerator,), inputs=(Filename,))
     final = Stage(pipeline, outputs=(IofQ,), inputs=(Numerator,))
     source: str = sl.visualize_stages(
         per_file,
         final,
-        parts={'Context': ({'fillcolor': '#123456'}, (Calibration,))},
+        groups={'Context': ({'fillcolor': '#123456'}, (Calibration,))},
     ).source
     assert '#123456' in node_line(source, Calibration)
     assert 'Context' in source

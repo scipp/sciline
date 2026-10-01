@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Any
 import networkx as nx
 
 from ._provider import Provider
+from ._utils import key_name
 from .data_graph import to_task_graph
 from .handler import HandleAsComputeTimeException
 from .pipeline import Pipeline
@@ -210,7 +211,7 @@ class Stage:
 
         return visualize_stages(
             self,
-            parts={
+            groups={
                 'Held, computed once': (
                     HELD_STYLE,
                     set(self._static_graph) - set(self._frontier),
@@ -255,27 +256,31 @@ class Stage:
 
 def visualize_stages(
     *stages: Stage,
-    parts: Mapping[str, tuple[Mapping[str, str], Iterable[Key]]],
+    groups: Mapping[str, tuple[Mapping[str, str], Iterable[Key]]] | None = None,
     show_legend: bool = True,
     show_held_ancestors: bool = True,
     **kwargs: Any,
 ) -> graphviz.Digraph:
-    """Draw the keys that several stages use, styling the nodes of each part.
+    """Draw the keys that several stages use, such as the stages of :py:func:`split`.
 
-    Inputs that no stage computes are drawn as parameters. The styles used by
-    :py:meth:`Stage.visualize` are in :py:mod:`sciline.visualize`, for example
-    ``sciline.visualize.INPUT_STYLE``.
+    By default, the nodes that each stage computes per call are filled with a color
+    per stage, labeled in the legend by the inputs of the stage. The
+    held part, the inputs, and the outputs are marked as by :py:meth:`Stage.visualize`;
+    values one stage passes to another are outputs of the one and inputs of the other.
+    Inputs that no stage computes are drawn as parameters.
 
     Parameters
     ----------
     stages:
         Stages that agree on every key they share, as for :py:func:`warm`.
-    parts:
-        For each part, by its label in the legend: a graphviz node style and the
-        keys in the part. Where a key is in several parts, the styles are merged
-        in the order of the parts.
+    groups:
+        Groups of nodes to style instead of the default, each by its label in the
+        legend: a graphviz node style and the keys in the group. Where a key is in
+        several groups, the styles are merged in the order of the groups. The styles
+        used by default are in :py:mod:`sciline.visualize`, for example
+        ``sciline.visualize.INPUT_STYLE``.
     show_legend:
-        If True, add a legend with one entry per part that has a drawn node.
+        If True, add a legend with one entry per group that has a drawn node.
     show_held_ancestors:
         If False, draw the held values without what they were computed from.
     kwargs:
@@ -298,7 +303,41 @@ def visualize_stages(
     for stage in stages:
         for key in stage.inputs:
             graph.setdefault(key, Provider.parameter(None))
-    return _to_graphviz_with_parts(graph, parts, show_legend=show_legend, **kwargs)
+    if groups is None:
+        groups = _groups_by_stage(stages)
+    return _to_graphviz_with_parts(graph, groups, show_legend=show_legend, **kwargs)
+
+
+def _groups_by_stage(
+    stages: Sequence[Stage],
+) -> dict[str, tuple[Mapping[str, str], Iterable[Key]]]:
+    from .visualize import (
+        FRONTIER_STYLE,
+        HELD_STYLE,
+        INPUT_STYLE,
+        OUTPUT_STYLE,
+        STAGE_FILLS,
+    )
+
+    computed = {k for stage in stages for k in stage._dynamic_graph}
+    frontier = {k for stage in stages for k in stage.frontier}
+    groups: dict[str, tuple[Mapping[str, str], Iterable[Key]]] = {
+        'Held, computed once': (
+            HELD_STYLE,
+            {k for stage in stages for k in stage._static_graph} - frontier,
+        ),
+        'Held value': (FRONTIER_STYLE, frontier),
+    }
+    own_inputs: list[Key] = []
+    for i, stage in enumerate(stages):
+        own_inputs += [k for k in stage.inputs if k not in computed]
+        names = ', '.join(key_name(k) for k in stage.inputs)
+        label = f'Stage {i}, per call' + (f' with {names}' if names else '')
+        fill = {'style': 'filled', 'fillcolor': STAGE_FILLS[i % len(STAGE_FILLS)]}
+        groups[label] = (fill, stage._dynamic_graph)
+    groups['Input'] = (INPUT_STYLE, own_inputs)
+    groups['Output'] = (OUTPUT_STYLE, {k for stage in stages for k in stage.outputs})
+    return groups
 
 
 def _same_provider(a: Provider, b: Provider) -> bool:
@@ -432,6 +471,32 @@ def split(
         pushed once per iteration of a loop that it does not vary in), or if a part
         reads a value that depends on the inputs of a part that is not its ancestor.
         Messages name a part by its position in ``parts``.
+
+    Examples
+    --------
+    Sum ``Numerator`` and ``Denominator`` over the detector banks of several runs,
+    loading each run once:
+
+    .. code-block:: python
+
+        run = Part(inputs=(Filename,))
+        bank = Part(inputs=(Bank,), outputs=(Numerator, Denominator), parent=run)
+        final = Part(inputs=(Numerator, Denominator), outputs=(IofQ,))
+        run_stage, bank_stage, final_stage = split(pipeline, run, bank, final)
+        warm(run_stage, bank_stage, final_stage)
+
+        acc = {key: Reduced(operator.add)() for key in bank.outputs}
+        for filename in filenames:
+            held = run_stage.compute({Filename: filename})
+            from_run = {k: held[k] for k in bank_stage.inputs if k in held}
+            for name in bank_names:
+                values = bank_stage.compute({**from_run, Bank: name})
+                for key in bank.outputs:
+                    acc[key].push(values[key])
+        result = final_stage.compute({k: a.value for k, a in acc.items()})
+
+    ``run_stage`` computes what the bank part reads that depends on the run alone,
+    such as the loaded run. :py:func:`visualize_stages` draws the three stages.
     """
     if len(set(parts)) != len(parts):
         raise ValueError('Each part must be given once')

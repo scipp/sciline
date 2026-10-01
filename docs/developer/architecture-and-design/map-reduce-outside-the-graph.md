@@ -200,6 +200,8 @@ A driver over several levels, such as banks within runs, needs to know which val
   In a driver that keys its accumulators by the part's outputs, as below, getting either wrong fails loudly, with a `KeyError` or a missing input.
 - **One level.**
   `split` with a single part is a `Stage` with the output check; a driver that builds a `Stage` directly gets the check from `stage.dynamic_outputs`.
+- **Drawing.**
+  `visualize_stages(*stages)` draws the stages of a split together, with a color per stage for what it computes per call, so that the derived boundaries can be checked by eye.
 
 A driver for runs times banks:
 
@@ -494,7 +496,7 @@ An earlier version of the stage tests was run on the generics branch and passed;
 The tests cover:
 
 - **Stage:** static part computed once and dynamic part per call; an intermediate input cuts off its ancestors; inputs the outputs do not need are rejected; pass-through of an output that is an input; snapshot behaviour; `warm` computes shared work once, skips warm stages, and rejects stages that compute a shared key differently; concurrent calls compute the static part once; an expensive load before a cheap parameter (the shape of tuning in essapps); the default scheduler follows a replacement of `sciline.task_graph.DaskScheduler`; the `StreamProcessor` shape with a context update.
-- **split:** three nested levels give the result of flat computes; a value is computed by the deepest level it depends on, also skipping a level; a part under a part after combining reads from it (the cut at the accumulation keys; this test fails without the cut); a value that depends on no part is held; per-iteration work runs once per iteration of its loop; an output that a descendant also reads is output once; outputs that do not vary in their part, outputs that depend on no part, reads from a non-ancestor, unknown outputs, unneeded inputs, an input of an ancestor, and a part given twice are rejected.
+- **split:** three nested levels give the result of flat computes; a value is computed by the deepest level it depends on, also skipping a level; a part under a part after combining reads from it (the cut at the accumulation keys; this test fails without the cut); a value that depends on no part is held; per-iteration work runs once per iteration of its loop; an output that a descendant also reads is output once; outputs that do not vary in their part, outputs that depend on no part, reads from a non-ancestor, unknown outputs, unneeded inputs, an input of an ancestor, and a part given twice are rejected. `visualize_stages` fills what each stage computes with the color of that stage.
 - **Accumulators:** push order, the first push as result, reading without pushes, pushing combined values gives the same result.
 
 ### Nested drivers

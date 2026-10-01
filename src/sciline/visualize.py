@@ -113,6 +113,8 @@ FRONTIER_STYLE = {'style': 'filled', 'fillcolor': '#e8e8e8', 'penwidth': '2.5'}
 INPUT_STYLE = {'style': 'filled', 'fillcolor': '#90ee90', 'penwidth': '2.5'}
 DYNAMIC_STYLE = {'style': 'filled', 'fillcolor': '#d4f4d4'}
 OUTPUT_STYLE = {'peripheries': '2'}
+# Fill colors of the per-call parts of several stages drawn together, by stage.
+STAGE_FILLS = ('#cfe2f3', '#fce5cd', '#d9d2e9', '#fff2cc', '#f4cccc', '#d0e0e3')
 
 
 def _to_graphviz_with_parts(

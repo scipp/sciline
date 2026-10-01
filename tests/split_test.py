@@ -256,3 +256,24 @@ def test_part_with_an_input_of_an_ancestor_is_rejected(pipeline: sl.Pipeline) ->
     b = Part(inputs=(B, A), outputs=(BValue,), parent=a)
     with pytest.raises(ValueError, match=r'parts\[1\].*inputs .*A\] of an ancestor'):
         split(pipeline, a, b)
+
+
+def test_visualize_stages_fills_what_each_stage_computes_per_call(
+    pipeline: sl.Pipeline, parts: tuple[Part, ...]
+) -> None:
+    from sciline.visualize import STAGE_FILLS
+
+    stages = split(pipeline, *parts)
+    lines: list[str] = sl.visualize_stages(*stages).source.splitlines()
+
+    def style(key: type) -> str:
+        # The last statement for the node is the one that sets its style.
+        return next(
+            line for line in reversed(lines) if line.lstrip().startswith(key.__name__)
+        )
+
+    for key, fill in zip(
+        (AValue, BValue, CValue, Combined), STAGE_FILLS[:4], strict=True
+    ):
+        assert fill in style(key)
+    assert any('Stage 1, per call with AValue, B' in line for line in lines)
