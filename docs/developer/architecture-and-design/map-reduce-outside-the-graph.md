@@ -80,7 +80,9 @@ warm(stage_a, stage_b)                # compute the static parts of both in one 
   On first use, the stage computes the values at its frontier and keeps them.
   Nothing else of the static part is kept.
 - **Calls.**
-  A call must supply a value for each input and nothing else.
+  A call must supply a value for each input.
+  It must not supply a value for a key the stage uses but does not take as input, since the stage holds or computes that key itself and would ignore the value.
+  Values for keys the stage does not use are ignored, so a driver can pass on everything that the stages of enclosing loops returned.
   It computes only the dynamic part, reading the held frontier values, and returns the outputs.
   The supplied and intermediate values are released when the call returns.
 - **Pass-through.**
@@ -196,7 +198,7 @@ A driver over several levels, such as banks within runs, needs to know which val
   A part that reads a value depending on the inputs of a part that is not its ancestor raises an error: a final step after combining over runs cannot read a per-run value, since there is no single run it could come from.
 - **What the driver pushes and passes.**
   The outputs of a part's stage are the part's outputs, followed by the values its descendants read from it; the driver pushes only the part's outputs.
-  `Stage.compute` takes exactly its inputs, so the driver selects them from the results of the ancestors' stages.
+  The driver passes the results of the ancestors' stages to a stage, which ignores the values it does not use.
   In a driver that keys its accumulators by the part's outputs, as below, getting either wrong fails loudly, with a `KeyError` or a missing input.
 - **One level.**
   `split` with a single part is a `Stage` with the output check; a driver that builds a `Stage` directly gets the check from `stage.dynamic_outputs`.
@@ -211,8 +213,7 @@ acc = {Numerator: Buffered(concat)(), Denominator: Reduced(add)()}
 for filename in filenames:
     run_values = run_stage.compute({Filename: filename})
     for name in bank_names:
-        inputs = {k: run_values[k] for k in bank_stage.inputs if k in run_values}
-        out = bank_stage.compute({**inputs, Bank: name})
+        out = bank_stage.compute({**run_values, Bank: name})
         for key in bank.outputs:
             acc[key].push(out[key])
 result = final_stage.compute({k: a.value for k, a in acc.items()})

@@ -1,15 +1,15 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright (c) 2026 Scipp contributors (https://github.com/scipp)
 from collections import Counter
-from collections.abc import Hashable, Mapping
+from collections.abc import Hashable
 from typing import Any, NewType
 
 import pytest
 
 import sciline as sl
-from sciline import Part, Reduced, Stage, split, warm
+from sciline import Part, Reduced, split, warm
 from sciline.reporter import Reporter
-from sciline.typing import Graph, Key
+from sciline.typing import Graph
 
 A = NewType('A', int)  # outer loop
 B = NewType('B', int)  # middle loop
@@ -51,11 +51,6 @@ def parts() -> tuple[Part, Part, Part, Part]:
     return a, b, c, after_c
 
 
-def pick(stage: Stage, *contexts: Mapping[Key, Any]) -> dict[Key, Any]:
-    values = {k: v for c in contexts for k, v in c.items()}
-    return {k: values[k] for k in stage.inputs if k in values}
-
-
 def test_value_is_computed_by_the_deepest_level_it_depends_on(
     pipeline: sl.Pipeline, parts: tuple[Part, ...]
 ) -> None:
@@ -77,11 +72,11 @@ def test_nested_loops_give_the_result_of_flat_computes(
     for a_ in (1, 2):
         a_out = a.compute({A: a_})
         for b_ in (3, 4):
-            b_out = b.compute({**pick(b, a_out), B: b_})
+            b_out = b.compute({**a_out, B: b_})
             acc = Reduced[int](lambda x, y: x + y)()
             for c_ in (5, 6):
-                acc.push(c.compute({**pick(c, a_out, b_out), C: c_})[CValue])
-            result = after_c.compute({**pick(after_c, a_out, b_out), CValue: acc.value})
+                acc.push(c.compute({**a_out, **b_out, C: c_})[CValue])
+            result = after_c.compute({**a_out, **b_out, CValue: acc.value})
 
             p = pipeline.copy()
             p[A] = a_
@@ -185,9 +180,9 @@ def test_split_uses_given_scheduler(
     monkeypatch.setattr(sl.task_graph, 'DaskScheduler', Refusing)
     a, b, c, after_c = split(pipeline, *parts, scheduler=Recording())
     a_out = a.compute({A: 1})
-    b_out = b.compute({**pick(b, a_out), B: 2})
-    c_out = c.compute({**pick(c, a_out, b_out), C: 3})
-    after_c.compute({**pick(after_c, a_out, b_out), CValue: c_out[CValue]})
+    b_out = b.compute({**a_out, B: 2})
+    c_out = c.compute({**a_out, **b_out, C: 3})
+    after_c.compute({**a_out, **b_out, CValue: c_out[CValue]})
     assert used
 
 
@@ -212,9 +207,9 @@ def test_per_iteration_work_runs_once_per_iteration_of_its_loop() -> None:
     for a_ in range(2):
         a_out = a_stage.compute({A: a_})
         for b_ in range(3):
-            b_out = b_stage.compute({**pick(b_stage, a_out), B: b_})
+            b_out = b_stage.compute({**a_out, B: b_})
             for c_ in range(4):
-                c_stage.compute({**pick(c_stage, a_out, b_out), C: c_})
+                c_stage.compute({**a_out, **b_out, C: c_})
     assert calls == {'a_value': 2, 'b_value': 2 * 3}
 
 

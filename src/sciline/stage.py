@@ -232,7 +232,9 @@ class Stage:
         Parameters
         ----------
         values:
-            A value for each input key, and nothing else.
+            A value for each input key. Values for keys the stage does not use, those
+            not in :py:attr:`keys`, are ignored, so a driver can pass on everything
+            the stages of enclosing loops returned.
 
         Returns
         -------
@@ -242,13 +244,21 @@ class Stage:
         Raises
         ------
         ValueError
-            If the keys of ``values`` are not exactly the inputs.
+            If a value for an input is missing, or if a value is given for a key that
+            the stage uses but does not take as input. The stage holds or computes
+            such a key itself and would ignore the value.
         """
-        if set(values) != set(self._inputs):
-            raise ValueError(f'Expected values for {self._inputs}, got {tuple(values)}')
+        missing = [k for k in self._inputs if k not in values]
+        if missing:
+            raise ValueError(f'Missing values for inputs {missing}')
+        not_inputs = [k for k in values if k in self._keys and k not in self._inputs]
+        if not_inputs:
+            raise ValueError(
+                f'The stage uses {not_inputs} but does not take them as inputs'
+            )
         graph: Graph = dict(self._dynamic_graph)
-        for k, v in values.items():
-            graph[k] = Provider.parameter(v)
+        for k in self._inputs:
+            graph[k] = Provider.parameter(values[k])
         for k, v in self.static().items():
             graph[k] = Provider.parameter(v)
         return _compute(graph, self._outputs, self._scheduler)
@@ -442,7 +452,9 @@ def split(
 
     The stage of a part takes the values it reads from its ancestors and the part's
     inputs. Its outputs are those of the part, then the values its descendants read
-    from it. The driver pushes only the outputs of the part.
+    from it. The driver pushes only the outputs of the part, and passes everything
+    the stages of the ancestors returned to the stage of the part, which ignores the
+    values it does not use.
 
     Parameters
     ----------
@@ -489,9 +501,8 @@ def split(
         acc = {key: Reduced(operator.add)() for key in bank.outputs}
         for filename in filenames:
             held = run_stage.compute({Filename: filename})
-            from_run = {k: held[k] for k in bank_stage.inputs if k in held}
             for name in bank_names:
-                values = bank_stage.compute({**from_run, Bank: name})
+                values = bank_stage.compute({**held, Bank: name})
                 for key in bank.outputs:
                     acc[key].push(values[key])
         result = final_stage.compute({k: a.value for k, a in acc.items()})
