@@ -38,7 +38,7 @@ The code that needs repetition, the *driver*, cuts the pipeline into *stages*, c
                                  (accumulator or forwarder)
 ```
 
-Sciline provides the stages, `split`, which builds the stages of nested loops from one pipeline, and the `Accumulator` protocol with two accumulator factories, `Buffered` and `Reduced`.
+Sciline provides the stages, `enclose`, which puts stages inside a loop to build the stages of nested loops, and the `Accumulator` protocol with two accumulator factories, `Buffered` and `Reduced`.
 Everything else, in particular what is kept between calls and when it is discarded, is decided by the code that runs the loop.
 
 Terms used in this document:
@@ -56,7 +56,9 @@ Terms used in this document:
 | contribution | The values at the accumulation keys for one member, as a dict. |
 | contribute stage | A stage from the inputs that give a member to the accumulation keys. |
 | finalize stage | A stage from the accumulation keys to the outputs. |
-| part | One level of a driver's loop, given to `split` (`sciline.Part`): the inputs supplied per iteration, the outputs needed per iteration, and the part of the enclosing loop. |
+| loop | One level of the driver's nested loops, given by the keys whose values the driver supplies on each iteration (the `inputs` of `enclose`). |
+| outer stage | The stage that `enclose` returns for a loop. It computes, once per iteration, the values that the stages inside the loop read and that depend on the inputs of the loop. |
+| forwarded value | A value that an outer stage returns and the stages inside its loop take as input. |
 | driver | The loop that calls stages and pushes into connectors. |
 | package object | What a reduction package returns to users in place of today's map/reduced pipeline. It is a driver. |
 
@@ -160,50 +162,85 @@ The base class then adds nothing to the protocol, and a forwarder built on it do
 Their `clear` method stays an ess.reduce convention; no base class beyond the protocol is shared.
 `Accumulator` is in sciline because `Buffered` and `Reduced` return it and drivers use it to type their accumulators; `Forwarder` stays in ess.reduce because nothing in sciline returns or consumes one.
 
-## 5. `split`
+## 5. `enclose`
 
 ```python
-run = Part(inputs=(Filename,))
-bank = Part(inputs=(Bank,), outputs=(Numerator, Denominator), parent=run)
-final = Part(inputs=(Numerator, Denominator), outputs=(IofQ,))
-run_stage, bank_stage, final_stage = split(pipeline, run, bank, final)
-# run_stage:  Filename -> what the bank part reads that depends on the run
-# bank_stage: those values and Bank -> Numerator, Denominator
+bank_stage = Stage(pipeline, inputs=(Bank,), outputs=(Numerator, Denominator))
+# bank_stage holds what it reads from the run, such as the content of the file
+run_stage, bank_stage = enclose(pipeline, [bank_stage], inputs=(Filename,))
+final_stage = Stage(pipeline, inputs=(Numerator, Denominator), outputs=(IofQ,))
+# run_stage:   Filename -> what the bank stage held that depends on the run
+# bank_stage:  those values and Bank -> Numerator, Denominator
 # final_stage: Numerator, Denominator -> IofQ
 ```
 
 A driver over several levels, such as banks within runs, needs to know which values the inner level reads from the outer one, so that it computes them once per iteration of the outer loop instead of once per iteration of the inner loop.
-`split` derives this from the graph and returns one ordinary `Stage` per part.
+A stage built for the inner loop alone holds these values at its frontier.
+`enclose` takes them from the frontier and returns one ordinary `Stage` for the outer loop, followed by the given stages, rebuilt.
 
 ### Behaviour
 
-- **Parts.**
-  A `Part` names the inputs the driver supplies on each iteration of its loop, the outputs the driver needs on each iteration (usually accumulation keys), and its `parent`, the part of the enclosing loop.
-  A part may have several children, such as the per-bank work and a per-run step after the banks are combined, but only one parent (section 8.7).
-- **The deepest-level rule.**
-  A part reads values that do not depend on its inputs.
-  Each such value belongs to the deepest ancestor whose inputs it depends on.
-  That ancestor's stage outputs it, once per iteration of the ancestor's loop, and the part's stage takes it as an input; it may skip levels in between.
-  A value that depends on the inputs of no part is held by the stage that reads it, as by any stage.
-- **The cut at the inputs on the path.**
-  Dependencies are taken in the graph cut at the inputs of the part and its ancestors.
-  A per-run step after the banks are combined takes accumulation keys as inputs.
-  In the uncut graph it depends on the bank through them, because the combine happens outside the graph; cut at them, it does not.
+- **The frontier rule.**
+  `enclose(pipeline, stages, inputs=...)` takes the frontier of the given stages.
+  The values in it that depend on `inputs` are computed by the outer stage, once per iteration of the new loop, and the rebuilt stages take them as inputs.
+  The values that do not depend on `inputs` stay held by the stages that read them.
+- **From the inside out.**
+  Nested loops are built from the innermost loop outwards: build the stages of the innermost loop, enclose them, then enclose the result.
+  The order of the `enclose` calls gives the nesting; no stage names the loop that encloses it.
+  A value stays held until the first `enclose` call whose inputs it depends on, so it is computed by the deepest loop whose inputs it depends on.
+  It may skip levels:
+
+  ```python
+  bank_stage = Stage(pipeline, inputs=(Bank,), outputs=(Numerator, Denominator))
+  run_stage, bank_stage = enclose(pipeline, [bank_stage], inputs=(Filename,))
+  calibration_stage, run_stage, bank_stage = enclose(
+      pipeline, [run_stage, bank_stage], inputs=(CalibrationFilename,)
+  )
+  # bank_stage reads Calibration, which depends on CalibrationFilename alone.
+  # The first call leaves it held, the second moves it to calibration_stage.
+  ```
+- **Every stage inside the loop.**
+  Each call gets every stage inside the new loop, not only the stages of the next inner loop.
+  In the example above, the bank stage reads `Calibration` from the outermost loop directly.
+  Left out of the second call, it would keep holding `Calibration`.
+- **One call per loop.**
+  All stages of one loop go into one `enclose` call.
+  A stage returned by `enclose` takes the forwarded values as inputs.
+  Enclosing it again in a loop over the same inputs does not forward them, and the driver fails with `Missing values for inputs [...]`.
+  `enclose` cannot detect this.
+  An input of a stage that depends on the inputs of the loop is either a forwarded value, such as the content of a file, or an accumulation key, such as `Numerator` for a per-run step after combining the banks; the graph does not tell them apart.
+- **Work after combining.**
+  A per-run step after the banks are combined is a stage from the accumulation keys of the bank loop.
+  It is inside the run loop, so it goes into the same `enclose` call as the bank stage.
+  A stage cuts its graph at its inputs, so the frontier of this stage does not contain what the accumulation keys are computed from.
+  `enclose` forwards to it only the values it reads from the run, although in the pipeline the accumulation keys depend on the bank.
+- **Outputs of the outer stage.**
+  The outer stage outputs the keys given as `outputs`, followed by the forwarded values.
+  `outputs` are keys the driver needs on each iteration of the new loop in addition to what the stages inside read, such as accumulation keys of the new loop.
+  The driver pushes only those.
 - **Declared outputs are checked, not derived.**
-  An output of a part that does not depend on the part's inputs raises an error that names the ancestor it depends on, if there is one.
-  Without the check the driver would push it once per iteration of a loop it does not vary in, and the combined value would be wrong without any error: a key that depends on the run alone, pushed in the bank loop, is counted once per bank; a key that depends on no input is counted once per member.
-- **An ancestor's inputs are not repeated.**
-  A part that lists an input of one of its ancestors raises an error, since its stage would compute per iteration what the ancestor holds.
-- **Reads from other branches are rejected.**
-  A part that reads a value depending on the inputs of a part that is not its ancestor raises an error: a final step after combining over runs cannot read a per-run value, since there is no single run it could come from.
-- **What the driver pushes and passes.**
-  The outputs of a part's stage are the part's outputs, followed by the values its descendants read from it; the driver pushes only the part's outputs.
-  The driver passes the results of the ancestors' stages to a stage, which ignores the values it does not use.
-  In a driver that keys its accumulators by the part's outputs, as below, getting either wrong fails loudly, with a `KeyError` or a missing input.
+  An output of a given stage that depends on `inputs` but not on the inputs of that stage raises an error.
+  In the rebuilt stage it would be a forwarded value passed through to the outputs, and the driver would push it once per iteration of a loop it does not vary in.
+  The combined value would be wrong without any error: a key that depends on the run alone, pushed in the bank loop, is counted once per bank.
+  An output that depends on the inputs of no loop is not rejected.
+  The stage holds it, and it is not in `stage.dynamic_outputs`, so a driver that pushes only `dynamic_outputs` does not push it.
+- **Snapshots.**
+  `enclose` builds the outer stage and the rebuilt stages from `pipeline`, which must be the pipeline the given stages were built from.
+  It raises an error if `pipeline` computes a key differently than when the given stages were built.
+- **What the driver passes.**
+  Each stage gets everything that the stages of the enclosing loops returned, `{**held_outer, **held_inner, Bank: b}`.
+  `Stage.compute` ignores values for keys the stage does not use, so the driver does not select them.
+  This also catches a stage left out of an `enclose` call: the stage still holds the forwarded value, and receiving it from the driver raises `The stage uses [...] but does not take them as inputs`.
+- **Mistakes found when the stages run.**
+  `enclose` sees the stages of one loop, not the whole nesting.
+  A stage enclosed twice over the same inputs, or left out of an `enclose` call, fails in the driver, as above.
+  A stage that holds a value depending on the inputs of a loop, because it was left out or because it is outside that loop, fails in `warm` with `UnsatisfiedRequirement` if those inputs are not set on the pipeline.
+  If they are set, the stage holds the value for the one member set on the pipeline, without an error (section 6.1).
 - **One level.**
-  `split` with a single part is a `Stage` with the output check; a driver that builds a `Stage` directly gets the check from `stage.dynamic_outputs`.
+  A single loop needs no `enclose`.
+  A driver that builds a `Stage` directly pushes only `stage.dynamic_outputs`.
 - **Drawing.**
-  `visualize_stages(*stages)` draws the stages of a split together, with a color per stage for what it computes per call, so that the derived boundaries can be checked by eye.
+  `visualize_stages(*stages)` draws the stages returned by `enclose` together, with a color per stage for what it computes per call, so that the derived boundaries can be checked by eye.
 
 A driver for runs times banks:
 
@@ -211,15 +248,17 @@ A driver for runs times banks:
 warm(run_stage, bank_stage, final_stage)
 acc = {Numerator: Buffered(concat)(), Denominator: Reduced(add)()}
 for filename in filenames:
-    run_values = run_stage.compute({Filename: filename})
+    held = run_stage.compute({Filename: filename})
     for name in bank_names:
-        out = bank_stage.compute({**run_values, Bank: name})
-        for key in bank.outputs:
+        out = bank_stage.compute({**held, Bank: name})
+        for key in bank_stage.dynamic_outputs:
             acc[key].push(out[key])
 result = final_stage.compute({k: a.value for k, a in acc.items()})
 ```
 
-### What is deliberately not in `split`
+A driver that keys its accumulators by the dynamic outputs, as here, fails with a `KeyError` if an accumulator is missing.
+
+### What is deliberately not in `enclose`
 
 - **Loops, held values, and accumulators.**
   The driver decides what is held, for how long, and when accumulators are made and discarded, so memory is bounded by what it holds, for example one run.
@@ -227,7 +266,7 @@ result = final_stage.compute({k: a.value for k, a in acc.items()})
   A stage call is a plain function call, so the driver can map it over members with threads, processes, or dask.
   This is the one thing that computing everything in one graph provided for free.
 - **Parameter changes.**
-  Parameters are set before `split` is called, and the stages are snapshots; a changed parameter means new stages.
+  Parameters are set before the stages are built, and the stages are snapshots; a changed parameter means new stages.
 
 ## 6. Composition
 
@@ -246,31 +285,34 @@ It holds one contribute stage per run type (sample and background), one finalize
 `compute()` warms all stages together, contributes the runs that have no contribution yet, pushes the held contributions into new accumulators, and finalizes.
 
 The background stage reads `DetectorMasks`, which in esssans depends on the detector IDs of the sample run set on the pipeline.
-The validation script reproduces this, but `split` rejects it: the background part reads a value that depends on `Filename[SampleRun]`, the input of a part that is not its ancestor (section 11).
+The validation script reproduces this: the background stage holds the masks for the sample run set on the pipeline.
+The background loop is not inside the sample loop, so no `enclose` call involves both, and nothing rejects this (section 11).
 
 ### 6.2 Several loops, one final stage
 
-Sample runs and background runs are two loops on the same pipeline, and a final part without parent takes the accumulation keys of both as inputs.
+Sample runs and background runs are two loops on the same pipeline, and a final stage outside both loops takes the accumulation keys of both as inputs.
 All stages are warmed together, so work they share, such as reading a mask file, is done once.
 
 ### 6.3 Runs times banks
 
 Mapping over detector banks and runs at once (LoKI banks, Bifrost triplets) needs two levels.
 A flat loop over (run, bank) pairs computes run-level work, such as loading monitors, once per bank, and pushes a run-level accumulation key once per bank; a loop per bank over the runs loads every run once per bank.
-With `split`, a run part and a bank part under it hold the per-run values for one iteration of the run loop (section 5), and a run-level key declared on the bank part raises an error.
+With `enclose`, the run stage computes the per-run values once per iteration of the run loop, and the bank stage takes them as inputs (section 5).
+A run-level key declared as an output of the bank stage raises an error.
 
 Bifrost merges the triplets of one run into one detector and concatenates the runs.
-The per-run step after merging is a second part under the run part:
+The per-run step after merging is a second stage inside the run loop, enclosed together with the triplet stage:
 
 ```python
-run = Part(inputs=(Filename,))
-triplet = Part(inputs=(NeXusDetectorName,), outputs=(EmptyDetector, NeXusData), parent=run)
-run_final = Part(inputs=(EmptyDetector, NeXusData), outputs=(NormalizedDetector,), parent=run)
-final = Part(inputs=(NormalizedDetector,), outputs=(EnergyQDetector,))
+triplet = Stage(pipeline, inputs=(NeXusDetectorName,), outputs=(EmptyDetector, NeXusData))
+run_final = Stage(pipeline, inputs=(EmptyDetector, NeXusData), outputs=(NormalizedDetector,))
+run, triplet, run_final = enclose(pipeline, [triplet, run_final], inputs=(Filename,))
+final = Stage(pipeline, inputs=(NormalizedDetector,), outputs=(EnergyQDetector,))
 ```
 
-The run stage outputs what both children read from the run: `NeXusFile` and `PrimaryGraph` for the triplets, and the angles, monitor, and proton charge for `run_final`.
-Each file is therefore opened once per run; two separate two-level splits would open it twice.
+The run stage outputs what both stages read from the run: `NeXusFile` and `PrimaryGraph` for the triplets, and the angles, monitor, and proton charge for `run_final`.
+Each file is therefore opened once per run.
+Enclosing the two stages in separate calls would give two run stages, and each would open the file.
 Work that depends on the bank alone, such as LoKI's per-bank lookup table, is computed once per run and bank (section 8.7).
 Groups within a run, such as angle groups in Bifrost, are a further level, and nothing is nested inside a graph.
 
@@ -300,27 +342,29 @@ A stream differs from a loop over runs in three ways.
 Chunks of a stream cannot be recomputed.
 The accumulators are reused between finalizations and need not be associative (rolling windows).
 A change of context, such as a new detector position, must not discard what was accumulated.
-`StreamProcessor` is one context part, one chunk part per group of dynamic keys, and one finalize part, all under the context part:
+`StreamProcessor` is a loop over contexts, with one chunk stage per group of dynamic keys and one finalize stage inside it:
 
 ```python
-context = Part(inputs=context_keys, outputs=context_only_targets)
-chunks = [Part(inputs=keys, outputs=acc_keys, parent=context)
-          for keys, acc_keys in groups]          # accumulators by the dynamic keys they read
-finalize = Part(inputs=(*all_acc_keys, *bypass_keys), outputs=accumulated_targets,
-                parent=context)
-context_stage, *chunk_stages, finalize_stage = split(pipeline, context, *chunks, finalize)
+chunk_stages = [Stage(pipeline, inputs=keys, outputs=acc_keys)
+                for keys, acc_keys in groups]    # accumulators by the dynamic keys they read
+finalize_stage = Stage(pipeline, inputs=(*all_acc_keys, *bypass_keys),
+                       outputs=accumulated_targets)
+context_stage, *chunk_stages, finalize_stage = enclose(
+    pipeline, [*chunk_stages, finalize_stage],
+    inputs=context_keys, outputs=context_only_targets,
+)
 ```
 
 `set_context` calls the context stage and holds its result in a forwarder.
-`accumulate` calls the stage of each chunk part whose inputs the chunk supplies and pushes into the accumulators.
+`accumulate` calls each chunk stage whose inputs the chunk supplies and pushes into the accumulators.
 `finalize` calls the finalize stage.
-What the chunk and finalize stages read from the context, today found by `_find_descendants` and `_find_parents`, is derived by `split`.
-A target that depends on the context alone is an output of the context part, and `allow_bypass` becomes an explicit input of the finalize part.
-A target that depends on no input fits no part, since `split` rejects it everywhere; a plain `Stage` without inputs computes it.
+What the chunk and finalize stages read from the context, today found by `_find_descendants` and `_find_parents`, is derived by `enclose`.
+A target that depends on the context alone is an output of the context stage, given as `outputs`, and `allow_bypass` becomes an explicit input of the finalize stage.
+A target that depends on no input belongs to no loop; a plain `Stage` without inputs computes it.
 The accumulator classes, the grouping of accumulators by dynamic keys, the validation of key sets, `on_finalize`, `clear`, and `visualize` stay.
 The module shrinks to its policy, which values are transient and which are held, as scipp/ess#732 proposed.
 
-With one context part, an update of any context key recomputes all context-derived values, where `StreamProcessor` today recomputes only what depends on the updated keys.
+With one context stage, an update of any context key recomputes all context-derived values, where `StreamProcessor` today recomputes only what depends on the updated keys.
 In esslivedata this costs compute and changes no results.
 The only reset tied to the context, the reset-on-move of `NoCopyAccumulator`, compares coordinate values on each push, and values recomputed from unchanged inputs are identical; nothing inspects which context nodes were recomputed.
 The extra work is at most one rebuild of the detector projection when a rare key (an ROI edit, or a wavelength lookup table after a chopper change) is updated in a job with moving detector geometry.
@@ -350,12 +394,12 @@ It uses them in four places:
   In a session, the contribute stage and the contributions by run are kept, so a call whose list extends the previous one contributes only the new runs.
   A long-lived runner that holds this state for one series under a rule is called a *fold* in essapps.
 - **A sum spread over nodes.**
-  The workflow author splits the sum into two specs, and the binding builds both from the stages of one split:
+  The workflow author splits the sum into two specs, and the binding builds both from two stages of one pipeline:
 
   ```python
-  run = Part(inputs=(Filename[SampleRun],), outputs=ACC_KEYS)
-  final = Part(inputs=ACC_KEYS, outputs=(IofQ,))
-  contribute_stage, final_stage = split(pipeline, run, final)
+  contribute_stage = Stage(pipeline, inputs=(Filename[SampleRun],), outputs=ACC_KEYS)
+  final_stage = Stage(pipeline, inputs=ACC_KEYS, outputs=(IofQ,))
+  assert set(contribute_stage.dynamic_outputs) == set(ACC_KEYS)  # each varies per run
 
   def contribute(filename):   # CONTRIBUTE: one run -> accumulation keys, exposed as outputs
       return contribute_stage.compute({Filename[SampleRun]: filename})
@@ -403,7 +447,7 @@ The parameter-tables guide is replaced by the guide on stages, and the generic-p
 ### 8.1 Connectors as separate objects, not tiers inside `Stage`
 
 The alternative was a `Stage` with several tiers of inputs and a policy per tier for what to hold, which hides the held values inside one class and puts policy into sciline.
-`split` derives the same boundaries but returns one plain stage per part, so every held value is an object the driver can inspect, clear, serialize, or send to another process: the explicit lifetime that scipp/sciline#241 asks for.
+`enclose` derives the same boundaries but returns one plain stage per loop, so every held value is an object the driver can inspect, clear, serialize, or send to another process: the explicit lifetime that scipp/sciline#241 asks for.
 `Stage` holds the values at its frontier itself.
 A stage without inputs followed by a forwarder would do the same.
 It is built in because every stage needs it.
@@ -420,10 +464,28 @@ If package objects turn out to repeat the same code, that repetition is the basi
 
 Three callers need the same boundary: the context frontier of `StreamProcessor`, runs times banks in esssans, and runs times triplets in Bifrost.
 Chosen by hand, it fails silently: a run-level key left out is recomputed per bank, which costs time but gives the right result.
-`split` derives it with one rule (section 5).
+`enclose` derives it from the frontier of the stages inside the loop (section 5).
+
+Stages are connected in two ways:
+
+| Connection | From | To | Given by |
+|---|---|---|---|
+| forwarded value | outer stage | stages inside its loop | derived by `enclose` from the frontier |
+| accumulation key | stages inside a loop | a stage after the loop | declared as outputs of one stage and inputs of the next |
 
 The accumulation keys are declared, not derived: the combine happens outside the graph, so the graph cannot tell that a key such as `NormalizedDetector` comes after combining the triplets.
-An output declared on the wrong part raises an error instead of being moved to the part it varies in, where the driver may have no loop or accumulator for it.
+An output declared on the stage of the wrong loop raises an error instead of being moved to the loop it varies in, where the driver may have no loop or accumulator for it.
+
+The nesting of the loops is given by the order of the `enclose` calls, from the inside out.
+An alternative, `split(pipeline, *parts)`, took all loops at once, one `Part` per loop with its inputs, its outputs, and a `parent`, the part of the enclosing loop.
+For three loops with a per-run step after combining, `split` and `enclose` build identical stages.
+`split` was dropped because `parent` declared the forwarded values only indirectly, which made the API hard to understand.
+`enclose` builds on the frontier, which users of `Stage` already know: a held value that depends on the inputs of the new loop is forwarded.
+
+The cost of `enclose` is that some mistakes are found when the stages run, not when they are built.
+`split` saw all loops at once and rejected, at construction, a read from a loop that does not enclose the reader and a part whose enclosing part was not given.
+`enclose` sees one loop at a time, so these mistakes surface in the driver or in `warm` (section 5).
+A stage outside a loop that reads a value depending on the inputs of that loop raises no error if those inputs are set on the pipeline: it holds the value for the one member set there (section 6.1).
 
 ### 8.4 No state in the objects sciline provides
 
@@ -444,7 +506,7 @@ It was prototyped and dropped:
 
 - No real driver used its finalize stage or `compute`: the SANS finalize reads the accumulation keys of two run types, the per-run finalize of Bifrost also reads run-level values, and nested drivers push inside their own loops instead of calling `combine`.
 - `compute(table)` invited the flat runs-times-banks table, which counts a run-level accumulation key once per bank without an error.
-- Its one guarantee, that a key not depending on the members is not accumulated, is `split` with a single part, or `Stage.dynamic_outputs`.
+- Its one guarantee, that a key not depending on the members is not accumulated, is `Stage.dynamic_outputs`.
 
 Its accumulator factories remain as `Buffered` and `Reduced`, and their reason remains: a driver makes new accumulators per computation (section 4).
 
@@ -456,15 +518,16 @@ It fixed the members when the pipeline was built.
 It hid a loop inside a provider, with no per-member errors, progress, or visualization.
 The trap to avoid remains: a hand-written provider that runs a pipeline.
 
-### 8.7 One parent per part
+### 8.7 Loops nest as a tree
 
-Two cases would need a part with several parents:
+Each `enclose` call puts stages inside one loop, so each loop is inside at most one other.
+Two cases would need a stage inside two loops that do not nest:
 
-- Work that depends on the bank alone, held across all runs; with runs as the outer level, it is computed once per run and bank.
-- Context keys updated independently in `StreamProcessor`; with one context part, any update recomputes all context-derived values (section 6.6).
+- Work that depends on the bank alone, held across all runs; with runs as the outer loop, it is computed once per run and bank.
+- Context keys updated independently in `StreamProcessor`; with one context stage, any update recomputes all context-derived values (section 6.6).
 
 Both cost compute only, and little: the per-bank lookup table in LoKI is cheap, and the extra context work in esslivedata is at most one rebuild of the detector projection on a rare update.
-Several parents would make the owner of a value ambiguous when it depends on both, and holding values across all iterations of another loop is a memory decision that belongs to the driver.
+Two enclosing loops would make the owner of a value ambiguous when it depends on both, and holding values across all iterations of another loop is a memory decision that belongs to the driver.
 
 ### 8.8 Default scheduler
 
@@ -490,22 +553,25 @@ Every parameter is set on the flat pipeline and reaches every stage, and composi
 
 ### Unit tests
 
-The implementation is in `src/sciline/stage.py` and `src/sciline/accumulators.py`, tested in `tests/stage_test.py`, `tests/split_test.py`, and `tests/accumulators_test.py`.
+The implementation is in `src/sciline/stage.py` and `src/sciline/accumulators.py`, tested in `tests/stage_test.py`, `tests/enclose_test.py`, and `tests/accumulators_test.py`.
 It runs on sciline `main`.
-An earlier version of the stage tests was run on the generics branch and passed; `split` has not been run there.
+An earlier version of the stage tests was run on the generics branch and passed; `enclose` has not been run there.
 
 The tests cover:
 
-- **Stage:** static part computed once and dynamic part per call; an intermediate input cuts off its ancestors; inputs the outputs do not need are rejected; pass-through of an output that is an input; snapshot behaviour; `warm` computes shared work once, skips warm stages, and rejects stages that compute a shared key differently; concurrent calls compute the static part once; an expensive load before a cheap parameter (the shape of tuning in essapps); the default scheduler follows a replacement of `sciline.task_graph.DaskScheduler`; the `StreamProcessor` shape with a context update.
-- **split:** three nested levels give the result of flat computes; a value is computed by the deepest level it depends on, also skipping a level; a part under a part after combining reads from it (the cut at the accumulation keys; this test fails without the cut); a value that depends on no part is held; per-iteration work runs once per iteration of its loop; an output that a descendant also reads is output once; outputs that do not vary in their part, outputs that depend on no part, reads from a non-ancestor, unknown outputs, unneeded inputs, an input of an ancestor, and a part given twice are rejected. `visualize_stages` fills what each stage computes with the color of that stage.
+- **Stage:** static part computed once and dynamic part per call; an intermediate input cuts off its ancestors; inputs the outputs do not need are rejected; pass-through of an output that is an input; `compute` rejects a missing input and a value for a key the stage uses but does not take as input, and ignores a value for a key it does not use; snapshot behaviour; `warm` computes shared work once, skips warm stages, and rejects stages that compute a shared key differently; concurrent calls compute the static part once; an expensive load before a cheap parameter (the shape of tuning in essapps); the default scheduler follows a replacement of `sciline.task_graph.DaskScheduler`; the `StreamProcessor` shape with a context update; `visualize_stages` applies the styles of groups given by the caller.
+- **enclose:** three nested loops give the result of plain loops over `Pipeline.compute`; a value is computed by the innermost loop whose inputs it depends on, also skipping a loop; a loop inside a stage whose input is an accumulation key reads from that stage; a value that depends on no loop stays held; per-iteration work runs once per iteration of its loop; `outputs` of the outer stage that an inner stage reads are output once; the outer stage uses the given scheduler and the inner stages keep theirs; a stage left out of a loop rejects what the loop computes when the driver passes it on; an output that does not vary with the inputs of its stage, a loop that no stage reads from, a pipeline changed since the stages were built, unknown outputs, and unneeded inputs are rejected; `visualize_stages` fills what each stage computes with the color of that stage.
+  The user guide on stages (`docs/user-guide/stages.ipynb`) runs two and three nested loops and a per-file step after combining the banks, and shows that each file is read once and each calibration is loaded once.
 - **Accumulators:** push order, the first push as result, reading without pushes, pushing combined values gives the same result.
 
 ### Nested drivers
 
-Prototype drivers with `split` ran on fake workflows with the dependency structure of esssans (banks times sample and background runs) and Bifrost (triplets times runs, with a per-run step after combining the triplets), and gave the results of plain loops over `Pipeline.compute`.
-Per-iteration work ran once per iteration of its loop, except work that depends on the bank alone (section 8.7); `tests/split_test.py` checks this for three levels.
+Prototype drivers with `split` (section 8.3) ran on fake workflows with the dependency structure of esssans (banks times sample and background runs) and Bifrost (triplets times runs, with a per-run step after combining the triplets), and gave the results of plain loops over `Pipeline.compute`.
+Per-iteration work ran once per iteration of its loop, except work that depends on the bank alone (section 8.7).
 A `StreamProcessor` on `split` gave the results of `ess.reduce.streaming.StreamProcessor` for two dynamic keys in separate chunks, a context key, a context-only target, and `allow_bypass`.
 These prototypes need esssans and ess.reduce and are not part of this repository.
+They were not run with `enclose`.
+They have at most two nested loops and a step after combining; for three such loops, `enclose` builds the same stages as `split`.
 The `StreamProcessor` rewrite still has to pass the ess.reduce tests (section 10).
 
 ### LoKI multi-run reduction
@@ -532,12 +598,12 @@ Not validated: the rewrite of `StreamProcessor` against its real tests.
 
 ### What changes for each project
 
-- **sciline:** adds `Stage`, `warm`, `Part`, `split`, `Accumulator`, `Buffered`, `Reduced`, and `Pipeline.provide`, and later removes what section 7 lists.
-  `split` belongs in sciline because it needs the dependency graph of the pipeline, and users outside ESS need a documented replacement for `map(...).reduce(...)`: a loop over a stage with accumulators, and `split` for nested loops.
+- **sciline:** adds `Stage`, `warm`, `enclose`, `Accumulator`, `Buffered`, `Reduced`, and `Pipeline.provide`, and later removes what section 7 lists.
+  `enclose` belongs in sciline because it needs the dependency graph of the pipeline, and users outside ESS need a documented replacement for `map(...).reduce(...)`: a loop over a stage with accumulators, and `enclose` for nested loops.
   No "experimental" label; the staged rollout below is the trial period.
   `Stage` also needs a `reporter` argument, so that progress reaches the ESS widgets.
 - **ess.reduce:** the accumulators satisfy `sciline.Accumulator` once `maybe_hist` moves out of their base class, and a `Forwarder` is added.
-  `StreamProcessor` is rewritten on `split` against its existing tests (section 6.6).
+  `StreamProcessor` is rewritten on `enclose` against its existing tests (section 6.6).
   `parameter_mappers`, which maps a list-valued parameter to a `with_*` helper that returns a pipeline, is replaced by a common interface of the package objects (section 11).
   `get_parameters` is unaffected, because it works on the flat pipeline.
 - **Reduction packages** (esssans, essreflectometry, essspectroscopy, essdiffraction, essnmx): the `with_*` helpers that fold are replaced by package objects, built from a configured pipeline, on which users set members and compute (section 6.1).
@@ -545,9 +611,9 @@ Not validated: the rewrite of `StreamProcessor` against its real tests.
   Specific points:
   - The pixel-mask folds in esssans and essdiffraction become a list parameter with providers (section 6.4).
   - `with_banks` in esssans, which maps without reducing, becomes a loop over a stage.
-  - essreflectometry drops the `try/except` around each reduce: `Stage.dynamic_outputs` lists the keys that vary per run, and `split` rejects the others. Its `BatchProcessor` loses the fallback for mapped pipelines.
+  - essreflectometry drops the `try/except` around each reduce: `Stage.dynamic_outputs` lists the keys that vary per run, and the driver pushes only those. Its `BatchProcessor` loses the fallback for mapped pipelines.
   - In bifrost, `NeXusData` depends on the run, so a bank fold inside a multi-run reduction sits inside per-run work.
-    The package object uses the parts of section 6.3, with the triplets combined per run and the runs combined after.
+    The package object uses the stages of section 6.3, with the triplets combined per run and the runs combined after.
     A list parameter with a provider that loops over the triplets would hide the loop inside a provider (section 8.6).
 - **esslivedata:** the bifrost bank fold becomes a loop over a stage with an accumulator, computed before the `StreamProcessor` is built (section 6.5).
 - **essapps:** the binding wraps the package objects and their stages instead of building its own (section 6.7).
@@ -586,7 +652,7 @@ Not validated: the rewrite of `StreamProcessor` against its real tests.
   Either each package object implements it, or one generic object is built from a registry that maps member keys to accumulation keys; this is decided when the second package migrates.
 - **Which run's detector IDs do the esssans background masks use?**
   `DetectorMasks` reads the detector IDs of the sample run set on the pipeline, and the background runs read it too (section 6.1).
-  With several sample runs this is not defined, and `split` rejects it; esssans decides when it migrates, for example detector IDs from the geometry or from a run chosen by a parameter.
+  With several sample runs this is not defined, and nothing in sciline detects it (section 8.3); esssans decides when it migrates, for example detector IDs from the geometry or from a run chosen by a parameter.
 - **Static work across processes.**
   Stages in one process share their static work through `warm`; a contribute call in a short-lived process recomputes it.
   This is the cost that essapps estimates for its stateless model of interactive work, not a new cost.
