@@ -5,7 +5,9 @@ Reference: with_pixel_mask_filenames + with_sample_runs + with_background_runs
 instead of a map/reduced pipeline, holding one contribute stage per run type, their
 shared finalize stage, and the contributions; the pixel masks are a list parameter
 read by one provider instead of a combined value, since the point at which they
-would be combined sits inside the per-run work.
+would be combined sits inside the per-run work. The masks are built from the
+detector IDs of the empty-beam run instead of the sample run: with several sample
+runs, "the sample run" is not defined.
 
 Run from this directory with
     python loki_validation.py
@@ -36,6 +38,7 @@ from ess.sans.types import (
     DetectorMasks,
     DirectBeam,
     EmptyBeamRun,
+    EmptyDetector,
     Filename,
     MaskedDetectorIDs,
     NeXusDetectorName,
@@ -83,8 +86,8 @@ def counted_to_detector_mask(
     return to_detector_mask(ids, path, masked_ids)
 
 
-# The prototype's mask handling: one list parameter, the files read once (static),
-# the masks built per run from the run's detector IDs.
+# The prototype's mask handling: one list parameter and the detector IDs of the
+# empty-beam run, so the files are read and the masks built once (static).
 PixelMaskFilenames = NewType('PixelMaskFilenames', tuple[str, ...])
 MaskedDetectorIDsPerFile = NewType('MaskedDetectorIDsPerFile', dict[str, sc.Variable])
 
@@ -102,6 +105,10 @@ def detector_masks(ids: DetectorIDs, masked: MaskedDetectorIDsPerFile) -> Detect
             for p, m in masked.items()
         )
     )
+
+
+def detector_ids_from_empty_beam(data: EmptyDetector[EmptyBeamRun]) -> DetectorIDs:
+    return DetectorIDs(data.coords['detector_number'])
 
 
 def counted_apply_pixel_masks(
@@ -266,10 +273,11 @@ def main() -> None:
     flat = base.copy()
     flat.insert(read_mask_files)
     flat.insert(detector_masks)
+    flat.insert(detector_ids_from_empty_beam)
     flat[PixelMaskFilenames] = tuple(masks)
-    # Filename[SampleRun] stays set on the pipeline: it is the input of the sample
-    # contribute stage, and an ordinary parameter for the background stage,
-    # whose DetectorMasks read the detector IDs of that one run (as in the reference).
+    # With the detector IDs of the sample run, the background stage would hold masks
+    # for the sample run set on the pipeline, while the sample stage varies it, and
+    # warm would reject the stages.
     t0 = time.perf_counter()
     reduction = SansReduction(flat)
     reduction.set_runs(SampleRun, sample_runs[:1])

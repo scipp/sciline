@@ -286,8 +286,10 @@ It holds one contribute stage per run type (sample and background), one finalize
 `compute()` warms all stages together, contributes the runs that have no contribution yet, pushes the held contributions into new accumulators, and finalizes.
 
 The background stage reads `DetectorMasks`, which in esssans depends on the detector IDs of the sample run set on the pipeline.
-The validation script reproduces this: the background stage holds the masks for the sample run set on the pipeline.
-The background loop is not inside the sample loop, so no `enclose` call involves both, but `warm` over both stages rejects this: the background stage holds a value that depends on `Filename[SampleRun]`, which the sample stage takes as input (section 11).
+With several sample runs, this run is not defined.
+`warm` over both stages rejects it: the background stage holds a value that depends on `Filename[SampleRun]`, which the sample stage takes as input.
+`enclose` is not the fix, because the background loop is not inside the sample loop; enclosed in it, each background run would be computed once per sample run.
+The validation script takes the detector IDs from the empty-beam run instead, so the masks depend on no run and are computed once (section 11).
 
 ### 6.2 Several loops, one final stage
 
@@ -321,7 +323,8 @@ Groups within a run, such as angle groups in Bifrost, are a further level, and n
 
 In esssans, `DetectorMasks` reads the detector IDs of the sample run, so with map/reduce the graph computes the mask fold once per sample run.
 This is not a loop with an accumulator, because the combined value is needed inside the work for each member.
-Outside the graph it becomes a list parameter, `PixelMaskFilenames`, and two providers: one reads all mask files (static and shared by all runs), and one builds the masks for a given run.
+Outside the graph it becomes a list parameter, `PixelMaskFilenames`, and two providers: one reads all mask files (static and shared by all runs), and one builds the masks from the detector IDs.
+With detector IDs that do not depend on the run (section 6.1), the masks are static as well.
 Loops over members are meant for members that are expensive to compute or whose individual results users want to see; a handful of small files combined by union is neither.
 
 ### 6.5 Passing a result from one driver to another
@@ -581,7 +584,7 @@ The `StreamProcessor` rewrite still has to pass the ess.reduce tests (section 10
 `loki_validation.py`, next to this document, runs the esssans multi-run test workflow with one mask file, two sample runs, and two background runs.
 
 - **Reference:** `with_pixel_mask_filenames`, `with_sample_runs`, and `with_background_runs`, using map/reduce.
-- **Prototype:** `SansReduction` (section 6.1) with a contribute stage per run type and one finalize stage on the flat pipeline, and the masks as a list parameter (section 6.4).
+- **Prototype:** `SansReduction` (section 6.1) with a contribute stage per run type and one finalize stage on the flat pipeline, the masks as a list parameter (section 6.4), and the detector IDs of the empty-beam run (section 6.1).
 
 Results:
 
@@ -589,10 +592,11 @@ Results:
 - Per-run `NormalizedQ` equals both a single-run computation and `compute_mapped`.
 - Contributing, combining, and finalizing as separate calls, with the sample runs combined as a chain, gives the same result as `SansReduction.compute`.
 - Provider call counts equal the reference, including a single read of the mask file, which requires `warm` over all three stages.
-- Wall time with the naive scheduler: 6.9 to 7.3 s for the prototype and 7.5 s for the reference, in two runs.
+  The exception is `to_detector_mask`, called once instead of three times, because the masks depend on no run.
+- Wall time with the naive scheduler: 6.9 s for the prototype and 7.1 to 7.2 s for the reference, in two runs.
   With sciline's default dask scheduler the reference is about 1.7 s faster, because the single graph computes the two sample runs in parallel threads; over stages this parallelism is up to the driver.
 - Adding a second sample run after computing with one costs one contribution: one more `apply_pixel_masks` call and no second read of the mask file.
-- Changing `QBins` means a new `SansReduction`, which makes the same provider calls as the reference.
+- Changing `QBins` means a new `SansReduction`, which makes the same provider calls as the first one.
 
 Not validated: the rewrite of `StreamProcessor` against its real tests.
 
@@ -654,7 +658,9 @@ Not validated: the rewrite of `StreamProcessor` against its real tests.
   Either each package object implements it, or one generic object is built from a registry that maps member keys to accumulation keys; this is decided when the second package migrates.
 - **Which run's detector IDs do the esssans background masks use?**
   `DetectorMasks` reads the detector IDs of the sample run set on the pipeline, and the background runs read it too (section 6.1).
-  With several sample runs this is not defined, and `warm` rejects it (section 6.1); esssans decides when it migrates, for example detector IDs from the geometry or from a run chosen by a parameter.
+  With several sample runs this is not defined, and `warm` rejects it (section 6.1).
+  The validation script uses the empty-beam run, which gives identical results on the test data, where all runs have the same detector IDs.
+  esssans decides when it migrates, for example detector IDs from the geometry or from a run chosen by a parameter.
 - **Static work across processes.**
   Stages in one process share their static work through `warm`; a contribute call in a short-lived process recomputes it.
   This is the cost that essapps estimates for its stateless model of interactive work, not a new cost.
