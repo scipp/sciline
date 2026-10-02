@@ -209,8 +209,8 @@ def main() -> None:
         a, b = (held[MonitorTerm[SampleRun]] for held in held_per_run.values())
         assert not sc.identical(a, b)
         numerator = ACCUMULATED[0]
-        for bank, values in per_run.items():
-            a, b = (v[numerator] for v in values.values())
+        for bank, by_run in per_run.items():
+            a, b = (v[numerator] for v in by_run.values())
             assert not sc.identical(a, b), bank
         print('  yes')
 
