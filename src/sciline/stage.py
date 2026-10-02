@@ -441,8 +441,8 @@ def enclose(
     """Put stages inside a loop over ``inputs``.
 
     A stage holds the values at its frontier. Some of them may depend on ``inputs``,
-    such as the content of a file, held by a stage that loops over the banks of the
-    file. The returned outer stage computes these values from ``inputs``, once per
+    such as the content of a file, held by a stage that loops over the channels of
+    the file. The returned outer stage computes these values from ``inputs``, once per
     iteration of the new loop. The returned inner stages take them as inputs, so the
     driver passes what the outer stage returned on to them. Values that do not depend
     on ``inputs`` stay held by the stages that read them.
@@ -483,18 +483,21 @@ def enclose(
 
     Examples
     --------
-    Sum ``Total`` over the detector banks of several files, reading each file once:
+    Sum ``Total`` over the channels of several files, reading each file once:
 
     .. code-block:: python
 
-        bank_stage = Stage(pipeline, outputs=(Total,), inputs=(Bank,))
-        file_stage, bank_stage = enclose(pipeline, [bank_stage], inputs=(Filename,))
+        channel_stage = Stage(pipeline, outputs=(Total,), inputs=(Channel,))
+        file_stage, channel_stage = enclose(
+            pipeline, [channel_stage], inputs=(Filename,)
+        )
 
         total = Reduced(operator.add)()
         for filename in filenames:
             held = file_stage.compute({Filename: filename})
-            for bank in banks:
-                total.push(bank_stage.compute({**held, Bank: bank})[Total])
+            for channel in channels:
+                values = channel_stage.compute({**held, Channel: channel})
+                total.push(values[Total])
     """
     stages = tuple(stages)
     inputs = tuple(inputs)
