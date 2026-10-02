@@ -575,7 +575,7 @@ Prototype drivers with `split` (section 8.3) ran on fake workflows with the depe
 Per-iteration work ran once per iteration of its loop, except work that depends on the bank alone (section 8.7).
 A `StreamProcessor` on `split` gave the results of `ess.reduce.streaming.StreamProcessor` for two dynamic keys in separate chunks, a context key, a context-only target, and `allow_bypass`.
 These prototypes need esssans and ess.reduce and are not part of this repository.
-They were not run with `enclose`.
+They were not run with `enclose`; the esssans shape is validated with `enclose` on real data below.
 They have at most two nested loops and a step after combining; for three such loops, `enclose` builds the same stages as `split`.
 The `StreamProcessor` rewrite still has to pass the ess.reduce tests (section 10).
 
@@ -597,6 +597,23 @@ Results:
   With sciline's default dask scheduler the reference is about 1.7 s faster, because the single graph computes the two sample runs in parallel threads; over stages this parallelism is up to the driver.
 - Adding a second sample run after computing with one costs one contribution: one more `apply_pixel_masks` call and no second read of the mask file.
 - Changing `QBins` means a new `SansReduction`, which makes the same provider calls as the first one.
+
+### LoKI runs times banks
+
+`loki_banks_validation.py`, next to this document, runs the esssans LoKI workflow over two sample runs and the nine detector banks of `loki_coda_file`, the only multi-bank test file.
+The second run is a copy of that file with the detector event IDs reversed and the monitor event time offsets scaled, so that both per-run and per-bank values differ between the runs.
+
+- **Reference:** `with_banks(with_sample_runs(...))`, using map/reduce, which gives `IntensityQ[SampleRun]` per bank, combined over the runs.
+- **Prototype:** a bank stage from `NeXusDetectorName` to `NormalizedQ[SampleRun, Numerator]` and `NormalizedQ[SampleRun, Denominator]`, enclosed in a loop over `Filename[SampleRun]`, and a final stage to `IntensityQ[SampleRun]`, with one set of accumulators per bank.
+
+Results:
+
+- `enclose` and `warm` accept the stages with no keys added by hand.
+  The run stage outputs `NeXusFileSpec`, `ElasticCoordTransformGraph`, `MonitorTerm`, and the source and sample positions of the sample run.
+- `IntensityQ[SampleRun]` is identical to the reference for every bank (`assert_identical`).
+  The script checks that the results are not all NaN: with the 200 wavelength bins of the esssans user guide, the 5 pulses in the file leave wavelength bins without monitor counts, and every value of I(Q) is NaN. It uses 20 bins.
+- The monitor term is computed once per run and the detector data are assembled once per run and bank, as in the reference.
+- Wall time with the naive scheduler: 3.7 to 3.8 s for the prototype and 4.7 to 4.8 s for the reference, in two runs.
 
 Not validated: the rewrite of `StreamProcessor` against its real tests.
 

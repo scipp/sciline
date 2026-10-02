@@ -199,6 +199,7 @@ A `sciline.v2` namespace that keeps the old `Pipeline` would serve them equally,
   Accumulator, contribution, and contribute/combine follow Beam, Flink, and Spark.
 - Every parameter is set on one flat pipeline, and everything held is a plain object that the driver can inspect, clear, or serialize.
 - The prototype reproduces the LoKI multi-run reduction with identical results and the same or fewer provider calls, and adding a run costs only that run's contribution.
+  `enclose` reproduces the LoKI reduction over runs times banks with identical results and provider calls.
   Prototype drivers, which are not in this repository, gave the results of plain loops for banks or triplets times runs, and a prototype `StreamProcessor` gave those of the real class.
   They were built with `split` (see alternatives), which builds the same stages as `enclose` for these shapes.
 
