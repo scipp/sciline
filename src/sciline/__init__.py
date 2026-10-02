@@ -11,6 +11,7 @@ except importlib.metadata.PackageNotFoundError:
 
 from . import scheduler
 from ._provider import Provider, UnboundTypeVar
+from .accumulators import Accumulator, Buffered, Reduced
 from .domain import Scope
 from .handler import (
     HandleAsBuildTimeException,
@@ -18,20 +19,28 @@ from .handler import (
     UnsatisfiedRequirement,
 )
 from .pipeline import Pipeline, compute_mapped, get_mapped_node_names
+from .stage import Stage, enclose, visualize_stages, warm
 from .task_graph import TaskGraph
 
 __all__ = [
+    "Accumulator",
+    "Buffered",
     "HandleAsBuildTimeException",
     "HandleAsComputeTimeException",
     "Pipeline",
     "Provider",
+    "Reduced",
     "Scope",
+    "Stage",
     'TaskGraph',
     "UnboundTypeVar",
     "UnsatisfiedRequirement",
     "compute_mapped",
+    "enclose",
     "get_mapped_node_names",
     "scheduler",
+    "visualize_stages",
+    "warm",
 ]
 
 del importlib
