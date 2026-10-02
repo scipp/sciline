@@ -388,8 +388,9 @@ def warm(*stages: Stage) -> None:
         parameter values, or if a stage holds a value that depends on a parameter
         that another stage takes as input. The held value is for the one value of
         the parameter set on the pipeline, or for none, while the driver varies it.
-        Such a stage belongs inside the loop over that input, see
-        :py:func:`enclose`.
+        If the stage runs inside the loop over that input, enclose it in that loop,
+        see :py:func:`enclose`. Otherwise the held value must not depend on that
+        input, which means changing the pipeline.
     """
     for i, held in enumerate(stages):
         params = {
@@ -403,7 +404,9 @@ def warm(*stages: Stage) -> None:
                 raise ValueError(
                     f'stages[{i}] holds values that depend on '
                     f'{sorted(varied, key=str)}, which stages[{j}] takes as inputs. '
-                    f'Enclose stages[{i}] in the loop over them'
+                    f'If stages[{i}] runs inside the loop over them, enclose it in '
+                    'that loop. Otherwise, change the pipeline so that the values '
+                    f'stages[{i}] holds do not depend on them'
                 )
     # Locks are taken in a fixed order, so that concurrent calls over overlapping
     # stages cannot deadlock.
