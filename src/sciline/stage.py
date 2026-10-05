@@ -133,6 +133,9 @@ class Stage:
         self._static_graph = {k: p for k, p in graph.items() if k in needed}
         self._keys = frozenset(self._static_graph) | frozenset(self._dynamic)
         self._static: dict[Key, Any] = {}
+        # The per-call part with the held values as parameters, built once when
+        # warmed, since the held values do not change.
+        self._call_graph: Graph = {}
         self._warm = False
         self._lock = threading.Lock()
 
@@ -245,10 +248,9 @@ class Stage:
         """
         if set(values) != set(self._inputs):
             raise ValueError(f'Expected values for {self._inputs}, got {tuple(values)}')
-        graph: Graph = dict(self._dynamic_graph)
+        warm(self)
+        graph = dict(self._call_graph)
         for k, v in values.items():
-            graph[k] = Provider.parameter(v)
-        for k, v in self.static().items():
             graph[k] = Provider.parameter(v)
         return _compute(graph, self._outputs, self._scheduler)
 
@@ -421,4 +423,8 @@ def warm(*stages: Stage) -> None:
         values = _compute(graph, tuple(keys), cold[0]._scheduler)
         for stage in cold:
             stage._static = {k: values[k] for k in stage._frontier}
+            stage._call_graph = {
+                **stage._dynamic_graph,
+                **{k: Provider.parameter(v) for k, v in stage._static.items()},
+            }
             stage._warm = True
