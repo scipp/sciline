@@ -147,30 +147,17 @@ def test_stage_rejects_output_not_in_pipeline(pipeline: sl.Pipeline) -> None:
         Stage(pipeline, outputs=(Events,), inputs=(Filename,))
 
 
-def test_stage_rejects_call_missing_an_input(pipeline: sl.Pipeline) -> None:
-    stage = Stage(pipeline, outputs=(IofQ,), inputs=(Numerator, Denominator))
-    with pytest.raises(ValueError, match='Missing values'):
-        stage.compute({Numerator: [1.0]})
-
-
-@pytest.mark.parametrize('key', [Bins, Masked], ids=['held', 'per-call'])
-def test_stage_rejects_value_for_key_it_uses_but_does_not_take(
-    pipeline: sl.Pipeline, key: type
-) -> None:
-    stage = Stage(pipeline, outputs=(Numerator,), inputs=(Filename,))
-    assert key in stage.keys
-    with pytest.raises(ValueError, match='does not take them as inputs'):
-        stage.compute({Filename: 'ab', key: 3})
-
-
-def test_stage_ignores_value_for_key_it_does_not_use(
-    pipeline: sl.Pipeline, calls: Calls
+@pytest.mark.parametrize(
+    'values',
+    [{Numerator: [1.0]}, {Numerator: [1.0], Denominator: 1.0, Scale: 2.0}],
+    ids=['missing', 'extra'],
+)
+def test_stage_rejects_call_with_wrong_keys(
+    pipeline: sl.Pipeline, values: dict[type, Any]
 ) -> None:
     stage = Stage(pipeline, outputs=(IofQ,), inputs=(Numerator, Denominator))
-    assert Masked not in stage.keys
-    values = {Numerator: [2.0, 4.0], Denominator: 3.0, Masked: [1.0], Filename: 'ab'}
-    assert stage.compute(values)[IofQ] == 2.0
-    assert calls.counts == {'normalize': 1}
+    with pytest.raises(ValueError, match='Expected values for'):
+        stage.compute(values)
 
 
 def test_stage_holds_expensive_part_up_to_cheap_parameter(
@@ -523,3 +510,16 @@ def test_visualize_stages_styles_groups_given_by_caller(pipeline: sl.Pipeline) -
     assert 'Context' in source
     # Numerator is computed by per_file, so it is drawn with its provider.
     assert 'via:' in node_line(source, Numerator, 'label=')
+
+
+def test_visualize_stages_fills_what_each_stage_computes_per_call(
+    pipeline: sl.Pipeline,
+) -> None:
+    from sciline.visualize import STAGE_FILLS
+
+    per_file = Stage(pipeline, outputs=(Numerator, Denominator), inputs=(Filename,))
+    final = Stage(pipeline, outputs=(IofQ,), inputs=(Numerator, Denominator))
+    source: str = sl.visualize_stages(per_file, final).source
+    assert STAGE_FILLS[0] in node_line(source, Masked)
+    assert STAGE_FILLS[1] in node_line(source, IofQ)
+    assert 'Stage 1, per call with Numerator, Denominator' in source

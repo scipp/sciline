@@ -231,9 +231,7 @@ class Stage:
         Parameters
         ----------
         values:
-            A value for each input key. Values for keys the stage does not use, those
-            not in :py:attr:`keys`, are ignored, so a driver can pass on everything
-            the stages of enclosing loops returned.
+            A value for each input key, and nothing else.
 
         Returns
         -------
@@ -243,21 +241,13 @@ class Stage:
         Raises
         ------
         ValueError
-            If a value for an input is missing, or if a value is given for a key that
-            the stage uses but does not take as input. The stage holds or computes
-            such a key itself and would ignore the value.
+            If the keys of ``values`` are not exactly the inputs.
         """
-        missing = [k for k in self._inputs if k not in values]
-        if missing:
-            raise ValueError(f'Missing values for inputs {missing}')
-        not_inputs = [k for k in values if k in self._keys and k not in self._inputs]
-        if not_inputs:
-            raise ValueError(
-                f'The stage uses {not_inputs} but does not take them as inputs'
-            )
+        if set(values) != set(self._inputs):
+            raise ValueError(f'Expected values for {self._inputs}, got {tuple(values)}')
         graph: Graph = dict(self._dynamic_graph)
-        for k in self._inputs:
-            graph[k] = Provider.parameter(values[k])
+        for k, v in values.items():
+            graph[k] = Provider.parameter(v)
         for k, v in self.static().items():
             graph[k] = Provider.parameter(v)
         return _compute(graph, self._outputs, self._scheduler)
@@ -270,7 +260,7 @@ def visualize_stages(
     show_held_ancestors: bool = True,
     **kwargs: Any,
 ) -> graphviz.Digraph:
-    """Draw the keys that several stages use, such as the stages of :py:func:`enclose`.
+    """Draw the keys that several stages use, such as the stages of one driver.
 
     By default, the nodes that each stage computes per call are filled with a color
     per stage, labeled in the legend by the inputs of the stage. The
@@ -388,9 +378,9 @@ def warm(*stages: Stage) -> None:
         parameter values, or if a stage holds a value that depends on a parameter
         that another stage takes as input. The held value is for the one value of
         the parameter set on the pipeline, or for none, while the driver varies it.
-        If the stage runs inside the loop over that input, enclose it in that loop,
-        see :py:func:`enclose`. Otherwise the held value must not depend on that
-        input, which means changing the pipeline.
+        If the stage runs inside the loop over that input, it must take the value as
+        an input, computed once per iteration of the loop. Otherwise the held value
+        must not depend on that input, which means changing the pipeline.
     """
     for i, held in enumerate(stages):
         params = {
@@ -404,9 +394,10 @@ def warm(*stages: Stage) -> None:
                 raise ValueError(
                     f'stages[{i}] holds values that depend on '
                     f'{sorted(varied, key=str)}, which stages[{j}] takes as inputs. '
-                    f'If stages[{i}] runs inside the loop over them, enclose it in '
-                    'that loop. Otherwise, change the pipeline so that the values '
-                    f'stages[{i}] holds do not depend on them'
+                    f'If stages[{i}] runs inside the loop over them, it must take '
+                    'those values as inputs, computed once per iteration of that loop. '
+                    f'Otherwise, change the pipeline so that the values stages[{i}] '
+                    'holds do not depend on them'
                 )
     # Locks are taken in a fixed order, so that concurrent calls over overlapping
     # stages cannot deadlock.
@@ -431,129 +422,3 @@ def warm(*stages: Stage) -> None:
         for stage in cold:
             stage._static = {k: values[k] for k in stage._frontier}
             stage._warm = True
-
-
-def enclose(
-    pipeline: Pipeline,
-    stages: Iterable[Stage],
-    *,
-    inputs: Iterable[Key],
-    outputs: Iterable[Key] = (),
-    scheduler: Scheduler | None = None,
-) -> tuple[Stage, ...]:
-    """Put stages inside a loop over ``inputs``.
-
-    A stage holds the values at its frontier. Some of them may depend on ``inputs``,
-    such as the content of a file, held by a stage that loops over the channels of
-    the file. The returned outer stage computes these values from ``inputs``, once per
-    iteration of the new loop. The returned inner stages take them as inputs, so the
-    driver passes what the outer stage returned on to them. Values that do not depend
-    on ``inputs`` stay held by the stages that read them.
-
-    Nested loops are built from the inside out: build the stages of the innermost
-    loop, enclose them, then enclose the result. Pass every stage inside the new loop
-    each time, not only those of the next inner loop, since any of them may read a
-    value that depends on ``inputs``. Enclose all stages of a loop in one call: a
-    stage returned by ``enclose`` takes the forwarded values as inputs, and enclosing
-    it again in a loop over the same inputs does not forward them.
-
-    Parameters
-    ----------
-    pipeline:
-        The pipeline the stages were built from.
-    stages:
-        The stages inside the new loop.
-    inputs:
-        Keys whose values the driver supplies on each iteration of the new loop.
-    outputs:
-        Keys the driver needs on each iteration of the new loop, such as accumulation
-        keys, in addition to what the inner stages read.
-    scheduler:
-        Scheduler for the outer stage. The inner stages keep their schedulers.
-
-    Returns
-    -------
-    :
-        The outer stage, then the given stages rebuilt, in the given order.
-
-    Raises
-    ------
-    ValueError
-        If no stage reads a value that depends on ``inputs`` and ``outputs`` is empty,
-        or if an output of a stage depends on ``inputs`` but not on the inputs of that
-        stage. The driver would push such an output once per iteration of a loop that
-        it does not vary in.
-
-    Examples
-    --------
-    Sum ``Total`` over the channels of several files, reading each file once:
-
-    .. code-block:: python
-
-        channel_stage = Stage(pipeline, outputs=(Total,), inputs=(Channel,))
-        file_stage, channel_stage = enclose(
-            pipeline, [channel_stage], inputs=(Filename,)
-        )
-
-        total = Reduced(operator.add)()
-        for filename in filenames:
-            held = file_stage.compute({Filename: filename})
-            for channel in channels:
-                values = channel_stage.compute({**held, Channel: channel})
-                total.push(values[Total])
-    """
-    stages = tuple(stages)
-    inputs = tuple(inputs)
-    outputs = tuple(outputs)
-    frontier = tuple(dict.fromkeys(k for s in stages for k in s.frontier))
-    graph = to_task_graph(
-        pipeline, targets=frontier, handler=HandleAsComputeTimeException()
-    )
-    deps = _dependency_graph(graph)
-    varying = [k for k in frontier if _upstream(deps, k) & set(inputs)]
-    if not varying and not outputs:
-        raise ValueError(f'No stage reads a value that depends on {inputs}')
-    for i, stage in enumerate(stages):
-        constant = [k for k in stage.outputs if k in varying]
-        if constant:
-            raise ValueError(
-                f'Outputs {constant} of stages[{i}] depend on {inputs} but not on '
-                'the inputs of that stage. Remove them from its outputs and pass '
-                'them to enclose as outputs of the outer stage'
-            )
-    outer = Stage(
-        pipeline,
-        outputs=(*outputs, *(k for k in varying if k not in outputs)),
-        inputs=inputs,
-        scheduler=scheduler,
-    )
-    inner = tuple(
-        Stage(
-            pipeline,
-            outputs=s.outputs,
-            inputs=(*(k for k in varying if k in s.frontier), *s.inputs),
-            scheduler=s._scheduler,
-        )
-        for s in stages
-    )
-    # Stages are snapshots, so a pipeline changed since the given stages were built
-    # would give stages that disagree with them.
-    built = {k: p for s in stages for k, p in _graph(s).items()}
-    for stage in (outer, *inner):
-        for key, provider in _graph(stage).items():
-            if key in built and not _same_provider(built[key], provider):
-                raise ValueError(
-                    f'The pipeline computes {key} differently than when the stages '
-                    'were built'
-                )
-    return (outer, *inner)
-
-
-def _upstream(deps: nx.DiGraph, key: Key) -> set[Key]:
-    if key not in deps:
-        return {key}
-    return {key, *nx.ancestors(deps, key)}
-
-
-def _graph(stage: Stage) -> Graph:
-    return {**stage._static_graph, **stage._dynamic_graph}

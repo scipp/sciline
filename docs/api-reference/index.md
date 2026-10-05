@@ -32,7 +32,6 @@
    :recursive:
 
    compute_mapped
-   enclose
    get_mapped_node_names
    visualize_stages
    warm
