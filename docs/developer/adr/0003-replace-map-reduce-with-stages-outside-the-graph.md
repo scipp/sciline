@@ -56,7 +56,7 @@ Remove from sciline: `map`, `reduce`, `index_names`, `indices`, `get_mapped_node
 Do not add `groupby`.
 `constraints=` is removed in the same release, because the PEP 695 generics do not need it.
 
-Add building blocks that work on an ordinary flat pipeline and add nothing to it: `Stage` with `warm`, and accumulators.
+Add building blocks that work on an ordinary flat pipeline and add nothing to it: `Stage` with `warm`, accumulators, and `enclose` for nested loops.
 
 ### `Stage`: a part of a pipeline, from chosen inputs to chosen outputs
 
@@ -106,20 +106,26 @@ finalize.compute({DetectorData: acc.value})
 
 Contributing, combining, and finalizing can run at different times or in different processes, since a contribution is a plain dict; the same loop without the accumulator replaces `compute_mapped`.
 
-### Nested loops
+### `enclose`: the stages of nested loops
 
 Banks within runs, or chunks of a stream within a context, are loops in loops.
 The inner level reads values that depend on the outer level only, such as a run's monitor, and those should be computed once per outer iteration.
 A stage built for the inner loop holds these values at its frontier.
-The driver builds one stage per loop: the outer stage computes the values at the frontier of the inner stage that depend on the outer inputs, and the rebuilt inner stage takes these *forwarded values* as inputs:
+`enclose` puts the stage inside a loop over the outer inputs, and derives the boundary from the graph:
 
 ```python
 bank_stage = Stage(pipeline, inputs=(Bank,), outputs=(Numerator, Denominator))
-forwarded = Stage(pipeline, inputs=(Filename,), outputs=bank_stage.frontier).dynamic_outputs
-run_stage = Stage(pipeline, inputs=(Filename,), outputs=forwarded)
-bank_stage = Stage(pipeline, inputs=(*forwarded, Bank), outputs=(Numerator, Denominator))
+run_stage, bank_stage = enclose(pipeline, [bank_stage], inputs=(Filename,))
 final_stage = Stage(pipeline, inputs=(Numerator, Denominator), outputs=(IofQ,))
+```
 
+The run stage computes, once per run, the values that the bank stage held and that depend on `Filename`.
+The rebuilt bank stage takes these *forwarded values* as inputs.
+Nested loops are built from the inside out: enclosing the result again adds a further outer loop, so each value is computed by the deepest loop whose inputs it depends on.
+`enclose` returns plain stages.
+The driver writes the loops and holds the values between them:
+
+```python
 for filename in filenames:
     held = run_stage.compute({Filename: filename})
     for bank in banks:
@@ -127,8 +133,7 @@ for filename in filenames:
         ...  # push out[Numerator] and out[Denominator] into accumulators
 ```
 
-A helper that builds these stages for several levels and rejects a run-level output pushed once per bank is left to a follow-up proposal.
-No current use of map/reduce needs it.
+`enclose` raises an error where a combined value would otherwise be silently wrong: an output of a stage that does not vary in that stage (a run-level key pushed once per bank).
 
 ### Who owns what
 
@@ -140,13 +145,13 @@ Everything stateful belongs to the driver: which members exist, which contributi
 - Each reduction package returns its own small object in place of the map/reduced pipeline.
   For esssans it holds a contribute stage per run type, a finalize stage, and the contributions by filename.
   A drop-in replacement for the map/reduced pipeline is a non-goal.
-- `StreamProcessor` in ess.reduce becomes a driver over a context stage, with chunk stages and a finalize stage inside its loop, with its existing accumulators and an object that holds the current context.
+- `StreamProcessor` in ess.reduce becomes a driver over stages built with `enclose` (a context stage, with chunk stages and a finalize stage inside its loop), with its existing accumulators and an object that holds the current context.
   The accumulators fit the `Accumulator` protocol once histogramming moves out of their base class.
-- Nested structures, such as banks within runs, are loops over one stage per loop; no graph contains another graph.
+- Nested structures, such as banks within runs, are loops over stages built with `enclose`; no graph contains another graph.
 
 ### Rollout
 
-`Stage`, `warm`, and the accumulators are added in a minor release.
+`Stage`, `warm`, `enclose`, and the accumulators are added in a minor release.
 The ESS packages then migrate one at a time while map/reduce still exists.
 The removal comes last, in a major release (recommended; a `sciline.v2` namespace is the open alternative, see below).
 Users who depend on map/reduce and do not need the new generics can stay on the last release before the removal.
@@ -164,6 +169,11 @@ A `sciline.v2` namespace that keeps the old `Pipeline` would serve them equally,
   `compute(table)` invited a flat runs-times-banks table, which counts run-level keys once per bank without an error, and its one guarantee is `Stage.dynamic_outputs`.
 - **Choosing the per-run keys of nested loops by hand.**
   Prototyped for LoKI and Bifrost: a key left out is recomputed per bank with a correct result, so the mistake goes unnoticed.
+- **`split(pipeline, *parts)`, with one `Part` per loop** that names the part of its enclosing loop as `parent`.
+  Prototyped and dropped: `parent` declared the forwarded values only indirectly, which made the API hard to understand.
+  It built the same stages as `enclose`.
+  Since it saw all loops at once, it rejected some mistakes at construction, such as a read from a loop that does not enclose the reader.
+  `enclose` builds on the frontier, which users of `Stage` already know.
 - **Let an aggregation turn back into a pipeline** (`as_pipeline()`), so that the `with_*` helpers could keep returning a pipeline.
   Prototyped and dropped: it became the only way to combine two aggregations, fixed the members at construction, and hid a loop inside a provider.
 - **Let the sciline objects hold state** (member tables, kept contributions, rules for what a parameter change invalidates).
@@ -189,7 +199,9 @@ A `sciline.v2` namespace that keeps the old `Pipeline` would serve them equally,
   Accumulator, contribution, and contribute/combine follow Beam, Flink, and Spark.
 - Every parameter is set on one flat pipeline, and everything held is a plain object that the driver can inspect, clear, or serialize.
 - The prototype reproduces the LoKI multi-run reduction with identical results and the same or fewer provider calls, and adding a run costs only that run's contribution.
+  `enclose` reproduces the LoKI reduction over runs times banks with identical results and provider calls.
   Prototype drivers, which are not in this repository, gave the results of plain loops for banks or triplets times runs, and a prototype `StreamProcessor` gave those of the real class.
+  They were built with `split` (see alternatives), which builds the same stages as `enclose` for these shapes.
 
 ### Negative
 
@@ -197,10 +209,9 @@ A `sciline.v2` namespace that keeps the old `Pipeline` would serve them equally,
 - The widgets need one interface across the package objects, a base class or one generic object, decided when the second package migrates.
 - Parallelism over members is the driver's job; with map/reduce, dask ran members in threads for free (about 1.7 s of 7.5 s in the LoKI validation script).
 - A map/reduce inside the per-member work of another one (the pixel masks in esssans) becomes a list parameter and a provider.
-- A driver must push only `stage.dynamic_outputs`; other keys are counted once per member.
-  In nested loops this is not enough: a run-level key declared as an output of the bank stage is dynamic there and is counted once per bank, without an error.
-  `warm` catches a stage inside a loop that still holds a value depending on the inputs of the loop, if the driver warms all its stages together.
-- With one context stage, a `StreamProcessor` context update recomputes all context-derived values (in esslivedata compute only; no accumulators reset).
+- A one-level driver that builds stages by hand must push only `stage.dynamic_outputs`; other keys are counted once per member. For nested loops, `enclose` is needed: a run-level key in a stage with inputs `(Filename, Bank)` is dynamic and still counted once per bank.
+- Each loop is inside at most one other: bank-only work is computed once per run and bank, and a `StreamProcessor` context update recomputes all context-derived values (in esslivedata compute only; no accumulators reset).
+- `enclose` sees one loop at a time, so some mistakes are found when the stages are warmed or run, not when they are built: `warm` rejects a stage left out of an `enclose` call, and a stage enclosed twice over the same inputs fails in the driver.
 - `warm` rejects the esssans background stage reading the masks of the one sample run set on the pipeline; esssans has to decide which run's detector IDs the background masks use.
 - esslivedata selects its scheduler by replacing `sciline.task_graph.DaskScheduler`; sciline keeps that working for stages, until it offers a public way.
 - Stages keep their held values, and package objects keep contributions (binned events for some workflows), so package objects need a way to clear them.
