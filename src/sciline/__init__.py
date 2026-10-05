@@ -19,7 +19,7 @@ from .handler import (
     UnsatisfiedRequirement,
 )
 from .pipeline import Pipeline, compute_mapped, get_mapped_node_names
-from .stage import Stage, visualize_stages, warm
+from .stage import Stage, enclose, visualize_stages, warm
 from .task_graph import TaskGraph
 
 __all__ = [
@@ -36,6 +36,7 @@ __all__ = [
     "UnboundTypeVar",
     "UnsatisfiedRequirement",
     "compute_mapped",
+    "enclose",
     "get_mapped_node_names",
     "scheduler",
     "visualize_stages",
