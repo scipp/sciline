@@ -205,8 +205,7 @@ Building the stages of nested loops this way has two pitfalls:
   `warm`, given all stages of a driver, rejects a stage that holds a value depending on a parameter that another stage takes as input.
   This relies on the driver warming its stages together, which it does anyway so that shared work is done once.
 
-A helper that builds the stages of nested loops from the inside out and rejects the first pitfall is a separate, follow-up proposal.
-The current uses (section 1) do not need it.
+A function that derives these stages, such as `enclose`, is a likely later addition.
 
 ### What is deliberately not in sciline
 

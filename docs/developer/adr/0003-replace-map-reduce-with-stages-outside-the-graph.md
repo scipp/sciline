@@ -127,8 +127,7 @@ for filename in filenames:
         ...  # push out[Numerator] and out[Denominator] into accumulators
 ```
 
-A helper that builds these stages for several levels and rejects a run-level output pushed once per bank is left to a follow-up proposal.
-No current use of map/reduce needs it.
+A function that derives these stages, such as `enclose`, is a likely later addition.
 
 ### Who owns what
 
