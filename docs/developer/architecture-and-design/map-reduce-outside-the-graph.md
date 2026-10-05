@@ -193,6 +193,9 @@ for filename in filenames:
 result = final_stage.compute({k: a.value for k, a in acc.items()})
 ```
 
+With several stages inside a loop, such as the triplet stage and the per-run step of Bifrost (section 6.3), the run stage outputs the forwarded values of all of them, and each stage takes those at its own frontier.
+`Stage.compute` accepts exactly the inputs of the stage, so the driver selects the values for each stage, `{k: v for k, v in held.items() if k in stage.inputs}`.
+
 Building the stages of nested loops this way has two pitfalls:
 
 - **An output of the inner stage that depends on the outer loop only.**
@@ -490,10 +493,10 @@ The tests cover:
 ### Nested drivers
 
 Prototype drivers ran on fake workflows with the dependency structure of esssans (banks times sample and background runs) and Bifrost (triplets times runs, with a per-run step after combining the triplets), and gave the results of plain loops over `Pipeline.compute`.
-They derived the forwarded values from the graph, as in section 5.
 Per-iteration work ran once per iteration of its loop, except work that depends on the bank alone (section 6.3).
-A prototype `StreamProcessor` on stages gave the results of `ess.reduce.streaming.StreamProcessor` for two dynamic keys in separate chunks, a context key, a context-only target, and `allow_bypass`.
-These prototypes need esssans and ess.reduce and are not part of this repository.
+A prototype `StreamProcessor` gave the results of `ess.reduce.streaming.StreamProcessor` for two dynamic keys in separate chunks, a context key, a context-only target, and `allow_bypass`.
+These prototypes were built with an earlier helper, since dropped, which builds the same stages as section 5 for these shapes.
+They need esssans and ess.reduce and are not part of this repository.
 The `StreamProcessor` rewrite still has to pass the ess.reduce tests (section 10).
 
 ### LoKI multi-run reduction
