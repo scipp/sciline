@@ -6,7 +6,7 @@ from typing import Any, NewType
 import pytest
 
 import sciline as sl
-from sciline import Stage, StageSpec, build_stages
+from sciline import Stage, build_stages
 from sciline.reporter import Reporter
 from sciline.typing import Graph
 from sciline.visualize import DYNAMIC_STYLE, FRONTIER_STYLE, HELD_STYLE, INPUT_STYLE
@@ -252,11 +252,7 @@ def test_build_stages_computes_shared_static_work_once(
     pipeline: sl.Pipeline, calls: Calls
 ) -> None:
     numerator, denominator = build_stages(
-        pipeline,
-        [
-            StageSpec(inputs=(Filename,), outputs=(Numerator,)),
-            StageSpec(inputs=(Filename,), outputs=(Denominator,)),
-        ],
+        pipeline, inputs=(Filename,), outputs=[(Numerator,), (Denominator,)]
     )
     assert calls['calibration'] == 1
     assert numerator.static() == {Calibration: 4.0, Bins: 2}
@@ -266,15 +262,16 @@ def test_build_stages_computes_shared_static_work_once(
     assert calls['calibration'] == 1
 
 
-def test_build_stages_returns_stages_in_order_of_specs(pipeline: sl.Pipeline) -> None:
-    specs = [
-        StageSpec(inputs=(Filename,), outputs=(Numerator, Denominator)),
-        StageSpec(inputs=(Numerator, Denominator), outputs=(IofQ,)),
-    ]
-    stages = build_stages(pipeline, specs)
-    assert [(s.inputs, s.outputs) for s in stages] == [
-        (spec.inputs, spec.outputs) for spec in specs
-    ]
+def test_build_stages_takes_inputs_each_stage_needs(pipeline: sl.Pipeline) -> None:
+    contribute, finalize = build_stages(
+        pipeline,
+        inputs=(Filename, Numerator, Denominator),
+        outputs=[(Numerator, Denominator), (IofQ,)],
+    )
+    assert contribute.inputs == (Filename,)
+    assert contribute.outputs == (Numerator, Denominator)
+    assert finalize.inputs == (Numerator, Denominator)
+    assert finalize.outputs == (IofQ,)
 
 
 def test_build_stages_with_missing_parameter_raises_unsatisfied() -> None:
@@ -286,42 +283,42 @@ def test_build_stages_with_missing_parameter_raises_unsatisfied() -> None:
 
     pipeline = sl.Pipeline([calibration, numerator])
     with pytest.raises(sl.UnsatisfiedRequirement):
-        build_stages(pipeline, [StageSpec(inputs=(Filename,), outputs=(Numerator,))])
+        build_stages(pipeline, inputs=(Filename,), outputs=[(Numerator,)])
 
 
-def test_build_stages_rejects_stage_holding_a_value_from_a_parameter_another_varies(
-    pipeline: sl.Pipeline, calls: Calls
+def test_build_stages_cuts_every_stage_at_every_input(
+    pipeline: sl.Pipeline,
 ) -> None:
-    with pytest.raises(
-        ValueError, match=r'specs\[1\] holds .*Filename.*which specs\[0\] takes'
-    ):
-        build_stages(
-            pipeline,
-            [
-                StageSpec(inputs=(Filename,), outputs=(Denominator,)),
-                # Holds Masked, loaded from the Filename set on the pipeline.
-                StageSpec(inputs=(Bins,), outputs=(Numerator,)),
-            ],
-        )
-    assert calls['load'] == 0
+    # Numerator reads Masked, which depends on Filename. Without the cut, the second
+    # stage would hold Masked for the Filename set on the pipeline.
+    per_file, per_bins = build_stages(
+        pipeline, inputs=(Filename, Bins), outputs=[(Denominator,), (Numerator,)]
+    )
+    assert per_file.inputs == (Filename,)
+    assert per_bins.inputs == (Filename, Bins)
+    assert per_bins.compute({Filename: 'ab', Bins: 1}) == {Numerator: [388.0]}
 
 
 def test_build_stages_allows_stage_taking_a_value_that_another_stage_holds(
     pipeline: sl.Pipeline, calls: Calls
 ) -> None:
-    build_stages(
+    _, masking = build_stages(
         pipeline,
-        [
-            StageSpec(inputs=(Filename,), outputs=(Calibration, Loaded)),
-            StageSpec(inputs=(Loaded, Calibration), outputs=(Masked,)),
-        ],
+        inputs=(Filename, Loaded, Calibration),
+        outputs=[(Calibration, Loaded), (Masked,)],
     )
+    assert masking.inputs == (Loaded, Calibration)
     assert calls['calibration'] == 1
 
 
-def test_build_stages_rejects_invalid_spec(pipeline: sl.Pipeline) -> None:
-    with pytest.raises(ValueError, match='not needed'):
-        build_stages(pipeline, [StageSpec(inputs=(Scale,), outputs=(Numerator,))])
+def test_build_stages_rejects_input_of_no_stage(pipeline: sl.Pipeline) -> None:
+    with pytest.raises(ValueError, match=r'Inputs \[.*Scale.*\] are not inputs'):
+        build_stages(pipeline, inputs=(Filename, Scale), outputs=[(Numerator,)])
+
+
+def test_build_stages_rejects_output_not_in_pipeline(pipeline: sl.Pipeline) -> None:
+    with pytest.raises(ValueError, match='not in the pipeline'):
+        build_stages(pipeline, inputs=(Filename,), outputs=[(int,)])
 
 
 # A stream: chunks of events are histogrammed against a geometry that depends on

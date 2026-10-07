@@ -72,11 +72,11 @@ stage.compute({Filename: 'run1.nxs'}) # -> {Numerator: ..., Denominator: ...}
 # Several stages from one pipeline, with their static parts computed in one run:
 contribute, finalize = build_stages(
     pipeline,
-    [
-        StageSpec(inputs=(Filename,), outputs=(Numerator, Denominator)),
-        StageSpec(inputs=(Numerator, Denominator), outputs=(IofQ,)),
-    ],
+    inputs=(Filename, Numerator, Denominator),
+    outputs=[(Numerator, Denominator), (IofQ,)],
 )
+contribute.inputs                     # (Filename,)
+finalize.inputs                       # (Numerator, Denominator)
 ```
 
 ### Behaviour
@@ -105,12 +105,14 @@ contribute, finalize = build_stages(
   `keys` lists every key the stage uses.
   A parameter that is not an input is in `keys` exactly when changing it on the pipeline would change the stage's results.
   Callers use this to decide what to rebuild (section 6.7).
-- **`build_stages(pipeline, specs)`.**
+- **`build_stages(pipeline, inputs=..., outputs=[...])`.**
   Stages built from one pipeline often share static work, for example a file that each of them reads.
-  `build_stages` takes one `StageSpec(inputs=..., outputs=...)` per stage, builds the stages, and computes their static parts in one scheduler run, so shared intermediate results are computed once and then released.
+  `build_stages` builds one stage per tuple of outputs and computes their static parts in one scheduler run, so shared intermediate results are computed once and then released.
   Each stage keeps only its own frontier values, as if it had been built alone.
   All stages are cut from one pipeline at one moment, so they agree on every key they share by construction.
-  `StageSpec` has keyword-only fields, as `Stage` has keyword-only arguments, because inputs and outputs are both tuples of keys and are easily swapped.
+  `inputs` is one set of keys for all stages: every stage is cut at every one of them, except at its own outputs, and takes those that its outputs still need.
+  So no stage holds a value that depends on a key that another stage takes as input; a stage that needs such a value takes the key as input itself.
+  A key in `inputs` that no stage takes is rejected.
 - **Threads.**
   A stage can be called from several threads at once; the static part is still computed only once.
 
@@ -185,11 +187,8 @@ bank_frontier = Stage(pipeline, inputs=(Bank,), outputs=(Numerator, Denominator)
 forwarded = Stage(pipeline, inputs=(Filename,), outputs=bank_frontier).dynamic_outputs
 run_stage, bank_stage, final_stage = build_stages(
     pipeline,
-    [
-        StageSpec(inputs=(Filename,), outputs=forwarded),
-        StageSpec(inputs=(*forwarded, Bank), outputs=(Numerator, Denominator)),
-        StageSpec(inputs=(Numerator, Denominator), outputs=(IofQ,)),
-    ],
+    inputs=(Filename, *forwarded, Bank, Numerator, Denominator),
+    outputs=[forwarded, (Numerator, Denominator), (IofQ,)],
 )
 ```
 
@@ -214,14 +213,17 @@ With several stages inside a loop, such as the triplet stage and the per-run ste
 Building the stages of nested loops this way has two pitfalls:
 
 - **An output of the inner stage that depends on the outer loop only.**
-  A key that depends on the run but not on the bank, declared as an output of the bank stage, is held, so it is at the frontier and forwarded.
-  The rebuilt bank stage takes it as input and passes it through, so it is in `dynamic_outputs`, and the driver pushes it once per bank.
+  A key that depends on the run but not on the bank, declared as an output of the bank stage, is held by the stage built for inspection, so it is at the frontier and forwarded.
+  The bank stage built by `build_stages` does not take its own output as input; it computes the key again on every call.
+  If the key depends only on forwarded values, it is in `dynamic_outputs`, and the driver pushes it once per bank.
   The combined value is wrong without any error.
   Run-level accumulation keys are outputs of the run stage instead.
-- **A stage that is not rebuilt.**
-  A stage inside the run loop that still holds a value depending on `Filename` uses the one run set on the pipeline, or fails if none is set.
-  `build_stages`, given all stages of a driver, rejects a stage that holds a value depending on a parameter that another stage takes as input.
+- **A run-level value that is not forwarded.**
+  If `forwarded` misses a value that the bank stage reads and that depends on the run, the bank stage takes `Filename` as input as well, since every stage is cut at every key in `inputs`.
+  The results cannot be wrong: a call without `Filename` fails, and a driver that supplies it computes the value once per bank instead of once per run.
+  A driver can reject this when it builds the stages, by checking that `Filename` is not in `bank_stage.inputs`.
   This relies on the driver building its stages in one call, which it does anyway so that shared work is done once.
+  Stages built separately are not cut at each other's inputs, and a stage inside the run loop that holds a value depending on `Filename` uses the one run set on the pipeline.
 
 A function that derives these stages, such as `enclose`, is a likely later addition.
 
@@ -254,7 +256,7 @@ All stages are built in one call to `build_stages` when the object is created.
 
 The background stage reads `DetectorMasks`, which in esssans depends on the detector IDs of the sample run set on the pipeline.
 With several sample runs, this run is not defined.
-`build_stages` rejects it: the background stage holds a value that depends on `Filename[SampleRun]`, which the sample stage takes as input.
+The background stage therefore takes `Filename[SampleRun]` as input, which the background loop cannot supply; `SansReduction` rejects this when it builds the stages.
 Forwarding the masks from the sample loop is not the fix, because the background loop is not inside the sample loop; nested in it, each background run would be computed once per sample run.
 The validation script takes the detector IDs from the empty-beam run instead, so the masks depend on no run and are computed once (section 11).
 
@@ -503,7 +505,7 @@ An earlier version of the stage tests was run on the generics branch and passed.
 
 The tests cover:
 
-- **Stage:** static part computed once and dynamic part per call; an intermediate input cuts off its ancestors; inputs the outputs do not need are rejected; pass-through of an output that is an input; `compute` rejects a missing input and a value for a key that is not an input; snapshot behaviour; `build_stages` rejects a stage that holds a value depending on a parameter that another stage takes as input, and allows a stage that takes as input a value that another stage holds; `build_stages` computes shared work once, returns the stages in the order of the specs, and rejects an invalid spec; concurrent calls compute the static part once; an expensive load before a cheap parameter (the shape of tuning in essapps); the default scheduler follows a replacement of `sciline.task_graph.DaskScheduler`; the `StreamProcessor` shape with a context update; `visualize_stages` fills what each stage computes with the color of that stage, and applies the styles of groups given by the caller.
+- **Stage:** static part computed once and dynamic part per call; an intermediate input cuts off its ancestors; inputs the outputs do not need are rejected; pass-through of an output that is an input; `compute` rejects a missing input and a value for a key that is not an input; snapshot behaviour; `build_stages` cuts every stage at every input, so a stage reading a value that depends on another stage's input takes that input itself, and allows a stage that takes as input a value that another stage holds; `build_stages` computes shared work once, gives each stage the inputs it needs, and rejects an input that no stage takes and an output not in the pipeline; concurrent calls compute the static part once; an expensive load before a cheap parameter (the shape of tuning in essapps); the default scheduler follows a replacement of `sciline.task_graph.DaskScheduler`; the `StreamProcessor` shape with a context update; `visualize_stages` fills what each stage computes with the color of that stage, and applies the styles of groups given by the caller.
 - **Accumulators:** push order, the first push as result, reading without pushes, pushing combined values gives the same result.
 
 ### Nested drivers
@@ -540,7 +542,7 @@ Not validated: the rewrite of `StreamProcessor` against its real tests.
 
 ### What changes for each project
 
-- **sciline:** adds `Stage`, `StageSpec`, `build_stages`, `Accumulator`, `Buffered`, `Reduced`, and `Pipeline.provide`, and later removes what section 7 lists.
+- **sciline:** adds `Stage`, `build_stages`, `Accumulator`, `Buffered`, `Reduced`, and `Pipeline.provide`, and later removes what section 7 lists.
   Users outside ESS need a documented replacement for `map(...).reduce(...)`: a loop over a stage with accumulators.
   No "experimental" label; the staged rollout below is the trial period.
   `Stage` also needs a `reporter` argument, so that progress reaches the ESS widgets.
@@ -594,7 +596,7 @@ Not validated: the rewrite of `StreamProcessor` against its real tests.
   Either each package object implements it, or one generic object is built from a registry that maps member keys to accumulation keys; this is decided when the second package migrates.
 - **Which run's detector IDs do the esssans background masks use?**
   `DetectorMasks` reads the detector IDs of the sample run set on the pipeline, and the background runs read it too (section 6.1).
-  With several sample runs this is not defined, and `build_stages` rejects it (section 6.1).
+  With several sample runs this is not defined, and the background stage takes `Filename[SampleRun]` as input, which the background loop cannot supply (section 6.1).
   The validation script uses the empty-beam run, which gives identical results on the test data, where all runs have the same detector IDs.
   esssans decides when it migrates, for example detector IDs from the geometry or from a run chosen by a parameter.
 - **Static work across processes.**

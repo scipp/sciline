@@ -76,7 +76,9 @@ A stage splits the graph needed for the outputs into two parts:
 An input can be a parameter or an intermediate result; in the second case everything upstream of it is cut off.
 A stage is a snapshot: changing the pipeline afterwards does not change the stage.
 The snapshot copies the graph but not the parameter values, so a value modified in place, rather than set anew, can change what the stage computes.
-`build_stages(pipeline, specs)` builds several stages from one pipeline, each given by a `StageSpec(inputs=..., outputs=...)`, and computes their static parts together, so that work they share is done once.
+`build_stages(pipeline, inputs=..., outputs=[...])` builds several stages from one pipeline, one per tuple of outputs, and computes their static parts together, so that work they share is done once.
+Every stage is cut at every key in `inputs`, except at its own outputs, and takes those of the keys that it needs.
+No stage therefore holds a value that depends on a key another stage varies.
 
 This is the operation that `StreamProcessor` builds by hand and that scipp/sciline#241 asks for.
 `Pipeline.provide(key, callable)`, the other request of that issue, is added as well.
@@ -111,18 +113,15 @@ Contributing, combining, and finalizing can run at different times or in differe
 Banks within runs, or chunks of a stream within a context, are loops in loops.
 The inner level reads values that depend on the outer level only, such as a run's monitor, and those should be computed once per outer iteration.
 A stage built for the inner loop holds these values at its frontier.
-The driver builds one stage per loop: the outer stage computes the values at the frontier of the inner stage that depend on the outer inputs, and the rebuilt inner stage takes these *forwarded values* as inputs:
+The driver builds one stage per loop: the outer stage computes the values at the frontier of the inner stage that depend on the outer inputs, and the inner stage takes these *forwarded values* as inputs:
 
 ```python
 bank_frontier = Stage(pipeline, inputs=(Bank,), outputs=(Numerator, Denominator)).frontier
 forwarded = Stage(pipeline, inputs=(Filename,), outputs=bank_frontier).dynamic_outputs
 run_stage, bank_stage, final_stage = build_stages(
     pipeline,
-    [
-        StageSpec(inputs=(Filename,), outputs=forwarded),
-        StageSpec(inputs=(*forwarded, Bank), outputs=(Numerator, Denominator)),
-        StageSpec(inputs=(Numerator, Denominator), outputs=(IofQ,)),
-    ],
+    inputs=(Filename, *forwarded, Bank, Numerator, Denominator),
+    outputs=[forwarded, (Numerator, Denominator), (IofQ,)],
 )
 
 for filename in filenames:
@@ -205,9 +204,10 @@ A `sciline.v2` namespace that keeps the old `Pipeline` would serve them equally,
 - A map/reduce inside the per-member work of another one (the pixel masks in esssans) becomes a list parameter and a provider.
 - A driver must push only `stage.dynamic_outputs`; other keys are counted once per member.
   In nested loops this is not enough: a run-level key declared as an output of the bank stage is dynamic there and is counted once per bank, without an error.
-  `build_stages` catches a stage inside a loop that still holds a value depending on the inputs of the loop, if the driver builds all its stages in one call.
+  A stage inside a loop cannot hold a value that depends on the inputs of the loop, if the driver builds all its stages in one call to `build_stages`.
+  If the driver does not forward such a value, the stage takes the input of the loop as well, and a call without it fails.
 - With one context stage, a `StreamProcessor` context update recomputes all context-derived values (in esslivedata compute only; no accumulators reset).
-- `build_stages` rejects the esssans background stage reading the masks of the one sample run set on the pipeline; esssans has to decide which run's detector IDs the background masks use.
+- The esssans background stage reads masks that depend on the sample run, so it takes `Filename[SampleRun]` as input, which the background loop cannot supply; esssans has to decide which run's detector IDs the background masks use.
 - esslivedata selects its scheduler by replacing `sciline.task_graph.DaskScheduler`; sciline keeps that working for stages, until it offers a public way.
 - Stages keep their held values, and package objects keep contributions (binned events for some workflows), so package objects need a way to clear them.
 - Visualization of mapped pipelines (`compact=`) goes; `Stage.visualize` and `visualize_stages` replace it in part.

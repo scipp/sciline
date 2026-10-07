@@ -61,7 +61,7 @@ from ess.sans.workflow import _merge, merge_contributions
 from scipp.testing import assert_allclose, assert_identical
 
 import sciline
-from sciline import Buffered, Stage, StageSpec, build_stages
+from sciline import Buffered, Stage, build_stages
 
 OUTPUTS = (BackgroundSubtractedIofQ, BackgroundSubtractedIofQxy)
 SCHEDULER = sciline.scheduler.NaiveScheduler()
@@ -168,17 +168,21 @@ def accumulators_for(run_type: type) -> dict[Any, Any]:
 def reduction_stages(pipeline: sciline.Pipeline) -> tuple[dict[type, Stage], Stage]:
     """One contribute stage per run type, and their shared finalize stage."""
     run_types = (SampleRun, BackgroundRun)
-    contribute = [
-        StageSpec(inputs=(Filename[rt],), outputs=tuple(accumulators_for(rt)))
-        for rt in run_types
-    ]
-    finalize = StageSpec(
-        inputs=tuple(k for spec in contribute for k in spec.outputs), outputs=OUTPUTS
-    )
+    acc_keys = [tuple(accumulators_for(rt)) for rt in run_types]
     *stages, final = build_stages(
-        pipeline, [*contribute, finalize], scheduler=SCHEDULER
+        pipeline,
+        inputs=(
+            *(Filename[rt] for rt in run_types),
+            *(k for ks in acc_keys for k in ks),
+        ),
+        outputs=[*acc_keys, OUTPUTS],
+        scheduler=SCHEDULER,
     )
-    for stage in stages:
+    for run_type, stage in zip(run_types, stages, strict=True):
+        # A stage reading values that depend on the runs of another run type takes
+        # their filenames as input, which the loop over its own runs cannot supply.
+        if stage.inputs != (Filename[run_type],):
+            raise ValueError(f'Contribute stage of {run_type} takes {stage.inputs}')
         # A key that does not vary per run would be pushed once per run.
         if stage.dynamic_outputs != stage.outputs:
             raise ValueError(
@@ -274,9 +278,9 @@ def main() -> None:
     flat.insert(detector_masks)
     flat.insert(detector_ids_from_empty_beam)
     flat[PixelMaskFilenames] = tuple(masks)
-    # With the detector IDs of the sample run, the background stage would hold masks
-    # for the sample run set on the pipeline, while the sample stage varies it, and
-    # build_stages would reject the stages.
+    # With the detector IDs of the sample run, the background stage would read masks
+    # that depend on the sample run, so it would take Filename[SampleRun] as input,
+    # which reduction_stages rejects.
     t0 = time.perf_counter()
     reduction = SansReduction(flat)
     reduction.set_runs(SampleRun, sample_runs[:1])

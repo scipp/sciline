@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import threading
 from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 import networkx as nx
@@ -271,39 +270,42 @@ class Stage:
         self._warm = True
 
 
-@dataclass(frozen=True, kw_only=True)
-class StageSpec:
-    """Inputs and outputs of a stage, for building several stages with
-    :py:func:`build_stages`."""
-
-    inputs: tuple[Key, ...]
-    """Keys supplied on each call."""
-    outputs: tuple[Key, ...]
-    """Keys whose values the stage computes."""
-
-
 def build_stages(
     pipeline: Pipeline,
-    specs: Iterable[StageSpec],
     *,
+    inputs: Iterable[Key],
+    outputs: Iterable[Iterable[Key]],
     scheduler: Scheduler | None = None,
 ) -> tuple[Stage, ...]:
     """Build several stages from one pipeline and compute their held parts in one run.
+
+    Every stage is cut at every key in ``inputs``, except at its own outputs. Its
+    inputs are those of ``inputs`` that its outputs still need after this cut. For
+    example, with ``inputs=(Filename, Numerator)`` and
+    ``outputs=[(Numerator,), (Result,)]``, the first stage computes ``Numerator``
+    from ``Filename``, and the second computes ``Result`` from ``Numerator``.
+
+    Since every stage is cut at every key in ``inputs``, no stage holds a value that
+    depends on one of them. A stage that needs such a value, and does not get it
+    through another key in ``inputs``, takes the key the value depends on as input.
+    For example, a stage inside a loop over runs that reads a value depending on the
+    run, which the outer stage does not pass on, takes ``Filename`` as input as
+    well. A driver that does not supply it gets an error on the first call.
 
     Intermediate results shared by the held parts are computed once and released;
     each stage keeps only the values at its frontier, as a :py:class:`Stage` built
     on its own does. The stages are returned warm, so the first call to
     :py:meth:`Stage.compute` computes only the per-call part.
 
-    Pass all stages of a driver, such as those of nested loops, in one call. Only
-    then can stages that would hold a value the driver varies be detected.
-
     Parameters
     ----------
     pipeline:
         Pipeline with all parameters set that the outputs need, except the inputs.
-    specs:
-        Inputs and outputs of each stage.
+    inputs:
+        Keys at which the pipeline is cut, such as the keys a driver loops over and
+        the values it passes from one stage to another.
+    outputs:
+        Keys whose values each stage computes, one tuple per stage.
     scheduler:
         Scheduler for computing the held parts and, in each stage, the per-call part.
         If not given, the default of :py:class:`Stage` is used.
@@ -311,41 +313,39 @@ def build_stages(
     Returns
     -------
     :
-        One stage per spec, in the order of ``specs``.
+        One stage per tuple in ``outputs``, in the same order.
 
     Raises
     ------
     ValueError
-        If a stage holds a value that depends on a parameter that another stage
-        takes as input. The held value is for the one value of the parameter set on
-        the pipeline, or for none, while the driver varies it. If the stage runs
-        inside the loop over that input, it must take the value as an input,
-        computed once per iteration of the loop. Otherwise the held value must not
-        depend on that input, which means changing the pipeline. Also raised as by
-        :py:class:`Stage` for an invalid spec.
+        If a key in ``inputs`` is not an input of any stage, or an output is not in
+        the pipeline.
     """
+    inputs = tuple(inputs)
+    outputs = [tuple(outs) for outs in outputs]
+    targets = tuple(dict.fromkeys(k for outs in outputs for k in outs))
+    unknown = [k for k in targets if k not in pipeline.underlying_graph]
+    if unknown:
+        raise ValueError(f'Outputs {unknown} are not in the pipeline')
+    deps = _dependency_graph(
+        to_task_graph(pipeline, targets=targets, handler=HandleAsComputeTimeException())
+    )
+    stage_inputs = []
+    for outs in outputs:
+        cut = deps.copy()
+        for key in inputs:
+            if key in cut and key not in outs:
+                cut.remove_edges_from(list(cut.in_edges(key)))
+        needed = set().union(*(nx.ancestors(cut, key) for key in outs))
+        stage_inputs.append(tuple(k for k in inputs if k in needed and k not in outs))
+    unused = [k for k in inputs if not any(k in ins for ins in stage_inputs)]
+    if unused:
+        raise ValueError(f'Inputs {unused} are not inputs of any stage')
     scheduler = scheduler_or_default(scheduler)
     stages = tuple(
-        Stage(pipeline, outputs=s.outputs, inputs=s.inputs, scheduler=scheduler)
-        for s in specs
+        Stage(pipeline, outputs=outs, inputs=ins, scheduler=scheduler)
+        for outs, ins in zip(outputs, stage_inputs, strict=True)
     )
-    for i, held in enumerate(stages):
-        params = {
-            k
-            for k, p in held._static_graph.items()
-            if p.kind in ('parameter', 'unsatisfied')
-        }
-        for j, other in enumerate(stages):
-            varied = params & set(other.inputs)
-            if j != i and varied:
-                raise ValueError(
-                    f'specs[{i}] holds values that depend on '
-                    f'{sorted(varied, key=str)}, which specs[{j}] takes as inputs. '
-                    f'If specs[{i}] runs inside the loop over them, it must take '
-                    'those values as inputs, computed once per iteration of that loop. '
-                    f'Otherwise, change the pipeline so that the values specs[{i}] '
-                    'holds do not depend on them'
-                )
     # The stages are cut from one pipeline, so they agree on every key they share.
     graph: Graph = {}
     for stage in stages:

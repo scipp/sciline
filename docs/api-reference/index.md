@@ -17,7 +17,6 @@
    scheduler.NaiveScheduler
    TaskGraph
    Stage
-   StageSpec
    Accumulator
    Buffered
    Reduced

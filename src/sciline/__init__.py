@@ -19,7 +19,7 @@ from .handler import (
     UnsatisfiedRequirement,
 )
 from .pipeline import Pipeline, compute_mapped, get_mapped_node_names
-from .stage import Stage, StageSpec, build_stages, visualize_stages
+from .stage import Stage, build_stages, visualize_stages
 from .task_graph import TaskGraph
 
 __all__ = [
@@ -32,7 +32,6 @@ __all__ = [
     "Reduced",
     "Scope",
     "Stage",
-    "StageSpec",
     'TaskGraph',
     "UnboundTypeVar",
     "UnsatisfiedRequirement",
