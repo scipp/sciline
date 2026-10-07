@@ -1,0 +1,354 @@
+"""Validate stages and accumulators on the esssans LoKI multi-run reduction.
+
+Reference: with_pixel_mask_filenames + with_sample_runs + with_background_runs
+(sciline map/reduce). Prototype: SansReduction, the object esssans would return
+instead of a map/reduced pipeline, holding one contribute stage per run type, their
+shared finalize stage, and the contributions; the pixel masks are a list parameter
+read by one provider instead of a combined value, since the point at which they
+would be combined sits inside the per-run work. The masks are built from the
+detector IDs of the empty-beam run instead of the sample run: with several sample
+runs, "the sample run" is not defined.
+
+Run from this directory with
+    python loki_validation.py
+"""
+
+# ruff: noqa: T201
+
+from __future__ import annotations
+
+import time
+from collections.abc import Iterable
+from typing import Any, NewType
+
+import ess.loki.data  # noqa: F401
+import scipp as sc
+from ess import loki, sans
+from ess.sans.io import read_xml_detector_masking
+from ess.sans.masking import apply_pixel_masks, to_detector_mask
+from ess.sans.types import (
+    BackgroundRun,
+    BackgroundSubtractedIofQ,
+    BackgroundSubtractedIofQxy,
+    BeamCenter,
+    CorrectedDetector,
+    CorrectForGravity,
+    Denominator,
+    DetectorIDs,
+    DetectorMasks,
+    DirectBeam,
+    EmptyBeamRun,
+    EmptyDetector,
+    Filename,
+    MaskedDetectorIDs,
+    NeXusDetectorName,
+    NormalizedQ,
+    NormalizedQxQy,
+    Numerator,
+    PixelMaskFilename,
+    QBins,
+    QxBins,
+    QyBins,
+    ReturnEvents,
+    RunType,
+    SampleRun,
+    TransmissionRun,
+    UncertaintyBroadcastMode,
+    WavelengthBins,
+    WavelengthDetector,
+)
+from ess.sans.workflow import _merge, merge_contributions
+from scipp.testing import assert_allclose, assert_identical
+
+import sciline
+from sciline import Buffered, Stage, build_stages
+
+OUTPUTS = (BackgroundSubtractedIofQ, BackgroundSubtractedIofQxy)
+SCHEDULER = sciline.scheduler.NaiveScheduler()
+
+calls: dict[str, int] = {}
+
+
+def _hit(name: str) -> None:
+    calls[name] = calls.get(name, 0) + 1
+
+
+# Counted copies of providers, with the original signatures so sciline sees them.
+def counted_read_xml_detector_masking(filename: PixelMaskFilename) -> MaskedDetectorIDs:
+    _hit('read_mask_file')
+    return read_xml_detector_masking(filename)
+
+
+def counted_to_detector_mask(
+    ids: DetectorIDs, path: PixelMaskFilename, masked_ids: MaskedDetectorIDs
+) -> DetectorMasks:
+    _hit('to_detector_mask')
+    return to_detector_mask(ids, path, masked_ids)
+
+
+# The prototype's mask handling: one list parameter and the detector IDs of the
+# empty-beam run, so the files are read and the masks built once (static).
+PixelMaskFilenames = NewType('PixelMaskFilenames', tuple[str, ...])
+MaskedDetectorIDsPerFile = NewType('MaskedDetectorIDsPerFile', dict[str, sc.Variable])
+
+
+def read_mask_files(filenames: PixelMaskFilenames) -> MaskedDetectorIDsPerFile:
+    return MaskedDetectorIDsPerFile(
+        {f: counted_read_xml_detector_masking(PixelMaskFilename(f)) for f in filenames}
+    )
+
+
+def detector_masks(ids: DetectorIDs, masked: MaskedDetectorIDsPerFile) -> DetectorMasks:
+    return _merge(
+        *(
+            counted_to_detector_mask(ids, PixelMaskFilename(p), m)
+            for p, m in masked.items()
+        )
+    )
+
+
+def detector_ids_from_empty_beam(data: EmptyDetector[EmptyBeamRun]) -> DetectorIDs:
+    return DetectorIDs(data.coords['detector_number'])
+
+
+def counted_apply_pixel_masks(
+    data: WavelengthDetector[RunType], masks: DetectorMasks
+) -> CorrectedDetector[RunType, Numerator]:
+    _hit('apply_pixel_masks')
+    return apply_pixel_masks(data, masks)
+
+
+def make_workflow() -> sciline.Pipeline:
+    # Same as the `larmor_workflow` fixture in tests/loki/conftest.py, no_masks=False.
+    wf: sciline.Pipeline = loki.LokiAtLarmorWorkflow()
+    wf[NeXusDetectorName] = 'larmor_detector'
+    wf[Filename[SampleRun]] = loki.data.loki_tutorial_sample_run_60339()
+    wf[Filename[BackgroundRun]] = loki.data.loki_tutorial_background_run_60393()
+    wf[Filename[TransmissionRun[SampleRun]]] = (
+        loki.data.loki_tutorial_sample_transmission_run()
+    )
+    wf[Filename[TransmissionRun[BackgroundRun]]] = loki.data.loki_tutorial_run_60392()
+    wf[Filename[EmptyBeamRun]] = loki.data.loki_tutorial_run_60392()
+    wf[WavelengthBins] = sc.linspace(
+        'wavelength', start=1.0, stop=13.0, num=51, unit='angstrom'
+    )
+    wf[CorrectForGravity] = True
+    wf[UncertaintyBroadcastMode] = UncertaintyBroadcastMode.upper_bound
+    wf[ReturnEvents] = False
+    wf[QxBins] = sc.linspace('Qx', start=-0.3, stop=0.3, num=91, unit='1/angstrom')
+    wf[QyBins] = sc.linspace('Qy', start=-0.2, stop=0.3, num=78, unit='1/angstrom')
+    wf[QBins] = sc.linspace('Q', start=0.01, stop=0.3, num=101, unit='1/angstrom')
+    wf[DirectBeam] = None
+    for provider in (
+        counted_read_xml_detector_masking,
+        counted_to_detector_mask,
+        counted_apply_pixel_masks,
+    ):
+        wf.insert(provider)
+    return wf
+
+
+def compare(name: str, a: Any, b: Any) -> None:
+    try:
+        assert_identical(a, b)
+        print(f'  {name}: identical')
+    except AssertionError:
+        assert_allclose(a, b, rtol=sc.scalar(1e-12))
+        print(f'  {name}: allclose (rtol 1e-12) but not identical')
+
+
+def accumulators_for(run_type: type) -> dict[Any, Any]:
+    return {
+        qtype[run_type, part]: Buffered(merge_contributions)
+        for part in (Numerator, Denominator)
+        for qtype in (NormalizedQ, NormalizedQxQy)
+    }
+
+
+def reduction_stages(pipeline: sciline.Pipeline) -> tuple[dict[type, Stage], Stage]:
+    """One contribute stage per run type, and their shared finalize stage."""
+    run_types = (SampleRun, BackgroundRun)
+    acc_keys = [tuple(accumulators_for(rt)) for rt in run_types]
+    *stages, final = build_stages(
+        pipeline,
+        inputs=(
+            *(Filename[rt] for rt in run_types),
+            *(k for ks in acc_keys for k in ks),
+        ),
+        outputs=[*acc_keys, OUTPUTS],
+        scheduler=SCHEDULER,
+    )
+    for run_type, stage in zip(run_types, stages, strict=True):
+        # A stage reading values that depend on the runs of another run type takes
+        # their filenames as input, which the loop over its own runs cannot supply.
+        if stage.inputs != (Filename[run_type],):
+            raise ValueError(f'Contribute stage of {run_type} takes {stage.inputs}')
+        # A key that does not vary per run would be pushed once per run.
+        if stage.dynamic_outputs != stage.outputs:
+            raise ValueError(
+                'Not varying per run: '
+                f'{set(stage.outputs) - set(stage.dynamic_outputs)}'
+            )
+    return dict(zip(run_types, stages, strict=True)), final
+
+
+def combine(run_type: type, contributions: Iterable[dict[Any, Any]]) -> dict[Any, Any]:
+    acc = {k: make() for k, make in accumulators_for(run_type).items()}
+    for contribution in contributions:
+        for k, a in acc.items():
+            a.push(contribution[k])
+    return {k: a.value for k, a in acc.items()}
+
+
+def show(label: str, t0: float) -> dict[str, int]:
+    print(f'  {label}: {time.perf_counter() - t0:.1f} s, calls {calls}')
+    return dict(calls)
+
+
+class SansReduction:
+    """What esssans would return instead of a map/reduced pipeline.
+
+    Sample and background runs each have a contribute stage, whose outputs feed one
+    shared finalize stage. Contributions are held by filename, so adding a run
+    computes only the new run's contribution, and removing a run recomputes nothing.
+
+    Built from a pipeline with all parameters set; to change a parameter, build a
+    new object.
+    """
+
+    def __init__(self, pipeline: sciline.Pipeline) -> None:
+        self._contribute, self._finalize = reduction_stages(pipeline)
+        self._runs: dict[type, list[str]] = {rt: [] for rt in self._contribute}
+        self._contributions: dict[type, dict[str, Any]] = {
+            rt: {} for rt in self._contribute
+        }
+
+    def set_runs(self, run_type: type, runs: list[str]) -> None:
+        self._runs[run_type] = list(runs)
+        held = self._contributions[run_type]
+        self._contributions[run_type] = {f: c for f, c in held.items() if f in runs}
+
+    def compute(self) -> dict[Any, Any]:
+        combined: dict[Any, Any] = {}
+        for run_type, stage in self._contribute.items():
+            held = self._contributions[run_type]
+            for run in self._runs[run_type]:
+                if run not in held:
+                    held[run] = stage.compute({Filename[run_type]: run})
+            combined |= combine(run_type, held.values())
+        return self._finalize.compute(combined)
+
+
+def main() -> None:
+    masks = loki.data.loki_tutorial_mask_filenames()
+    print(f'{len(masks)} mask file(s)')
+    sample_runs = [
+        loki.data.loki_tutorial_sample_run_60250(),
+        loki.data.loki_tutorial_sample_run_60339(),
+    ]
+    background_runs = [
+        loki.data.loki_tutorial_background_run_60248(),
+        loki.data.loki_tutorial_background_run_60393(),
+    ]
+
+    base = make_workflow()
+    # As in test_pipeline_can_compute_IofQ: beam center from the single-run workflow
+    # with masks, then fixed as a parameter for both approaches.
+    base[BeamCenter] = sans.beam_center_from_center_of_mass(
+        sans.with_pixel_mask_filenames(base, masks)
+    )
+    calls.clear()
+
+    # --- Reference: map/reduce ------------------------------------------------
+    t0 = time.perf_counter()
+    ref = sans.with_pixel_mask_filenames(base, masks)
+    ref = sans.with_sample_runs(ref, runs=sample_runs)
+    ref = sans.with_background_runs(ref, runs=background_runs)
+    # Both sides run on the naive scheduler so that timings compare call structure
+    # only. The default dask scheduler runs the members of one map/reduced graph in
+    # threads, about 1.7 s faster here; over stages that parallelism is the caller's.
+    ref_results = ref.compute(OUTPUTS, scheduler=SCHEDULER)
+    t_ref = time.perf_counter() - t0
+    ref_calls = show('reference', t0)
+    calls.clear()
+
+    # --- Prototype: the package object over stages and accumulators --------------
+    flat = base.copy()
+    flat.insert(read_mask_files)
+    flat.insert(detector_masks)
+    flat.insert(detector_ids_from_empty_beam)
+    flat[PixelMaskFilenames] = tuple(masks)
+    # With the detector IDs of the sample run, the background stage would read masks
+    # that depend on the sample run, so it would take Filename[SampleRun] as input,
+    # which reduction_stages rejects.
+    t0 = time.perf_counter()
+    reduction = SansReduction(flat)
+    reduction.set_runs(SampleRun, sample_runs[:1])
+    reduction.set_runs(BackgroundRun, background_runs)
+    reduction.compute()
+    show('one sample run', t0)
+    reduction.set_runs(SampleRun, sample_runs)
+    results = reduction.compute()
+    t_proto = time.perf_counter() - t0
+    proto_calls = show('second sample run added', t0)
+
+    print('final results, prototype vs reference:')
+    for key in OUTPUTS:
+        compare(key.__name__, results[key], ref_results[key])
+
+    # --- Parameter change: a new object -----------------------------------------
+    calls.clear()
+    t0 = time.perf_counter()
+    changed = flat.copy()
+    changed[QBins] = sc.linspace('Q', start=0.01, stop=0.3, num=51, unit='1/angstrom')
+    reduction = SansReduction(changed)
+    reduction.set_runs(SampleRun, sample_runs)
+    reduction.set_runs(BackgroundRun, background_runs)
+    reduction.compute()
+    show('QBins changed', t0)
+
+    # --- Per-member intermediate ----------------------------------------------
+    key = NormalizedQ[SampleRun, Numerator]
+    per_run = Stage(flat, outputs=(key,), inputs=(Filename[SampleRun],))
+    members = {
+        i: per_run.compute({Filename[SampleRun]: f})[key]
+        for i, f in enumerate(sample_runs)
+    }
+    single = sans.with_pixel_mask_filenames(base, masks)
+    print('per-member NormalizedQ[SampleRun, Numerator] vs single-run compute:')
+    for (m, value), filename in zip(members.items(), sample_runs, strict=True):
+        single[Filename[SampleRun]] = filename
+        compare(f'member {m}', value, single.compute(key))
+    mapped = sciline.compute_mapped(ref, key)
+    print('per-member vs sciline.compute_mapped:')
+    for (m, value), (_, expected) in zip(members.items(), mapped.items(), strict=True):
+        compare(f'member {m}', value, expected)
+
+    # --- Contribute, combine, finalize as separate calls, as a framework would ----
+    calls.clear()
+    stages, finalize = reduction_stages(flat)
+    # Sample runs combined as a chain, one new run onto the previous result.
+    sample = stages[SampleRun].compute({Filename[SampleRun]: sample_runs[0]})
+    for run in sample_runs[1:]:
+        new = stages[SampleRun].compute({Filename[SampleRun]: run})
+        sample = combine(SampleRun, [sample, new])
+    background_stage = stages[BackgroundRun]
+    background = combine(
+        BackgroundRun,
+        (
+            background_stage.compute({Filename[BackgroundRun]: r})
+            for r in background_runs
+        ),
+    )
+    staged = finalize.compute({**sample, **background})
+    print(f'separate calls (calls {calls}):')
+    for key in OUTPUTS:
+        compare(key.__name__, staged[key], results[key])
+
+    print(f'\nSUMMARY: reference {t_ref:.1f} s, prototype {t_proto:.1f} s')
+    print(f'  reference calls: {ref_calls}')
+    print(f'  prototype calls: {proto_calls}')
+
+
+if __name__ == '__main__':
+    main()
