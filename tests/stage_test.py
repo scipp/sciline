@@ -6,7 +6,7 @@ from typing import Any, NewType
 import pytest
 
 import sciline as sl
-from sciline import Stage, warm
+from sciline import Stage, StageSpec, build_stages
 from sciline.reporter import Reporter
 from sciline.typing import Graph
 from sciline.visualize import DYNAMIC_STYLE, FRONTIER_STYLE, HELD_STYLE, INPUT_STYLE
@@ -248,99 +248,80 @@ def test_stage_rejects_object_that_is_not_a_scheduler(pipeline: sl.Pipeline) -> 
         )
 
 
-def test_warm_computes_shared_static_work_once(
+def test_build_stages_computes_shared_static_work_once(
     pipeline: sl.Pipeline, calls: Calls
 ) -> None:
-    numerator = Stage(pipeline, outputs=(Numerator,), inputs=(Filename,))
-    denominator = Stage(pipeline, outputs=(Denominator,), inputs=(Filename,))
-    warm(numerator, denominator)
+    numerator, denominator = build_stages(
+        pipeline,
+        [
+            StageSpec(inputs=(Filename,), outputs=(Numerator,)),
+            StageSpec(inputs=(Filename,), outputs=(Denominator,)),
+        ],
+    )
+    assert calls['calibration'] == 1
     assert numerator.static() == {Calibration: 4.0, Bins: 2}
     assert denominator.static() == {Calibration: 4.0}
+    numerator.compute({Filename: 'ab'})
+    denominator.compute({Filename: 'ab'})
     assert calls['calibration'] == 1
 
 
-def test_warm_shares_work_between_pipeline_copies_that_agree(
-    pipeline: sl.Pipeline, calls: Calls
-) -> None:
-    # Scale is not used by the stages, so they agree on every key they share.
-    other = pipeline.copy()
-    other[Scale] = 2.0
-    numerator = Stage(pipeline, outputs=(Numerator,), inputs=(Filename,))
-    denominator = Stage(other, outputs=(Denominator,), inputs=(Filename,))
-    warm(numerator, denominator)
-    assert numerator.static() == {Calibration: 4.0, Bins: 2}
-    assert denominator.static() == {Calibration: 4.0}
-    assert calls['calibration'] == 1
+def test_build_stages_returns_stages_in_order_of_specs(pipeline: sl.Pipeline) -> None:
+    specs = [
+        StageSpec(inputs=(Filename,), outputs=(Numerator, Denominator)),
+        StageSpec(inputs=(Numerator, Denominator), outputs=(IofQ,)),
+    ]
+    stages = build_stages(pipeline, specs)
+    assert [(s.inputs, s.outputs) for s in stages] == [
+        (spec.inputs, spec.outputs) for spec in specs
+    ]
 
 
-def test_warm_rejects_stages_that_compute_a_shared_key_differently(
-    pipeline: sl.Pipeline,
-) -> None:
-    other = pipeline.copy()
-    other[Mask] = 'other mask'
-    a = Stage(pipeline, outputs=(Numerator,), inputs=(Filename,))
-    b = Stage(other, outputs=(Numerator,), inputs=(Filename,))
-    with pytest.raises(ValueError, match='differently'):
-        warm(a, b)
-
-
-def test_warm_rejects_stages_built_before_and_after_a_parameter_change(
-    pipeline: sl.Pipeline,
-) -> None:
-    before = Stage(pipeline, outputs=(Numerator,), inputs=(Filename,))
-    pipeline[Mask] = 'other mask'
-    after = Stage(pipeline, outputs=(Numerator,), inputs=(Filename,))
-    with pytest.raises(ValueError, match='differently'):
-        warm(before, after)
-
-
-def test_warm_stages_with_the_same_missing_parameter_raises_unsatisfied() -> None:
+def test_build_stages_with_missing_parameter_raises_unsatisfied() -> None:
     def calibration(mask: Mask) -> Calibration:
         return Calibration(float(len(mask)))
 
     def numerator(cal: Calibration, filename: Filename) -> Numerator:
         return Numerator([cal])
 
-    def denominator(cal: Calibration, filename: Filename) -> Denominator:
-        return Denominator(cal)
-
-    pipeline = sl.Pipeline([calibration, numerator, denominator])
-    a = Stage(pipeline, outputs=(Numerator,), inputs=(Filename,))
-    b = Stage(pipeline, outputs=(Denominator,), inputs=(Filename,))
+    pipeline = sl.Pipeline([calibration, numerator])
     with pytest.raises(sl.UnsatisfiedRequirement):
-        warm(a, b)
+        build_stages(pipeline, [StageSpec(inputs=(Filename,), outputs=(Numerator,))])
 
 
-def test_warm_rejects_stage_holding_a_value_from_a_parameter_another_varies(
-    pipeline: sl.Pipeline,
-) -> None:
-    per_file = Stage(pipeline, outputs=(Denominator,), inputs=(Filename,))
-    # Holds Masked, loaded from the Filename set on the pipeline.
-    per_bins = Stage(pipeline, outputs=(Numerator,), inputs=(Bins,))
-    with pytest.raises(
-        ValueError, match=r'stages\[1\] holds .*Filename.*which stages\[0\] takes'
-    ):
-        warm(per_file, per_bins)
-
-
-def test_warm_allows_stage_taking_a_value_that_another_stage_holds(
+def test_build_stages_rejects_stage_holding_a_value_from_a_parameter_another_varies(
     pipeline: sl.Pipeline, calls: Calls
 ) -> None:
-    loading = Stage(pipeline, outputs=(Calibration, Loaded), inputs=(Filename,))
-    masking = Stage(pipeline, outputs=(Masked,), inputs=(Loaded, Calibration))
-    warm(loading, masking)
+    with pytest.raises(
+        ValueError, match=r'specs\[1\] holds .*Filename.*which specs\[0\] takes'
+    ):
+        build_stages(
+            pipeline,
+            [
+                StageSpec(inputs=(Filename,), outputs=(Denominator,)),
+                # Holds Masked, loaded from the Filename set on the pipeline.
+                StageSpec(inputs=(Bins,), outputs=(Numerator,)),
+            ],
+        )
+    assert calls['load'] == 0
+
+
+def test_build_stages_allows_stage_taking_a_value_that_another_stage_holds(
+    pipeline: sl.Pipeline, calls: Calls
+) -> None:
+    build_stages(
+        pipeline,
+        [
+            StageSpec(inputs=(Filename,), outputs=(Calibration, Loaded)),
+            StageSpec(inputs=(Loaded, Calibration), outputs=(Masked,)),
+        ],
+    )
     assert calls['calibration'] == 1
 
 
-def test_warm_skips_stages_that_are_already_warm(
-    pipeline: sl.Pipeline, calls: Calls
-) -> None:
-    numerator = Stage(pipeline, outputs=(Numerator,), inputs=(Filename,))
-    denominator = Stage(pipeline, outputs=(Denominator,), inputs=(Filename,))
-    numerator.static()
-    warm(numerator, denominator)
-    warm(numerator, denominator)
-    assert calls['calibration'] == 2
+def test_build_stages_rejects_invalid_spec(pipeline: sl.Pipeline) -> None:
+    with pytest.raises(ValueError, match='not needed'):
+        build_stages(pipeline, [StageSpec(inputs=(Scale,), outputs=(Numerator,))])
 
 
 # A stream: chunks of events are histogrammed against a geometry that depends on
@@ -435,29 +416,6 @@ def test_stage_called_from_threads_computes_static_part_once(calls: Calls) -> No
         results = list(pool.map(stage.compute, [{Filename: 'ab'}] * 4))
     assert calls['calibration'] == 1
     assert all(r == results[0] for r in results)
-
-
-def test_warm_and_compute_from_threads_compute_static_part_once(calls: Calls) -> None:
-    from concurrent.futures import ThreadPoolExecutor
-    from time import sleep
-
-    def calibration(mask: Mask) -> Calibration:
-        calls.hit('calibration')
-        sleep(0.05)
-        return Calibration(float(len(mask)))
-
-    def load(filename: Filename, cal: Calibration) -> Loaded:
-        return Loaded([cal * ord(c) for c in filename])
-
-    pipeline = sl.Pipeline([calibration, load], params={Mask: 'mask'})
-    stage = Stage(pipeline, outputs=(Loaded,), inputs=(Filename,))
-    with ThreadPoolExecutor(max_workers=4) as pool:
-        computed = pool.submit(stage.compute, {Filename: 'ab'})
-        warmed = [pool.submit(warm, stage, stage) for _ in range(3)]
-        computed.result()
-        for w in warmed:
-            w.result()
-    assert calls['calibration'] == 1
 
 
 def node_line(source: str, key: type, attr: str = '') -> str:

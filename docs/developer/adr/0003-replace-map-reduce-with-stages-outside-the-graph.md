@@ -56,7 +56,7 @@ Remove from sciline: `map`, `reduce`, `index_names`, `indices`, `get_mapped_node
 Do not add `groupby`.
 `constraints=` is removed in the same release, because the PEP 695 generics do not need it.
 
-Add building blocks that work on an ordinary flat pipeline and add nothing to it: `Stage` with `warm`, and accumulators.
+Add building blocks that work on an ordinary flat pipeline and add nothing to it: `Stage` with `build_stages`, and accumulators.
 
 ### `Stage`: a part of a pipeline, from chosen inputs to chosen outputs
 
@@ -76,7 +76,7 @@ A stage splits the graph needed for the outputs into two parts:
 An input can be a parameter or an intermediate result; in the second case everything upstream of it is cut off.
 A stage is a snapshot: changing the pipeline afterwards does not change the stage.
 The snapshot copies the graph but not the parameter values, so a value modified in place, rather than set anew, can change what the stage computes.
-`warm(*stages)` computes the static parts of several stages together, so that work they share is done once.
+`build_stages(pipeline, specs)` builds several stages from one pipeline, each given by a `StageSpec(inputs=..., outputs=...)`, and computes their static parts together, so that work they share is done once.
 
 This is the operation that `StreamProcessor` builds by hand and that scipp/sciline#241 asks for.
 `Pipeline.provide(key, callable)`, the other request of that issue, is added as well.
@@ -114,11 +114,16 @@ A stage built for the inner loop holds these values at its frontier.
 The driver builds one stage per loop: the outer stage computes the values at the frontier of the inner stage that depend on the outer inputs, and the rebuilt inner stage takes these *forwarded values* as inputs:
 
 ```python
-bank_stage = Stage(pipeline, inputs=(Bank,), outputs=(Numerator, Denominator))
-forwarded = Stage(pipeline, inputs=(Filename,), outputs=bank_stage.frontier).dynamic_outputs
-run_stage = Stage(pipeline, inputs=(Filename,), outputs=forwarded)
-bank_stage = Stage(pipeline, inputs=(*forwarded, Bank), outputs=(Numerator, Denominator))
-final_stage = Stage(pipeline, inputs=(Numerator, Denominator), outputs=(IofQ,))
+bank_frontier = Stage(pipeline, inputs=(Bank,), outputs=(Numerator, Denominator)).frontier
+forwarded = Stage(pipeline, inputs=(Filename,), outputs=bank_frontier).dynamic_outputs
+run_stage, bank_stage, final_stage = build_stages(
+    pipeline,
+    [
+        StageSpec(inputs=(Filename,), outputs=forwarded),
+        StageSpec(inputs=(*forwarded, Bank), outputs=(Numerator, Denominator)),
+        StageSpec(inputs=(Numerator, Denominator), outputs=(IofQ,)),
+    ],
+)
 
 for filename in filenames:
     held = run_stage.compute({Filename: filename})
@@ -126,6 +131,8 @@ for filename in filenames:
         out = bank_stage.compute({**held, Bank: bank})
         ...  # push out[Numerator] and out[Denominator] into accumulators
 ```
+
+The two stages built first are only inspected, so their static parts are never computed.
 
 A function that derives these stages, such as `enclose`, is a likely later addition.
 
@@ -145,7 +152,7 @@ Everything stateful belongs to the driver: which members exist, which contributi
 
 ### Rollout
 
-`Stage`, `warm`, and the accumulators are added in a minor release.
+`Stage`, `build_stages`, and the accumulators are added in a minor release.
 The ESS packages then migrate one at a time while map/reduce still exists.
 The removal comes last, in a major release (recommended; a `sciline.v2` namespace is the open alternative, see below).
 Users who depend on map/reduce and do not need the new generics can stay on the last release before the removal.
@@ -198,9 +205,9 @@ A `sciline.v2` namespace that keeps the old `Pipeline` would serve them equally,
 - A map/reduce inside the per-member work of another one (the pixel masks in esssans) becomes a list parameter and a provider.
 - A driver must push only `stage.dynamic_outputs`; other keys are counted once per member.
   In nested loops this is not enough: a run-level key declared as an output of the bank stage is dynamic there and is counted once per bank, without an error.
-  `warm` catches a stage inside a loop that still holds a value depending on the inputs of the loop, if the driver warms all its stages together.
+  `build_stages` catches a stage inside a loop that still holds a value depending on the inputs of the loop, if the driver builds all its stages in one call.
 - With one context stage, a `StreamProcessor` context update recomputes all context-derived values (in esslivedata compute only; no accumulators reset).
-- `warm` rejects the esssans background stage reading the masks of the one sample run set on the pipeline; esssans has to decide which run's detector IDs the background masks use.
+- `build_stages` rejects the esssans background stage reading the masks of the one sample run set on the pipeline; esssans has to decide which run's detector IDs the background masks use.
 - esslivedata selects its scheduler by replacing `sciline.task_graph.DaskScheduler`; sciline keeps that working for stages, until it offers a public way.
 - Stages keep their held values, and package objects keep contributions (binned events for some workflows), so package objects need a way to clear them.
 - Visualization of mapped pipelines (`compact=`) goes; `Stage.visualize` and `visualize_stages` replace it in part.

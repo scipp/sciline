@@ -17,6 +17,7 @@
    scheduler.NaiveScheduler
    TaskGraph
    Stage
+   StageSpec
    Accumulator
    Buffered
    Reduced
@@ -31,10 +32,10 @@
    :toctree: ../generated/functions
    :recursive:
 
+   build_stages
    compute_mapped
    get_mapped_node_names
    visualize_stages
-   warm
 ```
 
 ## Exceptions

@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import threading
 from collections.abc import Iterable, Mapping, Sequence
-from contextlib import ExitStack
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 import networkx as nx
@@ -42,11 +42,11 @@ class Stage:
     """The part of a pipeline from a set of input keys to a set of output keys.
 
     Everything the outputs need that does not depend on the inputs is computed once,
-    on first use, and the values at the frontier are held. Each call to
-    :py:meth:`compute` supplies values for the inputs and computes only what lies
-    downstream of them. An input may be a parameter or an intermediate result; in
-    both cases its own provider and ancestors are cut off. An output that is also an
-    input is passed through.
+    on first use or by :py:func:`build_stages`, and the values at the frontier are
+    held. Each call to :py:meth:`compute` supplies values for the inputs and computes
+    only what lies downstream of them. An input may be a parameter or an
+    intermediate result; in both cases its own provider and ancestors are cut off.
+    An output that is also an input is passed through.
 
     A stage is a snapshot of the pipeline at the time it is built. Later changes to
     the pipeline do not affect it. Parameter values are held by reference, not
@@ -180,9 +180,9 @@ class Stage:
         """Values at the frontier, computed on first use and held.
 
         The first call computes the held part, which may be expensive; use
-        :py:func:`warm` to compute it together with that of other stages.
+        :py:func:`build_stages` to compute it together with that of other stages.
         """
-        warm(self)
+        self._warm_up()
         return self._static
 
     def visualize(
@@ -248,11 +248,113 @@ class Stage:
         """
         if set(values) != set(self._inputs):
             raise ValueError(f'Expected values for {self._inputs}, got {tuple(values)}')
-        warm(self)
+        self._warm_up()
         graph = dict(self._call_graph)
         for k, v in values.items():
             graph[k] = Provider.parameter(v)
         return _compute(graph, self._outputs, self._scheduler)
+
+    def _warm_up(self) -> None:
+        with self._lock:
+            if not self._warm:
+                self._hold(
+                    _compute(self._static_graph, self._frontier, self._scheduler)
+                )
+
+    def _hold(self, values: Mapping[Key, Any]) -> None:
+        """Hold the values at the frontier, taken from ``values``."""
+        self._static = {k: values[k] for k in self._frontier}
+        self._call_graph = {
+            **self._dynamic_graph,
+            **{k: Provider.parameter(v) for k, v in self._static.items()},
+        }
+        self._warm = True
+
+
+@dataclass(frozen=True, kw_only=True)
+class StageSpec:
+    """Inputs and outputs of a stage, for building several stages with
+    :py:func:`build_stages`."""
+
+    inputs: tuple[Key, ...]
+    """Keys supplied on each call."""
+    outputs: tuple[Key, ...]
+    """Keys whose values the stage computes."""
+
+
+def build_stages(
+    pipeline: Pipeline,
+    specs: Iterable[StageSpec],
+    *,
+    scheduler: Scheduler | None = None,
+) -> tuple[Stage, ...]:
+    """Build several stages from one pipeline and compute their held parts in one run.
+
+    Intermediate results shared by the held parts are computed once and released;
+    each stage keeps only the values at its frontier, as a :py:class:`Stage` built
+    on its own does. The stages are returned warm, so the first call to
+    :py:meth:`Stage.compute` computes only the per-call part.
+
+    Pass all stages of a driver, such as those of nested loops, in one call. Only
+    then can stages that would hold a value the driver varies be detected.
+
+    Parameters
+    ----------
+    pipeline:
+        Pipeline with all parameters set that the outputs need, except the inputs.
+    specs:
+        Inputs and outputs of each stage.
+    scheduler:
+        Scheduler for computing the held parts and, in each stage, the per-call part.
+        If not given, the default of :py:class:`Stage` is used.
+
+    Returns
+    -------
+    :
+        One stage per spec, in the order of ``specs``.
+
+    Raises
+    ------
+    ValueError
+        If a stage holds a value that depends on a parameter that another stage
+        takes as input. The held value is for the one value of the parameter set on
+        the pipeline, or for none, while the driver varies it. If the stage runs
+        inside the loop over that input, it must take the value as an input,
+        computed once per iteration of the loop. Otherwise the held value must not
+        depend on that input, which means changing the pipeline. Also raised as by
+        :py:class:`Stage` for an invalid spec.
+    """
+    scheduler = scheduler_or_default(scheduler)
+    stages = tuple(
+        Stage(pipeline, outputs=s.outputs, inputs=s.inputs, scheduler=scheduler)
+        for s in specs
+    )
+    for i, held in enumerate(stages):
+        params = {
+            k
+            for k, p in held._static_graph.items()
+            if p.kind in ('parameter', 'unsatisfied')
+        }
+        for j, other in enumerate(stages):
+            varied = params & set(other.inputs)
+            if j != i and varied:
+                raise ValueError(
+                    f'specs[{i}] holds values that depend on '
+                    f'{sorted(varied, key=str)}, which specs[{j}] takes as inputs. '
+                    f'If specs[{i}] runs inside the loop over them, it must take '
+                    'those values as inputs, computed once per iteration of that loop. '
+                    f'Otherwise, change the pipeline so that the values specs[{i}] '
+                    'holds do not depend on them'
+                )
+    # The stages are cut from one pipeline, so they agree on every key they share.
+    graph: Graph = {}
+    for stage in stages:
+        graph.update(stage._static_graph)
+    keys = tuple(dict.fromkeys(k for stage in stages for k in stage.frontier))
+    values = _compute(graph, keys, scheduler)
+    for stage in stages:
+        stage._hold(values)
+    return stages
 
 
 def visualize_stages(
@@ -273,7 +375,8 @@ def visualize_stages(
     Parameters
     ----------
     stages:
-        Stages that agree on every key they share, as for :py:func:`warm`.
+        Stages cut from one pipeline, such as those returned by
+        :py:func:`build_stages`.
     groups:
         Groups of nodes to style instead of the default, each by its label in the
         legend: a graphviz node style and the keys in the group. Where a key is in
@@ -339,92 +442,3 @@ def _groups_by_stage(
     groups['Input'] = (INPUT_STYLE, own_inputs)
     groups['Output'] = (OUTPUT_STYLE, {k for stage in stages for k in stage.outputs})
     return groups
-
-
-def _same_provider(a: Provider, b: Provider) -> bool:
-    # Parameter and unsatisfied providers are rebuilt for each stage, so they are
-    # compared by what they return. Parameter values are held by reference, so
-    # identity tells whether they were set separately.
-    if a.kind != b.kind:
-        return False
-    if a.kind == 'parameter':
-        return a.func() is b.func()
-    if a.kind == 'unsatisfied':
-        return True
-    return a.func is b.func and tuple(a.arg_spec.keys()) == tuple(b.arg_spec.keys())
-
-
-def warm(*stages: Stage) -> None:
-    """Compute the held parts of several stages in one run.
-
-    Intermediate results shared by the held parts are computed once and released;
-    each stage keeps only the values at its frontier, as when warmed on its own.
-    Stages that are already warm are skipped.
-
-    The stages may be built from different pipelines, such as copies of one
-    pipeline with different parameter values, as long as they agree on every key
-    they share. The scheduler of the first stage that is not yet warm is used.
-
-    May be called from several threads at once, also together with
-    :py:meth:`Stage.compute`; each held part is computed once.
-
-    Parameters
-    ----------
-    stages:
-        Stages that agree on every key they share.
-
-    Raises
-    ------
-    ValueError
-        If two stages compute a shared key differently, for example from different
-        parameter values, or if a stage holds a value that depends on a parameter
-        that another stage takes as input. The held value is for the one value of
-        the parameter set on the pipeline, or for none, while the driver varies it.
-        If the stage runs inside the loop over that input, it must take the value as
-        an input, computed once per iteration of the loop. Otherwise the held value
-        must not depend on that input, which means changing the pipeline.
-    """
-    for i, held in enumerate(stages):
-        params = {
-            k
-            for k, p in held._static_graph.items()
-            if p.kind in ('parameter', 'unsatisfied')
-        }
-        for j, other in enumerate(stages):
-            varied = params & set(other.inputs)
-            if other is not held and varied:
-                raise ValueError(
-                    f'stages[{i}] holds values that depend on '
-                    f'{sorted(varied, key=str)}, which stages[{j}] takes as inputs. '
-                    f'If stages[{i}] runs inside the loop over them, it must take '
-                    'those values as inputs, computed once per iteration of that loop. '
-                    f'Otherwise, change the pipeline so that the values stages[{i}] '
-                    'holds do not depend on them'
-                )
-    # Locks are taken in a fixed order, so that concurrent calls over overlapping
-    # stages cannot deadlock.
-    unique = tuple(dict.fromkeys(stages))
-    with ExitStack() as locks:
-        for stage in sorted(unique, key=id):
-            locks.enter_context(stage._lock)
-        cold = [s for s in unique if not s._warm]
-        if not cold:
-            return
-        graph: Graph = {}
-        keys: dict[Key, None] = {}
-        for stage in cold:
-            for key, provider in stage._static_graph.items():
-                if key in graph and not _same_provider(graph[key], provider):
-                    raise ValueError(
-                        f'Stages compute {key} differently; warm them separately'
-                    )
-                graph[key] = provider
-            keys.update(dict.fromkeys(stage._frontier))
-        values = _compute(graph, tuple(keys), cold[0]._scheduler)
-        for stage in cold:
-            stage._static = {k: values[k] for k in stage._frontier}
-            stage._call_graph = {
-                **stage._dynamic_graph,
-                **{k: Provider.parameter(v) for k, v in stage._static.items()},
-            }
-            stage._warm = True

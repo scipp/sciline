@@ -68,7 +68,15 @@ Terms used in this document:
 stage = Stage(pipeline, inputs=(Filename,), outputs=(Numerator, Denominator))
 stage.frontier                        # keys whose values the stage holds
 stage.compute({Filename: 'run1.nxs'}) # -> {Numerator: ..., Denominator: ...}
-warm(stage_a, stage_b)                # compute the static parts of both in one run
+
+# Several stages from one pipeline, with their static parts computed in one run:
+contribute, finalize = build_stages(
+    pipeline,
+    [
+        StageSpec(inputs=(Filename,), outputs=(Numerator, Denominator)),
+        StageSpec(inputs=(Numerator, Denominator), outputs=(IofQ,)),
+    ],
+)
 ```
 
 ### Behaviour
@@ -79,7 +87,7 @@ warm(stage_a, stage_b)                # compute the static parts of both in one 
   An input can be a parameter or an intermediate result.
   In both cases its provider and everything upstream of it are removed from the stage.
 - **Held values.**
-  On first use, the stage computes the values at its frontier and keeps them.
+  On first use, or when built by `build_stages`, the stage computes the values at its frontier and keeps them.
   Nothing else of the static part is kept.
 - **Calls.**
   A call supplies a value for each input and for nothing else.
@@ -97,10 +105,12 @@ warm(stage_a, stage_b)                # compute the static parts of both in one 
   `keys` lists every key the stage uses.
   A parameter that is not an input is in `keys` exactly when changing it on the pipeline would change the stage's results.
   Callers use this to decide what to rebuild (section 6.7).
-- **`warm(*stages)`.**
+- **`build_stages(pipeline, specs)`.**
   Stages built from one pipeline often share static work, for example a file that each of them reads.
-  `warm` computes the static parts of several stages in one scheduler run, so shared intermediate results are computed once and then released.
-  Each stage keeps only its own frontier values, as if it had been warmed alone.
+  `build_stages` takes one `StageSpec(inputs=..., outputs=...)` per stage, builds the stages, and computes their static parts in one scheduler run, so shared intermediate results are computed once and then released.
+  Each stage keeps only its own frontier values, as if it had been built alone.
+  All stages are cut from one pipeline at one moment, so they agree on every key they share by construction.
+  `StageSpec` has keyword-only fields, as `Stage` has keyword-only arguments, because inputs and outputs are both tuples of keys and are easily swapped.
 - **Threads.**
   A stage can be called from several threads at once; the static part is still computed only once.
 
@@ -170,19 +180,24 @@ The driver therefore builds one stage per loop, and the outer stage computes the
 They are the values at the frontier of the inner stage that depend on the inputs of the outer loop:
 
 ```python
-bank_stage = Stage(pipeline, inputs=(Bank,), outputs=(Numerator, Denominator))
-# What bank_stage holds that depends on the run:
-forwarded = Stage(pipeline, inputs=(Filename,), outputs=bank_stage.frontier).dynamic_outputs
-run_stage = Stage(pipeline, inputs=(Filename,), outputs=forwarded)
-bank_stage = Stage(pipeline, inputs=(*forwarded, Bank), outputs=(Numerator, Denominator))
-final_stage = Stage(pipeline, inputs=(Numerator, Denominator), outputs=(IofQ,))
+bank_frontier = Stage(pipeline, inputs=(Bank,), outputs=(Numerator, Denominator)).frontier
+# What a bank stage alone would hold that depends on the run:
+forwarded = Stage(pipeline, inputs=(Filename,), outputs=bank_frontier).dynamic_outputs
+run_stage, bank_stage, final_stage = build_stages(
+    pipeline,
+    [
+        StageSpec(inputs=(Filename,), outputs=forwarded),
+        StageSpec(inputs=(*forwarded, Bank), outputs=(Numerator, Denominator)),
+        StageSpec(inputs=(Numerator, Denominator), outputs=(IofQ,)),
+    ],
+)
 ```
 
+The two stages built first are only inspected, so their static parts are never computed.
 Values at the frontier that do not depend on the run, such as a calibration, stay held by the bank stage.
 A driver for runs times banks:
 
 ```python
-warm(run_stage, bank_stage, final_stage)
 acc = {Numerator: Buffered(concat)(), Denominator: Reduced(add)()}
 for filename in filenames:
     held = run_stage.compute({Filename: filename})
@@ -205,8 +220,8 @@ Building the stages of nested loops this way has two pitfalls:
   Run-level accumulation keys are outputs of the run stage instead.
 - **A stage that is not rebuilt.**
   A stage inside the run loop that still holds a value depending on `Filename` uses the one run set on the pipeline, or fails if none is set.
-  `warm`, given all stages of a driver, rejects a stage that holds a value depending on a parameter that another stage takes as input.
-  This relies on the driver warming its stages together, which it does anyway so that shared work is done once.
+  `build_stages`, given all stages of a driver, rejects a stage that holds a value depending on a parameter that another stage takes as input.
+  This relies on the driver building its stages in one call, which it does anyway so that shared work is done once.
 
 A function that derives these stages, such as `enclose`, is a likely later addition.
 
@@ -234,18 +249,19 @@ It is built from a pipeline with all parameters set, so setting the runs is the 
 To change a parameter, the user builds a new object; nearly every parameter is read per run, so this costs no more than rebuilding only the affected stages would.
 It holds one contribute stage per run type (sample and background), one finalize stage from the accumulation keys of both to the outputs, and the contributions of each run type by filename.
 `set_runs(run_type, runs)` records the runs and drops the contributions of runs no longer listed.
-`compute()` warms all stages together, contributes the runs that have no contribution yet, pushes the held contributions into new accumulators, and finalizes.
+All stages are built in one call to `build_stages` when the object is created.
+`compute()` contributes the runs that have no contribution yet, pushes the held contributions into new accumulators, and finalizes.
 
 The background stage reads `DetectorMasks`, which in esssans depends on the detector IDs of the sample run set on the pipeline.
 With several sample runs, this run is not defined.
-`warm` over both stages rejects it: the background stage holds a value that depends on `Filename[SampleRun]`, which the sample stage takes as input.
+`build_stages` rejects it: the background stage holds a value that depends on `Filename[SampleRun]`, which the sample stage takes as input.
 Forwarding the masks from the sample loop is not the fix, because the background loop is not inside the sample loop; nested in it, each background run would be computed once per sample run.
 The validation script takes the detector IDs from the empty-beam run instead, so the masks depend on no run and are computed once (section 11).
 
 ### 6.2 Several loops, one final stage
 
 Sample runs and background runs are two loops on the same pipeline, and a final stage outside both loops takes the accumulation keys of both as inputs.
-All stages are warmed together, so work they share, such as reading a mask file, is done once.
+All stages are built in one call to `build_stages`, so work they share, such as reading a mask file, is done once.
 
 ### 6.3 Runs times banks
 
@@ -487,7 +503,7 @@ An earlier version of the stage tests was run on the generics branch and passed.
 
 The tests cover:
 
-- **Stage:** static part computed once and dynamic part per call; an intermediate input cuts off its ancestors; inputs the outputs do not need are rejected; pass-through of an output that is an input; `compute` rejects a missing input and a value for a key that is not an input; snapshot behaviour; `warm` rejects a stage that holds a value depending on a parameter that another stage takes as input, and allows a stage that takes as input a value that another stage holds; `warm` computes shared work once, skips warm stages, and rejects stages that compute a shared key differently; concurrent calls compute the static part once; an expensive load before a cheap parameter (the shape of tuning in essapps); the default scheduler follows a replacement of `sciline.task_graph.DaskScheduler`; the `StreamProcessor` shape with a context update; `visualize_stages` fills what each stage computes with the color of that stage, and applies the styles of groups given by the caller.
+- **Stage:** static part computed once and dynamic part per call; an intermediate input cuts off its ancestors; inputs the outputs do not need are rejected; pass-through of an output that is an input; `compute` rejects a missing input and a value for a key that is not an input; snapshot behaviour; `build_stages` rejects a stage that holds a value depending on a parameter that another stage takes as input, and allows a stage that takes as input a value that another stage holds; `build_stages` computes shared work once, returns the stages in the order of the specs, and rejects an invalid spec; concurrent calls compute the static part once; an expensive load before a cheap parameter (the shape of tuning in essapps); the default scheduler follows a replacement of `sciline.task_graph.DaskScheduler`; the `StreamProcessor` shape with a context update; `visualize_stages` fills what each stage computes with the color of that stage, and applies the styles of groups given by the caller.
 - **Accumulators:** push order, the first push as result, reading without pushes, pushing combined values gives the same result.
 
 ### Nested drivers
@@ -511,7 +527,7 @@ Results:
 - `BackgroundSubtractedIofQ` and `BackgroundSubtractedIofQxy` are identical to the reference (`assert_identical`).
 - Per-run `NormalizedQ` equals both a single-run computation and `compute_mapped`.
 - Contributing, combining, and finalizing as separate calls, with the sample runs combined as a chain, gives the same result as `SansReduction.compute`.
-- Provider call counts equal the reference, including a single read of the mask file, which requires `warm` over all three stages.
+- Provider call counts equal the reference, including a single read of the mask file, which requires building all three stages in one call to `build_stages`.
   The exception is `to_detector_mask`, called once instead of three times, because the masks depend on no run.
 - Wall time with the naive scheduler: 6.9 s for the prototype and 7.1 to 7.2 s for the reference, in two runs.
   With sciline's default dask scheduler the reference is about 1.7 s faster, because the single graph computes the two sample runs in parallel threads; over stages this parallelism is up to the driver.
@@ -524,7 +540,7 @@ Not validated: the rewrite of `StreamProcessor` against its real tests.
 
 ### What changes for each project
 
-- **sciline:** adds `Stage`, `warm`, `Accumulator`, `Buffered`, `Reduced`, and `Pipeline.provide`, and later removes what section 7 lists.
+- **sciline:** adds `Stage`, `StageSpec`, `build_stages`, `Accumulator`, `Buffered`, `Reduced`, and `Pipeline.provide`, and later removes what section 7 lists.
   Users outside ESS need a documented replacement for `map(...).reduce(...)`: a loop over a stage with accumulators.
   No "experimental" label; the staged rollout below is the trial period.
   `Stage` also needs a `reporter` argument, so that progress reaches the ESS widgets.
@@ -578,11 +594,11 @@ Not validated: the rewrite of `StreamProcessor` against its real tests.
   Either each package object implements it, or one generic object is built from a registry that maps member keys to accumulation keys; this is decided when the second package migrates.
 - **Which run's detector IDs do the esssans background masks use?**
   `DetectorMasks` reads the detector IDs of the sample run set on the pipeline, and the background runs read it too (section 6.1).
-  With several sample runs this is not defined, and `warm` rejects it (section 6.1).
+  With several sample runs this is not defined, and `build_stages` rejects it (section 6.1).
   The validation script uses the empty-beam run, which gives identical results on the test data, where all runs have the same detector IDs.
   esssans decides when it migrates, for example detector IDs from the geometry or from a run chosen by a parameter.
 - **Static work across processes.**
-  Stages in one process share their static work through `warm`; a contribute call in a short-lived process recomputes it.
+  Stages in one process share their static work when built together by `build_stages`; a contribute call in a short-lived process recomputes it.
   This is the cost that essapps estimates for its stateless model of interactive work, not a new cost.
 - **`sciline.v2` or a major release?**
   A `v2` namespace would let esslivedata and external users keep the old `Pipeline` next to the new one.

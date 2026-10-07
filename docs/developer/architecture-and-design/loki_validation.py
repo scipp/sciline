@@ -61,7 +61,7 @@ from ess.sans.workflow import _merge, merge_contributions
 from scipp.testing import assert_allclose, assert_identical
 
 import sciline
-from sciline import Buffered, Stage, warm
+from sciline import Buffered, Stage, StageSpec, build_stages
 
 OUTPUTS = (BackgroundSubtractedIofQ, BackgroundSubtractedIofQxy)
 SCHEDULER = sciline.scheduler.NaiveScheduler()
@@ -165,19 +165,27 @@ def accumulators_for(run_type: type) -> dict[Any, Any]:
     }
 
 
-def contribute_stage(pipeline: sciline.Pipeline, run_type: type) -> Stage:
-    stage = Stage(
-        pipeline,
-        outputs=tuple(accumulators_for(run_type)),
-        inputs=(Filename[run_type],),
-        scheduler=SCHEDULER,
+def reduction_stages(pipeline: sciline.Pipeline) -> tuple[dict[type, Stage], Stage]:
+    """One contribute stage per run type, and their shared finalize stage."""
+    run_types = (SampleRun, BackgroundRun)
+    contribute = [
+        StageSpec(inputs=(Filename[rt],), outputs=tuple(accumulators_for(rt)))
+        for rt in run_types
+    ]
+    finalize = StageSpec(
+        inputs=tuple(k for spec in contribute for k in spec.outputs), outputs=OUTPUTS
     )
-    # A key that does not vary per run would be pushed once per run.
-    if stage.dynamic_outputs != stage.outputs:
-        raise ValueError(
-            f'Not varying per run: {set(stage.outputs) - set(stage.dynamic_outputs)}'
-        )
-    return stage
+    *stages, final = build_stages(
+        pipeline, [*contribute, finalize], scheduler=SCHEDULER
+    )
+    for stage in stages:
+        # A key that does not vary per run would be pushed once per run.
+        if stage.dynamic_outputs != stage.outputs:
+            raise ValueError(
+                'Not varying per run: '
+                f'{set(stage.outputs) - set(stage.dynamic_outputs)}'
+            )
+    return dict(zip(run_types, stages, strict=True)), final
 
 
 def combine(run_type: type, contributions: Iterable[dict[Any, Any]]) -> dict[Any, Any]:
@@ -204,20 +212,12 @@ class SansReduction:
     new object.
     """
 
-    run_types = (SampleRun, BackgroundRun)
-
     def __init__(self, pipeline: sciline.Pipeline) -> None:
-        self._runs: dict[type, list[str]] = {rt: [] for rt in self.run_types}
+        self._contribute, self._finalize = reduction_stages(pipeline)
+        self._runs: dict[type, list[str]] = {rt: [] for rt in self._contribute}
         self._contributions: dict[type, dict[str, Any]] = {
-            rt: {} for rt in self.run_types
+            rt: {} for rt in self._contribute
         }
-        self._contribute = {rt: contribute_stage(pipeline, rt) for rt in self.run_types}
-        self._finalize = Stage(
-            pipeline,
-            outputs=OUTPUTS,
-            inputs=tuple(k for s in self._contribute.values() for k in s.outputs),
-            scheduler=SCHEDULER,
-        )
 
     def set_runs(self, run_type: type, runs: list[str]) -> None:
         self._runs[run_type] = list(runs)
@@ -225,7 +225,6 @@ class SansReduction:
         self._contributions[run_type] = {f: c for f, c in held.items() if f in runs}
 
     def compute(self) -> dict[Any, Any]:
-        warm(*self._contribute.values(), self._finalize)
         combined: dict[Any, Any] = {}
         for run_type, stage in self._contribute.items():
             held = self._contributions[run_type]
@@ -277,7 +276,7 @@ def main() -> None:
     flat[PixelMaskFilenames] = tuple(masks)
     # With the detector IDs of the sample run, the background stage would hold masks
     # for the sample run set on the pipeline, while the sample stage varies it, and
-    # warm would reject the stages.
+    # build_stages would reject the stages.
     t0 = time.perf_counter()
     reduction = SansReduction(flat)
     reduction.set_runs(SampleRun, sample_runs[:1])
@@ -323,14 +322,7 @@ def main() -> None:
 
     # --- Contribute, combine, finalize as separate calls, as a framework would ----
     calls.clear()
-    stages = {rt: contribute_stage(flat, rt) for rt in (SampleRun, BackgroundRun)}
-    finalize = Stage(
-        flat,
-        outputs=OUTPUTS,
-        inputs=stages[SampleRun].outputs + stages[BackgroundRun].outputs,
-        scheduler=SCHEDULER,
-    )
-    warm(*stages.values(), finalize)
+    stages, finalize = reduction_stages(flat)
     # Sample runs combined as a chain, one new run onto the previous result.
     sample = stages[SampleRun].compute({Filename[SampleRun]: sample_runs[0]})
     for run in sample_runs[1:]:
