@@ -9,11 +9,11 @@ import sciline as sl
 from sciline import Stage, build_stages
 from sciline.reporter import Reporter
 from sciline.typing import Graph
-from sciline.visualize import DYNAMIC_STYLE, FRONTIER_STYLE, HELD_STYLE, INPUT_STYLE
+from sciline.visualize import HELD_STYLE, INPUT_STYLE, ONCE_STYLE, PER_CALL_STYLE
 
 Filename = NewType('Filename', str)
 Mask = NewType('Mask', str)
-Calibration = NewType('Calibration', float)  # static, expensive
+Calibration = NewType('Calibration', float)  # computed once, expensive
 Loaded = NewType('Loaded', list[float])  # per file
 Masked = NewType('Masked', list[float])
 Bins = NewType('Bins', int)
@@ -74,12 +74,12 @@ def pipeline(calls: Calls) -> sl.Pipeline:
     )
 
 
-def test_stage_computes_static_part_once_and_dynamic_part_per_call(
+def test_stage_computes_held_values_once_and_per_call_part_per_call(
     pipeline: sl.Pipeline, calls: Calls
 ) -> None:
     stage = Stage(pipeline, outputs=(Numerator, Denominator), inputs=(Filename,))
-    assert stage.frontier == (Calibration, Bins)
-    assert set(stage.dynamic) == {Filename, Loaded, Masked, Numerator, Denominator}
+    assert stage.held == (Calibration, Bins)
+    assert set(stage.per_call) == {Filename, Loaded, Masked, Numerator, Denominator}
     a = stage.compute({Filename: 'ab'})
     b = stage.compute({Filename: 'cde'})
     assert a[Numerator] == [97.0 * 4, 98.0 * 4]
@@ -93,7 +93,7 @@ def test_stage_with_intermediate_input_cuts_its_ancestors(
     pipeline: sl.Pipeline, calls: Calls
 ) -> None:
     stage = Stage(pipeline, outputs=(IofQ,), inputs=(Numerator, Denominator, Scale))
-    assert stage.frontier == ()
+    assert stage.held == ()
     assert Filename not in stage.keys
     assert Calibration not in stage.keys
     assert (
@@ -167,7 +167,7 @@ def test_stage_holds_expensive_part_up_to_cheap_parameter(
     expected = pipeline.compute(IofQ)
     calls.reset()
     stage = Stage(pipeline, outputs=(IofQ,), inputs=(Scale,))
-    assert stage.frontier == (Numerator, Denominator)
+    assert stage.held == (Numerator, Denominator)
     assert stage.compute({Scale: 1.0})[IofQ] == pytest.approx(expected)
     assert stage.compute({Scale: 3.0})[IofQ] == pytest.approx(3.0 * expected)
     assert calls['load'] == 1
@@ -177,9 +177,9 @@ def test_stage_holds_expensive_part_up_to_cheap_parameter(
 def test_stage_with_shared_ancestor_input_holds_the_rest(
     pipeline: sl.Pipeline,
 ) -> None:
-    # Numerator is supplied; Denominator and Scale are static and held.
+    # Numerator is supplied; Denominator and Scale are held.
     stage = Stage(pipeline, outputs=(IofQ,), inputs=(Numerator,))
-    assert stage.frontier == (Denominator, Scale)
+    assert stage.held == (Denominator, Scale)
     assert stage.compute({Numerator: [1.0]})[IofQ] == 1.0 / (
         sum(map(ord, 'unused')) * 4
     )
@@ -189,7 +189,7 @@ def test_stage_passes_through_an_output_that_is_an_input(
     pipeline: sl.Pipeline, calls: Calls
 ) -> None:
     stage = Stage(pipeline, outputs=(Numerator, IofQ), inputs=(Numerator,))
-    assert stage.dynamic_outputs == (Numerator, IofQ)
+    assert stage.per_call_outputs == (Numerator, IofQ)
     assert stage.compute({Numerator: [1.0]})[Numerator] == [1.0]
     assert calls['numerator'] == 0
 
@@ -211,7 +211,7 @@ def test_stage_uses_given_scheduler(scheduler: sl.scheduler.Scheduler) -> None:
 
     pipeline = sl.Pipeline([length, scaled], params={float: 0.5})
     stage = Stage(pipeline, outputs=(complex,), inputs=(str,), scheduler=scheduler)
-    assert stage.frontier == (float,)
+    assert stage.held == (float,)
     assert stage.compute({str: 'abcd'})[complex] == 2.0 + 0.0j
 
 
@@ -248,15 +248,15 @@ def test_stage_rejects_object_that_is_not_a_scheduler(pipeline: sl.Pipeline) -> 
         )
 
 
-def test_build_stages_computes_shared_static_work_once(
+def test_build_stages_computes_shared_work_once(
     pipeline: sl.Pipeline, calls: Calls
 ) -> None:
     numerator, denominator = build_stages(
         pipeline, inputs=(Filename,), outputs=[(Numerator,), (Denominator,)]
     )
     assert calls['calibration'] == 1
-    assert numerator.static() == {Calibration: 4.0, Bins: 2}
-    assert denominator.static() == {Calibration: 4.0}
+    assert numerator.held_values() == {Calibration: 4.0, Bins: 2}
+    assert denominator.held_values() == {Calibration: 4.0}
     numerator.compute({Filename: 'ab'})
     denominator.compute({Filename: 'ab'})
     assert calls['calibration'] == 1
@@ -359,17 +359,15 @@ def test_stream_of_chunks_with_context_held_between_changes(calls: Calls) -> Non
 
     pipeline = sl.Pipeline([geometry, histogram, result], params={Norm: 2.0})
 
-    # The context frontier, the context-dependent keys just above the
-    # chunk-dependent ones, is derived from the stages rather than declared.
+    # The context keys, the context-dependent keys just above the
+    # chunk-dependent ones, are derived from the stages rather than declared.
     per_chunk = Stage(pipeline, outputs=(Histogram,), inputs=(Events,))
-    context_frontier = Stage(
-        pipeline, outputs=per_chunk.frontier, inputs=(Angle,)
-    ).dynamic_outputs
-    assert context_frontier == (Geometry,)
-    context_stage = Stage(pipeline, outputs=context_frontier, inputs=(Angle,))
-    chunk_stage = Stage(
-        pipeline, outputs=(Histogram,), inputs=(Events, *context_frontier)
-    )
+    context_keys = Stage(
+        pipeline, outputs=per_chunk.held, inputs=(Angle,)
+    ).per_call_outputs
+    assert context_keys == (Geometry,)
+    context_stage = Stage(pipeline, outputs=context_keys, inputs=(Angle,))
+    chunk_stage = Stage(pipeline, outputs=(Histogram,), inputs=(Events, *context_keys))
     finalize_stage = Stage(pipeline, outputs=(Result,), inputs=(Histogram,))
 
     held = Latest()
@@ -395,7 +393,7 @@ def test_stream_of_chunks_with_context_held_between_changes(calls: Calls) -> Non
     assert calls['geometry'] == 2
 
 
-def test_stage_called_from_threads_computes_static_part_once(calls: Calls) -> None:
+def test_stage_called_from_threads_computes_held_values_once(calls: Calls) -> None:
     from concurrent.futures import ThreadPoolExecutor
     from time import sleep
 
@@ -433,9 +431,9 @@ def test_stage_visualize_marks_inputs_held_and_per_call_nodes(
     stage = Stage(pipeline, outputs=(Numerator,), inputs=(Filename,))
     source: str = stage.visualize().source
     assert INPUT_STYLE['fillcolor'] in node_line(source, Filename)
-    assert HELD_STYLE['fillcolor'] in node_line(source, Mask)
-    assert FRONTIER_STYLE['penwidth'] in node_line(source, Calibration)
-    assert DYNAMIC_STYLE['fillcolor'] in node_line(source, Masked)
+    assert ONCE_STYLE['fillcolor'] in node_line(source, Mask)
+    assert HELD_STYLE['penwidth'] in node_line(source, Calibration)
+    assert PER_CALL_STYLE['fillcolor'] in node_line(source, Masked)
     assert 'peripheries=2' in node_line(source, Numerator)
     assert 'cluster_legend' in source
 
@@ -448,7 +446,7 @@ def test_stage_visualize_without_legend(pipeline: sl.Pipeline) -> None:
 def test_stage_visualize_can_hide_held_ancestors(pipeline: sl.Pipeline) -> None:
     stage = Stage(pipeline, outputs=(Numerator,), inputs=(Filename,))
     source: str = stage.visualize(show_held_ancestors=False).source
-    assert FRONTIER_STYLE['penwidth'] in node_line(source, Calibration)
+    assert HELD_STYLE['penwidth'] in node_line(source, Calibration)
     assert 'Mask [' not in source
     assert 'Computed once, not kept' not in source
 

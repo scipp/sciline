@@ -68,15 +68,15 @@ stage.compute({Filename: 'run2.nxs'})  # -> {Result: ...}, calibration not loade
 
 A stage splits the graph needed for the outputs into two parts:
 
-- The *static* part does not depend on the inputs, for example loading a calibration.
-  It is computed once, on first use, and the stage keeps the values that the dynamic part reads, plus outputs that do not depend on the inputs (`stage.frontier`).
-- The *dynamic* part depends on the inputs.
+- The part *computed once* does not depend on the inputs, for example loading a calibration.
+  It is computed once, on first use, and the stage keeps the values that the per-call part reads, plus outputs that do not depend on the inputs (`stage.held`).
+- The *per-call* part depends on the inputs.
   It is computed on every call, and nothing of it is kept after the call returns.
 
 An input can be a parameter or an intermediate result; in the second case everything upstream of it is cut off.
 A stage is a snapshot: changing the pipeline afterwards does not change the stage.
 The snapshot copies the graph but not the parameter values, so a value modified in place, rather than set anew, can change what the stage computes.
-`build_stages(pipeline, inputs=..., outputs=[...])` builds several stages from one pipeline, one per tuple of outputs, and computes their static parts together, so that work they share is done once.
+`build_stages(pipeline, inputs=..., outputs=[...])` builds several stages from one pipeline, one per tuple of outputs, and computes the held values of all of them together, so that work they share is done once.
 Every stage is cut at every key in `inputs`, except at its own outputs, and takes those of the keys that it needs.
 No stage therefore holds a value that depends on a key another stage varies.
 
@@ -112,12 +112,12 @@ Contributing, combining, and finalizing can run at different times or in differe
 
 Banks within runs, or chunks of a stream within a context, are loops in loops.
 The inner level reads values that depend on the outer level only, such as a run's monitor, and those should be computed once per outer iteration.
-A stage built for the inner loop holds these values at its frontier.
-The driver builds one stage per loop: the outer stage computes the values at the frontier of the inner stage that depend on the outer inputs, and the inner stage takes these *forwarded values* as inputs:
+A stage built for the inner loop holds these values.
+The driver builds one stage per loop: the outer stage computes the held values of the inner stage that depend on the outer inputs, and the inner stage takes these *forwarded values* as inputs:
 
 ```python
-bank_frontier = Stage(pipeline, inputs=(Bank,), outputs=(Numerator, Denominator)).frontier
-forwarded = Stage(pipeline, inputs=(Filename,), outputs=bank_frontier).dynamic_outputs
+bank_held = Stage(pipeline, inputs=(Bank,), outputs=(Numerator, Denominator)).held
+forwarded = Stage(pipeline, inputs=(Filename,), outputs=bank_held).per_call_outputs
 run_stage, bank_stage, final_stage = build_stages(
     pipeline,
     inputs=(Filename, *forwarded, Bank, Numerator, Denominator),
@@ -131,14 +131,14 @@ for filename in filenames:
         ...  # push out[Numerator] and out[Denominator] into accumulators
 ```
 
-The two stages built first are only inspected, so their static parts are never computed.
+The two stages built first are only inspected, so they never compute their held values.
 
 A function that derives these stages, such as `enclose`, is a likely later addition.
 
 ### Who owns what
 
 Sciline provides the mechanism: cutting a graph into stages and combining the values of members.
-Stages hold the values at their frontier but no contributions and no member list, and they do not react to parameter changes; a changed parameter means new stages.
+Stages hold values computed once but no contributions and no member list, and they do not react to parameter changes; a changed parameter means new stages.
 
 Everything stateful belongs to the driver: which members exist, which contributions are kept, what a parameter change invalidates, and whether members run in parallel:
 
@@ -166,7 +166,7 @@ A `sciline.v2` namespace that keeps the old `Pipeline` would serve them equally,
   The staged rollout gives users the same transition period without keeping both.
 - **An `Aggregation` object** with a contribute stage, accumulators, a finalize stage, and `compute(table)`.
   Prototyped and dropped: no real driver used its finalize stage or `compute`, since the SANS finalize reads two run types and the Bifrost per-run finalize also reads run-level values.
-  `compute(table)` invited a flat runs-times-banks table, which counts run-level keys once per bank without an error, and its one guarantee is `Stage.dynamic_outputs`.
+  `compute(table)` invited a flat runs-times-banks table, which counts run-level keys once per bank without an error, and its one guarantee is `Stage.per_call_outputs`.
 - **Choosing the per-run keys of nested loops by hand.**
   Prototyped for LoKI and Bifrost: a key left out is recomputed per bank with a correct result, so the mistake goes unnoticed.
 - **Let an aggregation turn back into a pipeline** (`as_pipeline()`), so that the `with_*` helpers could keep returning a pipeline.
@@ -202,8 +202,8 @@ A `sciline.v2` namespace that keeps the old `Pipeline` would serve them equally,
 - The widgets need one interface across the package objects, a base class or one generic object, decided when the second package migrates.
 - Parallelism over members is the driver's job; with map/reduce, dask ran members in threads for free (about 1.7 s of 7.5 s in the LoKI validation script).
 - A map/reduce inside the per-member work of another one (the pixel masks in esssans) becomes a list parameter and a provider.
-- A driver must push only `stage.dynamic_outputs`; other keys are counted once per member.
-  In nested loops this is not enough: a run-level key declared as an output of the bank stage is dynamic there and is counted once per bank, without an error.
+- A driver must push only `stage.per_call_outputs`; other keys are counted once per member.
+  In nested loops this is not enough: a run-level key declared as an output of the bank stage is per-call there and is counted once per bank, without an error.
   A stage inside a loop cannot hold a value that depends on the inputs of the loop, if the driver builds all its stages in one call to `build_stages`.
   If the driver does not forward such a value, the stage takes the input of the loop as well, and a call without it fails.
 - With one context stage, a `StreamProcessor` context update recomputes all context-derived values (in esslivedata compute only; no accumulators reset).

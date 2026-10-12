@@ -87,7 +87,7 @@ def counted_to_detector_mask(
 
 
 # The prototype's mask handling: one list parameter and the detector IDs of the
-# empty-beam run, so the files are read and the masks built once (static).
+# empty-beam run, so the files are read and the masks built once.
 PixelMaskFilenames = NewType('PixelMaskFilenames', tuple[str, ...])
 MaskedDetectorIDsPerFile = NewType('MaskedDetectorIDsPerFile', dict[str, sc.Variable])
 
@@ -184,10 +184,10 @@ def reduction_stages(pipeline: sciline.Pipeline) -> tuple[dict[type, Stage], Sta
         if stage.inputs != (Filename[run_type],):
             raise ValueError(f'Contribute stage of {run_type} takes {stage.inputs}')
         # A key that does not vary per run would be pushed once per run.
-        if stage.dynamic_outputs != stage.outputs:
+        if stage.per_call_outputs != stage.outputs:
             raise ValueError(
                 'Not varying per run: '
-                f'{set(stage.outputs) - set(stage.dynamic_outputs)}'
+                f'{set(stage.outputs) - set(stage.per_call_outputs)}'
             )
     return dict(zip(run_types, stages, strict=True)), final
 

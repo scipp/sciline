@@ -106,12 +106,12 @@ def to_graphviz(
     return dot
 
 
-# Node styles for graphs cut into parts, such as the held and per-call parts of a
-# stage. Where a key is in several parts, the later part's style wins.
-HELD_STYLE = {'style': 'filled', 'fillcolor': '#e8e8e8'}
-FRONTIER_STYLE = {'style': 'filled', 'fillcolor': '#e8e8e8', 'penwidth': '2.5'}
+# Node styles for graphs cut into parts, such as the part of a stage computed once
+# and its per-call part. Where a key is in several parts, the later part's style wins.
+ONCE_STYLE = {'style': 'filled', 'fillcolor': '#e8e8e8'}
+HELD_STYLE = {'style': 'filled', 'fillcolor': '#e8e8e8', 'penwidth': '2.5'}
 INPUT_STYLE = {'style': 'filled', 'fillcolor': '#90ee90', 'penwidth': '2.5'}
-DYNAMIC_STYLE = {'style': 'filled', 'fillcolor': '#d4f4d4'}
+PER_CALL_STYLE = {'style': 'filled', 'fillcolor': '#d4f4d4'}
 OUTPUT_STYLE = {'peripheries': '2'}
 # Fill colors of the per-call parts of several stages drawn together, by stage.
 STAGE_FILLS = ('#cfe2f3', '#fce5cd', '#d9d2e9', '#fff2cc', '#f4cccc', '#d0e0e3')

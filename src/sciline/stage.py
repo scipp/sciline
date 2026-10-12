@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright (c) 2026 Scipp contributors (https://github.com/scipp)
-"""Stages cut a pipeline at a set of input keys, hold the part that does not
-depend on them, and compute the part that does on each call."""
+"""Stages cut a pipeline at a set of input keys, compute the part that does not
+depend on them once, and compute the part that does on each call."""
 
 from __future__ import annotations
 
@@ -41,9 +41,10 @@ class Stage:
     """The part of a pipeline from a set of input keys to a set of output keys.
 
     Everything the outputs need that does not depend on the inputs is computed once,
-    on first use or by :py:func:`build_stages`, and the values at the frontier are
-    held. Each call to :py:meth:`compute` supplies values for the inputs and computes
-    only what lies downstream of them. An input may be a parameter or an
+    on first use or by :py:func:`build_stages`. Of this part, the stage holds the
+    values that the per-call part reads, and the outputs that do not depend on the
+    inputs. Each call to :py:meth:`compute` supplies values for the inputs and
+    computes only what lies downstream of them. An input may be a parameter or an
     intermediate result; in both cases its own provider and ancestors are cut off.
     An output that is also an input is passed through.
 
@@ -51,8 +52,8 @@ class Stage:
     the pipeline do not affect it. Parameter values are held by reference, not
     copied, so modifying a value in place can change what the stage computes.
 
-    :py:meth:`compute` may be called from several threads at once; the held part is
-    computed once even then.
+    :py:meth:`compute` may be called from several threads at once. Even then, the
+    part that does not depend on the inputs is computed only once.
     """
 
     def __init__(
@@ -73,9 +74,9 @@ class Stage:
         inputs:
             Keys supplied on each call. Each must be needed by the outputs.
         scheduler:
-            Scheduler for computing the held and the per-call parts. If not given,
-            :py:class:`sciline.scheduler.DaskScheduler` is used if dask is installed,
-            otherwise :py:class:`sciline.scheduler.NaiveScheduler`.
+            Scheduler for computing the held values and the per-call part. If not
+            given, :py:class:`sciline.scheduler.DaskScheduler` is used if dask is
+            installed, otherwise :py:class:`sciline.scheduler.NaiveScheduler`.
 
         Raises
         ------
@@ -107,34 +108,35 @@ class Stage:
             raise ValueError(
                 f'Inputs {missing} are not needed by outputs {self._outputs}'
             )
-        dynamic: set[Key] = set(self._inputs)
+        per_call: set[Key] = set(self._inputs)
         for key in self._inputs:
-            dynamic |= nx.descendants(deps, key)
-        self._dynamic_graph: Graph = {
-            k: p for k, p in graph.items() if k in dynamic and k not in self._inputs
+            per_call |= nx.descendants(deps, key)
+        self._per_call_graph: Graph = {
+            k: p for k, p in graph.items() if k in per_call and k not in self._inputs
         }
-        # The frontier: held nodes read by dynamic nodes, plus held outputs.
-        frontier = dict.fromkeys(
+        # The held keys: keys computed once that the per-call part reads, plus
+        # outputs computed once.
+        held = dict.fromkeys(
             [
                 arg
-                for p in self._dynamic_graph.values()
+                for p in self._per_call_graph.values()
                 for arg in p.arg_spec.keys()
-                if arg not in dynamic
+                if arg not in per_call
             ]
-            + [o for o in self._outputs if o not in dynamic]
+            + [o for o in self._outputs if o not in per_call]
         )
-        self._frontier = tuple(frontier)
-        self._dynamic = tuple(k for k in graph if k in dynamic)
-        self._dynamic_outputs = tuple(o for o in self._outputs if o in dynamic)
-        needed = set(self._frontier)
-        for key in self._frontier:
+        self._held = tuple(held)
+        self._per_call = tuple(k for k in graph if k in per_call)
+        self._per_call_outputs = tuple(o for o in self._outputs if o in per_call)
+        needed = set(self._held)
+        for key in self._held:
             needed |= nx.ancestors(deps, key)
-        self._static_graph = {k: p for k, p in graph.items() if k in needed}
-        self._keys = frozenset(self._static_graph) | frozenset(self._dynamic)
-        self._static: dict[Key, Any] = {}
+        self._once_graph = {k: p for k, p in graph.items() if k in needed}
+        self._keys = frozenset(self._once_graph) | frozenset(self._per_call)
+        self._held_values: dict[Key, Any] = {}
         # The per-call part with the held values as parameters, built once when
         # warmed, since the held values do not change.
-        self._call_graph: Graph = {}
+        self._graph_with_held_values: Graph = {}
         self._warm = False
         self._lock = threading.Lock()
 
@@ -150,7 +152,8 @@ class Stage:
 
     @property
     def keys(self) -> frozenset[Key]:
-        """Keys the stage uses: those of the held part and of the per-call part.
+        """Keys the stage uses: those of the part computed once and of the per-call
+        part.
 
         Ancestors that an intermediate input cuts off are not included, so a
         parameter that is not an input is in ``keys`` exactly when changing it on the
@@ -159,30 +162,30 @@ class Stage:
         return self._keys
 
     @property
-    def frontier(self) -> tuple[Key, ...]:
+    def held(self) -> tuple[Key, ...]:
         """Keys whose values are held: those read by the per-call part, and outputs
         that do not depend on the inputs."""
-        return self._frontier
+        return self._held
 
     @property
-    def dynamic(self) -> tuple[Key, ...]:
-        """Keys that depend on the inputs, including the inputs themselves."""
-        return self._dynamic
+    def per_call(self) -> tuple[Key, ...]:
+        """Keys whose values change with each call: the inputs and the keys that
+        depend on them."""
+        return self._per_call
 
     @property
-    def dynamic_outputs(self) -> tuple[Key, ...]:
-        """Outputs that depend on the inputs; the rest are fixed when the stage is
-        built."""
-        return self._dynamic_outputs
+    def per_call_outputs(self) -> tuple[Key, ...]:
+        """Outputs that depend on the inputs; the rest are held."""
+        return self._per_call_outputs
 
-    def static(self) -> Mapping[Key, Any]:
-        """Values at the frontier, computed on first use and held.
+    def held_values(self) -> Mapping[Key, Any]:
+        """Values of the held keys, computed on first use.
 
-        The first call computes the held part, which may be expensive; use
-        :py:func:`build_stages` to compute it together with that of other stages.
+        The first call computes them, which may be expensive; use
+        :py:func:`build_stages` to compute them together with those of other stages.
         """
         self._warm_up()
-        return self._static
+        return self._held_values
 
     def visualize(
         self,
@@ -191,7 +194,8 @@ class Stage:
         show_held_ancestors: bool = True,
         **kwargs: Any,
     ) -> graphviz.Digraph:
-        """Draw the graph of the stage, with its inputs, held part, and per-call part.
+        """Draw the graph of the stage, with its inputs, the part computed once, the
+        held values, and the per-call part.
 
         Parameters
         ----------
@@ -203,23 +207,23 @@ class Stage:
             Keyword arguments passed to :py:func:`sciline.visualize.to_graphviz`.
         """
         from .visualize import (
-            DYNAMIC_STYLE,
-            FRONTIER_STYLE,
             HELD_STYLE,
             INPUT_STYLE,
+            ONCE_STYLE,
             OUTPUT_STYLE,
+            PER_CALL_STYLE,
         )
 
         return visualize_stages(
             self,
             groups={
                 'Computed once, not kept': (
-                    HELD_STYLE,
-                    set(self._static_graph) - set(self._frontier),
+                    ONCE_STYLE,
+                    set(self._once_graph) - set(self._held),
                 ),
-                'Held value': (FRONTIER_STYLE, self._frontier),
+                'Held value': (HELD_STYLE, self._held),
                 'Input': (INPUT_STYLE, self._inputs),
-                'Computed per call': (DYNAMIC_STYLE, self._dynamic_graph),
+                'Computed per call': (PER_CALL_STYLE, self._per_call_graph),
                 'Output': (OUTPUT_STYLE, self._outputs),
             },
             show_legend=show_legend,
@@ -248,7 +252,7 @@ class Stage:
         if set(values) != set(self._inputs):
             raise ValueError(f'Expected values for {self._inputs}, got {tuple(values)}')
         self._warm_up()
-        graph = dict(self._call_graph)
+        graph = dict(self._graph_with_held_values)
         for k, v in values.items():
             graph[k] = Provider.parameter(v)
         return _compute(graph, self._outputs, self._scheduler)
@@ -256,16 +260,14 @@ class Stage:
     def _warm_up(self) -> None:
         with self._lock:
             if not self._warm:
-                self._hold(
-                    _compute(self._static_graph, self._frontier, self._scheduler)
-                )
+                self._hold(_compute(self._once_graph, self._held, self._scheduler))
 
     def _hold(self, values: Mapping[Key, Any]) -> None:
-        """Hold the values at the frontier, taken from ``values``."""
-        self._static = {k: values[k] for k in self._frontier}
-        self._call_graph = {
-            **self._dynamic_graph,
-            **{k: Provider.parameter(v) for k, v in self._static.items()},
+        """Hold the values of the held keys, taken from ``values``."""
+        self._held_values = {k: values[k] for k in self._held}
+        self._graph_with_held_values = {
+            **self._per_call_graph,
+            **{k: Provider.parameter(v) for k, v in self._held_values.items()},
         }
         self._warm = True
 
@@ -277,7 +279,8 @@ def build_stages(
     outputs: Iterable[Iterable[Key]],
     scheduler: Scheduler | None = None,
 ) -> tuple[Stage, ...]:
-    """Build several stages from one pipeline and compute their held parts in one run.
+    """Build several stages from one pipeline and compute their held values in one
+    run.
 
     Every stage is cut at every key in ``inputs``, except at its own outputs. Its
     inputs are those of ``inputs`` that its outputs still need after this cut. For
@@ -292,9 +295,9 @@ def build_stages(
     run, which the outer stage does not pass on, takes ``Filename`` as input as
     well. A driver that does not supply it gets an error on the first call.
 
-    Intermediate results shared by the held parts are computed once and released;
-    each stage keeps only the values at its frontier, as a :py:class:`Stage` built
-    on its own does. The stages are returned warm, so the first call to
+    Intermediate results shared by several stages are computed once and released;
+    each stage keeps only its held values, as a :py:class:`Stage` built on
+    its own does. The stages are returned warm, so the first call to
     :py:meth:`Stage.compute` computes only the per-call part.
 
     Parameters
@@ -307,8 +310,8 @@ def build_stages(
     outputs:
         Keys whose values each stage computes, one tuple per stage.
     scheduler:
-        Scheduler for computing the held parts and, in each stage, the per-call part.
-        If not given, the default of :py:class:`Stage` is used.
+        Scheduler for computing the held values and, in each stage, the per-call
+        part. If not given, the default of :py:class:`Stage` is used.
 
     Returns
     -------
@@ -349,8 +352,8 @@ def build_stages(
     # The stages are cut from one pipeline, so they agree on every key they share.
     graph: Graph = {}
     for stage in stages:
-        graph.update(stage._static_graph)
-    keys = tuple(dict.fromkeys(k for stage in stages for k in stage.frontier))
+        graph.update(stage._once_graph)
+    keys = tuple(dict.fromkeys(k for stage in stages for k in stage.held))
     values = _compute(graph, keys, scheduler)
     for stage in stages:
         stage._hold(values)
@@ -367,10 +370,11 @@ def visualize_stages(
     """Draw the keys that several stages use, such as the stages of one driver.
 
     By default, the nodes that each stage computes per call are filled with a color
-    per stage, labeled in the legend by the inputs of the stage. The
-    held part, the inputs, and the outputs are marked as by :py:meth:`Stage.visualize`;
-    values one stage passes to another are outputs of the one and inputs of the other.
-    Inputs that no stage computes are drawn as parameters.
+    per stage, labeled in the legend by the inputs of the stage. The part computed
+    once, the held values, the inputs, and the outputs are marked as by
+    :py:meth:`Stage.visualize`; values one stage passes to another are outputs of the
+    one and inputs of the other. Inputs that no stage computes are drawn as
+    parameters.
 
     Parameters
     ----------
@@ -394,15 +398,15 @@ def visualize_stages(
 
     graph: Graph = {}
     for stage in stages:
-        graph.update(stage._static_graph)
-        graph.update(stage._dynamic_graph)
+        graph.update(stage._once_graph)
+        graph.update(stage._per_call_graph)
     if not show_held_ancestors:
-        frontier = {k for stage in stages for k in stage.frontier}
-        dynamic = {k for stage in stages for k in stage._dynamic_graph}
+        held = {k for stage in stages for k in stage.held}
+        per_call = {k for stage in stages for k in stage._per_call_graph}
         graph = {
-            k: Provider.parameter(None) if k in frontier else p
+            k: Provider.parameter(None) if k in held else p
             for k, p in graph.items()
-            if k in frontier or k in dynamic
+            if k in held or k in per_call
         }
     for stage in stages:
         for key in stage.inputs:
@@ -416,21 +420,21 @@ def _groups_by_stage(
     stages: Sequence[Stage],
 ) -> dict[str, tuple[Mapping[str, str], Iterable[Key]]]:
     from .visualize import (
-        FRONTIER_STYLE,
         HELD_STYLE,
         INPUT_STYLE,
+        ONCE_STYLE,
         OUTPUT_STYLE,
         STAGE_FILLS,
     )
 
-    computed = {k for stage in stages for k in stage._dynamic_graph}
-    frontier = {k for stage in stages for k in stage.frontier}
+    computed = {k for stage in stages for k in stage._per_call_graph}
+    held = {k for stage in stages for k in stage.held}
     groups: dict[str, tuple[Mapping[str, str], Iterable[Key]]] = {
         'Computed once, not kept': (
-            HELD_STYLE,
-            {k for stage in stages for k in stage._static_graph} - frontier,
+            ONCE_STYLE,
+            {k for stage in stages for k in stage._once_graph} - held,
         ),
-        'Held value': (FRONTIER_STYLE, frontier),
+        'Held value': (HELD_STYLE, held),
     }
     own_inputs: list[Key] = []
     for i, stage in enumerate(stages):
@@ -438,7 +442,7 @@ def _groups_by_stage(
         names = ', '.join(key_name(k) for k in stage.inputs)
         label = f'Stage {i}, per call' + (f' with {names}' if names else '')
         fill = {'style': 'filled', 'fillcolor': STAGE_FILLS[i % len(STAGE_FILLS)]}
-        groups[label] = (fill, stage._dynamic_graph)
+        groups[label] = (fill, stage._per_call_graph)
     groups['Input'] = (INPUT_STYLE, own_inputs)
     groups['Output'] = (OUTPUT_STYLE, {k for stage in stages for k in stage.outputs})
     return groups
