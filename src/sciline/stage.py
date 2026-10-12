@@ -24,6 +24,15 @@ if TYPE_CHECKING:
     import graphviz
 
 
+def _task_graph(pipeline: Pipeline, targets: tuple[Key, ...]) -> Graph:
+    unknown = [k for k in targets if k not in pipeline.underlying_graph]
+    if unknown:
+        raise ValueError(f'Outputs {unknown} are not in the pipeline')
+    return to_task_graph(
+        pipeline, targets=targets, handler=HandleAsComputeTimeException()
+    )
+
+
 def _dependency_graph(graph: Graph) -> nx.DiGraph:
     g = nx.DiGraph()
     for key, provider in graph.items():
@@ -31,6 +40,25 @@ def _dependency_graph(graph: Graph) -> nx.DiGraph:
         for arg in provider.arg_spec.keys():
             g.add_edge(arg, key)
     return g
+
+
+def _cut(deps: nx.DiGraph, keys: Iterable[Key]) -> nx.DiGraph:
+    """Return a copy of ``deps`` with the providers of ``keys`` cut off."""
+    cut = deps.copy()
+    for key in keys:
+        if key in cut:
+            cut.remove_edges_from(list(cut.in_edges(key)))
+    return cut
+
+
+def _upstream(deps: nx.DiGraph, keys: Sequence[Key]) -> set[Key]:
+    """Return ``keys`` and their ancestors."""
+    return set(keys).union(*(nx.ancestors(deps, key) for key in keys))
+
+
+def _downstream(deps: nx.DiGraph, keys: Sequence[Key]) -> set[Key]:
+    """Return ``keys`` and their descendants."""
+    return set(keys).union(*(nx.descendants(deps, key) for key in keys))
 
 
 def _compute(graph: Graph, keys: Sequence[Key], scheduler: Scheduler) -> dict[Key, Any]:
@@ -87,30 +115,19 @@ class Stage:
         self._outputs = tuple(outputs)
         self._inputs = tuple(inputs)
         self._scheduler = scheduler_or_default(scheduler)
-        unknown = [k for k in self._outputs if k not in pipeline.underlying_graph]
-        if unknown:
-            raise ValueError(f'Outputs {unknown} are not in the pipeline')
-        graph = to_task_graph(
-            pipeline, targets=self._outputs, handler=HandleAsComputeTimeException()
-        )
-        deps = _dependency_graph(graph)
+        graph = _task_graph(pipeline, self._outputs)
         # Cut off the providers of the inputs, then drop what only they needed.
-        for key in self._inputs:
-            if key in deps:
-                deps.remove_edges_from(list(deps.in_edges(key)))
-        needed_by_outputs = set(self._outputs)
-        for key in self._outputs:
-            needed_by_outputs |= nx.ancestors(deps, key)
-        deps = deps.subgraph(needed_by_outputs)
-        graph = {k: p for k, p in graph.items() if k in needed_by_outputs}
-        missing = [k for k in self._inputs if k not in deps]
+        deps = _cut(_dependency_graph(graph), self._inputs)
+        used = _upstream(deps, self._outputs)
+        graph = {k: p for k, p in graph.items() if k in used}
+        missing = [k for k in self._inputs if k not in used]
         if missing:
             raise ValueError(
                 f'Inputs {missing} are not needed by outputs {self._outputs}'
             )
-        per_call: set[Key] = set(self._inputs)
-        for key in self._inputs:
-            per_call |= nx.descendants(deps, key)
+        # Every ancestor of a used key is used, so restricting to used keys after
+        # following the edges drops only keys the outputs do not need.
+        per_call = _downstream(deps, self._inputs) & used
         self._per_call_graph: Graph = {
             k: p for k, p in graph.items() if k in per_call and k not in self._inputs
         }
@@ -128,10 +145,8 @@ class Stage:
         self._held = tuple(held)
         self._per_call = tuple(k for k in graph if k in per_call)
         self._per_call_outputs = tuple(o for o in self._outputs if o in per_call)
-        needed = set(self._held)
-        for key in self._held:
-            needed |= nx.ancestors(deps, key)
-        self._once_graph = {k: p for k, p in graph.items() if k in needed}
+        once = _upstream(deps, self._held)
+        self._once_graph = {k: p for k, p in graph.items() if k in once}
         self._keys = frozenset(self._once_graph) | frozenset(self._per_call)
         self._held_values: dict[Key, Any] = {}
         # The per-call part with the held values as parameters, built once when
@@ -325,21 +340,13 @@ def build_stages(
         the pipeline.
     """
     inputs = tuple(inputs)
-    outputs = [tuple(outs) for outs in outputs]
-    targets = tuple(dict.fromkeys(k for outs in outputs for k in outs))
-    unknown = [k for k in targets if k not in pipeline.underlying_graph]
-    if unknown:
-        raise ValueError(f'Outputs {unknown} are not in the pipeline')
-    deps = _dependency_graph(
-        to_task_graph(pipeline, targets=targets, handler=HandleAsComputeTimeException())
-    )
+    stage_outputs = [tuple(outs) for outs in outputs]
+    targets = tuple(dict.fromkeys(k for outs in stage_outputs for k in outs))
+    deps = _dependency_graph(_task_graph(pipeline, targets))
     stage_inputs = []
-    for outs in outputs:
-        cut = deps.copy()
-        for key in inputs:
-            if key in cut and key not in outs:
-                cut.remove_edges_from(list(cut.in_edges(key)))
-        needed = set().union(*(nx.ancestors(cut, key) for key in outs))
+    for outs in stage_outputs:
+        cut = _cut(deps, [k for k in inputs if k not in outs])
+        needed = _upstream(cut, outs)
         stage_inputs.append(tuple(k for k in inputs if k in needed and k not in outs))
     unused = [k for k in inputs if not any(k in ins for ins in stage_inputs)]
     if unused:
@@ -347,7 +354,7 @@ def build_stages(
     scheduler = scheduler_or_default(scheduler)
     stages = tuple(
         Stage(pipeline, outputs=outs, inputs=ins, scheduler=scheduler)
-        for outs, ins in zip(outputs, stage_inputs, strict=True)
+        for outs, ins in zip(stage_outputs, stage_inputs, strict=True)
     )
     # The stages are cut from one pipeline, so they agree on every key they share.
     graph: Graph = {}
