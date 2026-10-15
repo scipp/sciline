@@ -127,26 +127,30 @@ class DaskScheduler:
 
         reporter = _reporter_or_fallback(reporter)
 
+        dask_keys: dict[Hashable, tuple[str, int]] = {
+            tp: _to_dask_key(tp, index) for index, tp in enumerate(graph)
+        }
+
         # Use `apply` to allow passing keyword arguments.
         # Contrary to the Dask docs, we need to pass positional args as a list
         # and keyword args with a nested tuple+list structure.
         # Otherwise, Dask would treat them as literal values instead of
         # references to other nodes.
         dsk = {
-            _to_dask_key(tp): (
+            dask_keys[tp]: (
                 apply,
                 reporter.reporting_provider_func(provider),
-                list(map(_to_dask_key, provider.arg_spec.args)),
+                [dask_keys[arg] for arg in provider.arg_spec.args],
                 (
                     dict,
-                    [[key, _to_dask_key(val)] for key, val in provider.arg_spec.kwargs],
+                    [[key, dask_keys[val]] for key, val in provider.arg_spec.kwargs],
                 ),
             )
             for tp, provider in graph.items()
         }
         with reporter.run_computation(graph.values()):
             try:
-                return self._dask_get(dsk, list(map(_to_dask_key, keys)))
+                return self._dask_get(dsk, [dask_keys[key] for key in keys])
             except RuntimeError as e:
                 if str(e).startswith("Cycle detected"):
                     raise CycleError from e
@@ -158,14 +162,15 @@ class DaskScheduler:
         return f'{self.__class__.__name__}({module}.{name})'
 
 
-def _to_dask_key(key: Hashable) -> str:
+def _to_dask_key(key: Hashable, index: int) -> tuple[str, int]:
     """Map a Sciline key to a dask key.
 
     According to the docs (https://docs.dask.org/en/stable/spec.html#definitions),
     keys in a Dask graph are not allowed to be types.
-    So this function converts Sciline keys (types) to strings.
+    So this function converts Sciline keys (types) to tuples of names and indices.
+    The index distinguishes different keys with the same qualified name.
     """
-    return key_full_qualname(key)
+    return key_full_qualname(key), index
 
 
 def _reporter_or_fallback(reporter: Reporter | None) -> Reporter:
