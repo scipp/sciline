@@ -192,12 +192,9 @@ class TimingReporter(Reporter):
             ]
         )
 
-        return (
-            f'Total time: {self._total_end - self._total_start:.3f} ms\n'
-            + "\n".join(
-                f'{s} {m} {ll} {n}'
-                for s, m, ll, n in zip(sums, means, lens, names, strict=True)
-            )
+        return f'Total time: {self._total_end - self._total_start:.3f} s\n' + "\n".join(
+            f'{s} {m} {ll} {n}'
+            for s, m, ll, n in zip(sums, means, lens, names, strict=True)
         )
 
     def as_pandas(self) -> pd.DataFrame:
