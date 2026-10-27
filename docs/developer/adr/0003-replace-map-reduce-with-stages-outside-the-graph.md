@@ -56,29 +56,29 @@ Remove from sciline: `map`, `reduce`, `index_names`, `indices`, `get_mapped_node
 Do not add `groupby`.
 `constraints=` is removed in the same release, because the PEP 695 generics do not need it.
 
-Add building blocks that work on an ordinary flat pipeline and add nothing to it: `Stage` with `build_stages`, and accumulators.
+Add building blocks that work on an ordinary flat pipeline and add nothing to it: `Stage` with `prepare_stages`, and accumulators.
 
 ### `Stage`: a part of a pipeline, from chosen inputs to chosen outputs
 
 ```python
 stage = Stage(pipeline, inputs=(Filename,), outputs=(Result,))
-stage.compute({Filename: 'run1.nxs'})  # -> {Result: ...}
-stage.compute({Filename: 'run2.nxs'})  # -> {Result: ...}, calibration not loaded again
+stage.apply({Filename: 'run1.nxs'})  # -> {Result: ...}
+stage.apply({Filename: 'run2.nxs'})  # -> {Result: ...}, calibration not loaded again
 ```
 
 A stage splits the graph needed for the outputs into two parts:
 
 - The part *computed once* does not depend on the inputs, for example loading a calibration.
-  It is computed once, on first use, and the stage keeps the values that the per-call part reads, plus outputs that do not depend on the inputs (`stage.held`).
+  It is computed once, on first use, and the stage keeps the values that the per-call part reads, plus outputs that do not depend on the inputs (`stage.cached`).
 - The *per-call* part depends on the inputs.
   It is computed on every call, and nothing of it is kept after the call returns.
 
 An input can be a parameter or an intermediate result; in the second case everything upstream of it is cut off.
 A stage is a snapshot: changing the pipeline afterwards does not change the stage.
 The snapshot copies the graph but not the parameter values, so a value modified in place, rather than set anew, can change what the stage computes.
-`build_stages(pipeline, inputs=..., outputs=[...])` builds several stages from one pipeline, one per tuple of outputs, and computes the held values of all of them together, so that work they share is done once.
+`prepare_stages(pipeline, inputs=..., outputs=[...])` builds several stages from one pipeline, one per tuple of outputs, and computes the cached values of all of them together, so that work they share is done once.
 Every stage is cut at every key in `inputs`, except at its own outputs, and takes those of the keys that it needs.
-No stage therefore holds a value that depends on a key another stage varies.
+No stage therefore caches a value that depends on a key another stage varies.
 
 This is the operation that `StreamProcessor` builds by hand and that scipp/sciline#241 asks for.
 `Pipeline.provide(key, callable)`, the other request of that issue, is added as well.
@@ -100,10 +100,10 @@ The replacement for `map(...).reduce(...)` is a loop over a stage with accumulat
 ```python
 contribute = Stage(pipeline, inputs=(Filename[SampleRun],), outputs=(DetectorData,))
 finalize = Stage(pipeline, inputs=(DetectorData,), outputs=(IofQ,))
-acc = Buffered(merge)()
+acc = Buffered(merge)
 for run in ['run1.nxs', 'run2.nxs']:
-    acc.push(contribute.compute({Filename[SampleRun]: run})[DetectorData])
-finalize.compute({DetectorData: acc.value})
+    acc.push(contribute.apply({Filename[SampleRun]: run})[DetectorData])
+finalize.apply({DetectorData: acc.value})
 ```
 
 Contributing, combining, and finalizing can run at different times or in different processes, since a contribution is a plain dict; the same loop without the accumulator replaces `compute_mapped`.
@@ -112,33 +112,33 @@ Contributing, combining, and finalizing can run at different times or in differe
 
 Banks within runs, or chunks of a stream within a context, are loops in loops.
 The inner level reads values that depend on the outer level only, such as a run's monitor, and those should be computed once per outer iteration.
-A stage built for the inner loop holds these values.
-The driver builds one stage per loop: the outer stage computes the held values of the inner stage that depend on the outer inputs, and the inner stage takes these *forwarded values* as inputs:
+A stage built for the inner loop caches these values.
+The driver builds one stage per loop: the outer stage computes the cached values of the inner stage that depend on the outer inputs, and the inner stage takes these *forwarded values* as inputs:
 
 ```python
-bank_held = Stage(pipeline, inputs=(Bank,), outputs=(Numerator, Denominator)).held
-forwarded = Stage(pipeline, inputs=(Filename,), outputs=bank_held).per_call_outputs
-run_stage, bank_stage, final_stage = build_stages(
+bank_cached = Stage(pipeline, inputs=(Bank,), outputs=(Numerator, Denominator)).cached
+forwarded_keys = Stage(pipeline, inputs=(Filename,), outputs=bank_cached).per_call_outputs
+run_stage, bank_stage, final_stage = prepare_stages(
     pipeline,
-    inputs=(Filename, *forwarded, Bank, Numerator, Denominator),
-    outputs=[forwarded, (Numerator, Denominator), (IofQ,)],
+    inputs=(Filename, *forwarded_keys, Bank, Numerator, Denominator),
+    outputs=[forwarded_keys, (Numerator, Denominator), (IofQ,)],
 )
 
 for filename in filenames:
-    held = run_stage.compute({Filename: filename})
+    forwarded = run_stage.apply({Filename: filename})
     for bank in banks:
-        out = bank_stage.compute({**held, Bank: bank})
+        out = bank_stage.apply({**forwarded, Bank: bank})
         ...  # push out[Numerator] and out[Denominator] into accumulators
 ```
 
-The two stages built first are only inspected, so they never compute their held values.
+The two stages built first are only inspected, so they never compute their cached values.
 
 A function that derives these stages, such as `enclose`, is a likely later addition.
 
 ### Who owns what
 
 Sciline provides the mechanism: cutting a graph into stages and combining the values of members.
-Stages hold values computed once but no contributions and no member list, and they do not react to parameter changes; a changed parameter means new stages.
+Stages cache values computed once but no contributions and no member list, and they do not react to parameter changes; a changed parameter means new stages.
 
 Everything stateful belongs to the driver: which members exist, which contributions are kept, what a parameter change invalidates, and whether members run in parallel:
 
@@ -151,7 +151,7 @@ Everything stateful belongs to the driver: which members exist, which contributi
 
 ### Rollout
 
-`Stage`, `build_stages`, and the accumulators are added in a minor release.
+`Stage`, `prepare_stages`, and the accumulators are added in a minor release.
 The ESS packages then migrate one at a time while map/reduce still exists.
 The removal comes last, in a major release (recommended; a `sciline.v2` namespace is the open alternative, see below).
 Users who depend on map/reduce and do not need the new generics can stay on the last release before the removal.
@@ -204,12 +204,12 @@ A `sciline.v2` namespace that keeps the old `Pipeline` would serve them equally,
 - A map/reduce inside the per-member work of another one (the pixel masks in esssans) becomes a list parameter and a provider.
 - A driver must push only `stage.per_call_outputs`; other keys are counted once per member.
   In nested loops this is not enough: a run-level key declared as an output of the bank stage is per-call there and is counted once per bank, without an error.
-  A stage inside a loop cannot hold a value that depends on the inputs of the loop, if the driver builds all its stages in one call to `build_stages`.
+  A stage inside a loop cannot cache a value that depends on the inputs of the loop, if the driver builds all its stages in one call to `prepare_stages`.
   If the driver does not forward such a value, the stage takes the input of the loop as well, and a call without it fails.
 - With one context stage, a `StreamProcessor` context update recomputes all context-derived values (in esslivedata compute only; no accumulators reset).
 - The esssans background stage reads masks that depend on the sample run, so it takes `Filename[SampleRun]` as input, which the background loop cannot supply; esssans has to decide which run's detector IDs the background masks use.
 - esslivedata selects its scheduler by replacing `sciline.task_graph.DaskScheduler`; sciline keeps that working for stages, until it offers a public way.
-- Stages keep their held values, and package objects keep contributions (binned events for some workflows), so package objects need a way to clear them.
+- Stages keep their cached values, and package objects keep contributions (binned events for some workflows), so package objects need a way to clear them.
 - Visualization of mapped pipelines (`compact=`) goes; `Stage.visualize` and `visualize_stages` replace it in part.
   Progress reporting through `Stage` is not implemented yet.
 - networkx becomes a direct dependency; today it comes through cyclebane.

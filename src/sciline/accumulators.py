@@ -32,12 +32,12 @@ class Accumulator(Protocol[T]):
 
 
 class Buffered(Generic[T]):
-    """Factory for accumulators that apply an n-ary function to all pushed values.
+    """Accumulator that applies an n-ary function to all pushed values.
 
-    Each accumulator holds every pushed value and applies the function to them, in
-    push order, each time ``value`` is read. This suits functions without a cheaper
-    incremental form, such as concatenation. A sum of large arrays is better served
-    by :py:class:`Reduced`.
+    Holds every pushed value and applies the function to them, in push order, each
+    time ``value`` is read. This suits functions without a cheaper incremental form,
+    such as concatenation. A sum of large arrays is better served by
+    :py:class:`Reduced`.
 
     For combined values to be pushed back in, the function must be associative:
     ``func(func(a, b), c) == func(a, b, c)``.
@@ -51,33 +51,26 @@ class Buffered(Generic[T]):
             Function combining any number of pushed values into one.
         """
         self._func = func
-
-    def __call__(self) -> Accumulator[T]:
-        """Return a new accumulator with nothing pushed."""
-        return _Buffer(self._func)
-
-
-class _Buffer(Generic[T]):
-    def __init__(self, func: Callable[..., T]) -> None:
-        self._func = func
         self._values: list[T] = []
 
     def push(self, value: T) -> None:
+        """Add a value."""
         self._values.append(value)
 
     @property
     def value(self) -> T:
+        """The function applied to all values pushed so far."""
         if not self._values:
             raise ValueError('Nothing has been pushed')
         return self._func(*self._values)
 
 
 class Reduced(Generic[T]):
-    """Factory for accumulators that keep a running result of a binary function.
+    """Accumulator that keeps a running result of a binary function.
 
-    Each accumulator applies the function to its result so far and each pushed value,
-    in push order, and holds only the result. This suits a sum of large arrays, where
-    buffering would hold one array per member.
+    Applies the function to its result so far and each pushed value, in push order,
+    and holds only the result. This suits a sum of large arrays, where buffering
+    would hold one array per member.
 
     The function must be associative, so that combining values in groups and then
     combining the group results gives the same value as combining them all at once.
@@ -94,24 +87,17 @@ class Reduced(Generic[T]):
             result.
         """
         self._func = func
-
-    def __call__(self) -> Accumulator[T]:
-        """Return a new accumulator with nothing pushed."""
-        return _Running(self._func)
-
-
-class _Running(Generic[T]):
-    def __init__(self, func: Callable[[T, T], T]) -> None:
-        self._func = func
         self._pushed = False
         self._result: T
 
     def push(self, value: T) -> None:
+        """Add a value."""
         self._result = self._func(self._result, value) if self._pushed else value
         self._pushed = True
 
     @property
     def value(self) -> T:
+        """The running result of all values pushed so far."""
         if not self._pushed:
             raise ValueError('Nothing has been pushed')
         return self._result

@@ -38,7 +38,7 @@ The code that needs repetition, the *driver*, cuts the pipeline into *stages*, c
                                  (accumulator or forwarder)
 ```
 
-Sciline provides the stages and the `Accumulator` protocol with two accumulator factories, `Buffered` and `Reduced`.
+Sciline provides the stages and the `Accumulator` protocol with two accumulators, `Buffered` and `Reduced`.
 Everything else, in particular what is kept between calls and when it is discarded, is decided by the code that runs the loop.
 
 Terms used in this document:
@@ -47,9 +47,9 @@ Terms used in this document:
 |---|---|
 | stage | The part of a pipeline from a set of input keys to a set of output keys (`sciline.Stage`). |
 | part computed once, per-call part | The part of a stage's graph that does not depend on the inputs, and the part that does. |
-| held keys | The keys of the part computed once that the per-call part reads, plus outputs that do not depend on the inputs. A stage holds the values at these keys. |
+| cached keys | The keys of the part computed once that the per-call part reads, plus outputs that do not depend on the inputs. A stage caches the values at these keys. |
 | connector | An object between stages with `push(value)` and `value`. |
-| accumulator | A connector that combines all pushed values (`sciline.Accumulator`). |
+| accumulator | A connector that combines all pushed values (`sciline.accumulators.Accumulator`). |
 | forwarder | A connector that holds the last pushed value until the next push. Lives in ess.reduce. |
 | member | One repetition, for example one run, given by the values of the inputs of a stage. |
 | accumulation key | A key at which the values of the members are combined. |
@@ -66,11 +66,11 @@ Terms used in this document:
 
 ```python
 stage = Stage(pipeline, inputs=(Filename,), outputs=(Numerator, Denominator))
-stage.held                            # keys whose values the stage holds
-stage.compute({Filename: 'run1.nxs'}) # -> {Numerator: ..., Denominator: ...}
+stage.cached                            # keys whose values the stage caches
+stage.apply({Filename: 'run1.nxs'}) # -> {Numerator: ..., Denominator: ...}
 
-# Several stages from one pipeline, with their held values computed in one run:
-contribute, finalize = build_stages(
+# Several stages from one pipeline, with their cached values computed in one run:
+contribute, finalize = prepare_stages(
     pipeline,
     inputs=(Filename, Numerator, Denominator),
     outputs=[(Numerator, Denominator), (IofQ,)],
@@ -86,12 +86,12 @@ finalize.inputs                       # (Numerator, Denominator)
   The inputs and everything that depends on them form the per-call part; the rest is the part computed once.
   An input can be a parameter or an intermediate result.
   In both cases its provider and everything upstream of it are removed from the stage.
-- **Held values.**
-  On first use, or when built by `build_stages`, the stage computes its held values and keeps them.
+- **Cached values.**
+  On first use, or when built by `prepare_stages`, the stage computes its cached values and keeps them.
   Nothing else of the part computed once is kept.
 - **Calls.**
   A call supplies a value for each input and for nothing else.
-  It computes only the per-call part, reading the held values, and returns the outputs.
+  It computes only the per-call part, reading the cached values, and returns the outputs.
   The supplied and intermediate values are released when the call returns.
 - **Pass-through.**
   An output that is also an input is returned as supplied.
@@ -99,22 +99,22 @@ finalize.inputs                       # (Numerator, Denominator)
 - **Snapshot.**
   The stage is built from the task graph of the pipeline at construction time.
   Later changes to the pipeline do not affect it; to change a parameter, build a new stage.
-  Parameter values are held by reference, not copied, so a value modified in place, rather than set anew, can change what the stage computes.
+  Parameter values are kept by reference, not copied, so a value modified in place, rather than set anew, can change what the stage computes.
 - **Introspection.**
   `per_call` lists the keys that depend on the inputs, and `per_call_outputs` the outputs among them.
   `keys` lists every key the stage uses.
   A parameter that is not an input is in `keys` exactly when changing it on the pipeline would change the stage's results.
   Callers use this to decide what to rebuild (section 6.7).
-- **`build_stages(pipeline, inputs=..., outputs=[...])`.**
+- **`prepare_stages(pipeline, inputs=..., outputs=[...])`.**
   Stages built from one pipeline often share work computed once, for example a file that each of them reads.
-  `build_stages` builds one stage per tuple of outputs and computes the held values of all of them in one scheduler run, so shared intermediate results are computed once and then released.
-  Each stage keeps only its own held values, as if it had been built alone.
+  `prepare_stages` builds one stage per tuple of outputs and computes the cached values of all of them in one scheduler run, so shared intermediate results are computed once and then released.
+  Each stage keeps only its own cached values, as if it had been built alone.
   All stages are cut from one pipeline at one moment, so they agree on every key they share by construction.
   `inputs` is one set of keys for all stages: every stage is cut at every one of them, except at its own outputs, and takes those that its outputs still need.
-  So no stage holds a value that depends on a key that another stage takes as input; a stage that needs such a value takes the key as input itself.
+  So no stage caches a value that depends on a key that another stage takes as input; a stage that needs such a value takes the key as input itself.
   A key in `inputs` that no stage takes is rejected.
 - **Threads.**
-  A stage can be called from several threads at once; the held values are still computed only once.
+  A stage can be called from several threads at once; the cached values are still computed only once.
 
 ### Implementation notes
 
@@ -135,18 +135,18 @@ It also meets the three requirements of scipp/sciline#241: no graph rebuild per 
 ### The protocol
 
 `Accumulator` is a structural protocol: any object with `push(value)` and a `value` property satisfies it.
-Sciline provides two factories:
+Sciline provides two accumulators:
 
-- `Buffered(func)` makes accumulators that keep every pushed value and apply the n-ary function `func` to all of them when `value` is read.
+- `Buffered(func)` is an accumulator that keeps every pushed value and applies the n-ary function `func` to all of them when `value` is read.
   This is the signature of `reduce(func=)` today, so every existing combine function can be used unchanged.
-- `Reduced(func)` makes accumulators that keep only a running result.
+- `Reduced(func)` is an accumulator that keeps only a running result.
   The first pushed value becomes the result, and each further push replaces it by `func(result, value)`.
   `func` must be associative and must not modify its arguments, because the pushed values belong to the driver.
   Since the update is not in place, a sum briefly holds the old result, the new result, and the pushed value.
   An accumulator that updates in place has to be written by the workflow author, who then owns the copy of the first value; the accumulators in ess.reduce are such objects.
 
 For concatenation, `Buffered` and `Reduced` cost about the same memory; for a sum of large dense arrays, a running result holds one array instead of one per member.
-Both are factories: each call returns a new, empty accumulator, and a driver makes new accumulators for each computation.
+A driver makes new accumulators for each computation.
 An accumulator kept from an earlier computation adds the new members to the old result, without an error.
 
 ### Combining combined values
@@ -170,67 +170,67 @@ The driver also owns their lifetime (`clear`), their identity (contributions by 
 The accumulators of `ess.reduce.streaming` satisfy the protocol once `maybe_hist`, which histograms in the base class `push`, moves to the subclasses that need it.
 The base class then adds nothing to the protocol, and a forwarder built on it does not histogram.
 Their `clear` method stays an ess.reduce convention; no base class beyond the protocol is shared.
-`Accumulator` is in sciline because `Buffered` and `Reduced` return it and drivers use it to type their accumulators; `Forwarder` stays in ess.reduce because nothing in sciline returns or consumes one.
+`Accumulator` is in sciline because `Buffered` and `Reduced` implement it and drivers use it to type their accumulators; `Forwarder` stays in ess.reduce because nothing in sciline implements or consumes one.
 
 ## 5. Nested loops
 
 Banks within runs, or chunks of a stream within a context, are loops in loops.
 The stage of the inner loop reads values that depend on the outer loop only, such as the content of the file of a run.
 These should be computed once per iteration of the outer loop, not once per iteration of the inner loop.
-A stage built for the inner loop alone holds them, for the one run set on the pipeline.
+A stage built for the inner loop alone caches them, for the one run set on the pipeline.
 The driver therefore builds one stage per loop, and the outer stage computes the *forwarded values* that the inner stage takes as inputs.
-They are the held values of the inner stage that depend on the inputs of the outer loop:
+They are the cached values of the inner stage that depend on the inputs of the outer loop:
 
 ```python
-bank_held = Stage(pipeline, inputs=(Bank,), outputs=(Numerator, Denominator)).held
-# What a bank stage alone would hold that depends on the run:
-forwarded = Stage(pipeline, inputs=(Filename,), outputs=bank_held).per_call_outputs
-run_stage, bank_stage, final_stage = build_stages(
+bank_cached = Stage(pipeline, inputs=(Bank,), outputs=(Numerator, Denominator)).cached
+# What a bank stage alone would cache that depends on the run:
+forwarded_keys = Stage(pipeline, inputs=(Filename,), outputs=bank_cached).per_call_outputs
+run_stage, bank_stage, final_stage = prepare_stages(
     pipeline,
-    inputs=(Filename, *forwarded, Bank, Numerator, Denominator),
-    outputs=[forwarded, (Numerator, Denominator), (IofQ,)],
+    inputs=(Filename, *forwarded_keys, Bank, Numerator, Denominator),
+    outputs=[forwarded_keys, (Numerator, Denominator), (IofQ,)],
 )
 ```
 
-The two stages built first are only inspected, so they never compute their held values.
-Held values that do not depend on the run, such as a calibration, stay held by the bank stage.
+The two stages built first are only inspected, so they never compute their cached values.
+Cached values that do not depend on the run, such as a calibration, stay cached in the bank stage.
 A driver for runs times banks:
 
 ```python
-acc = {Numerator: Buffered(concat)(), Denominator: Reduced(add)()}
+acc = {Numerator: Buffered(concat), Denominator: Reduced(add)}
 for filename in filenames:
-    held = run_stage.compute({Filename: filename})
+    forwarded = run_stage.apply({Filename: filename})
     for name in bank_names:
-        out = bank_stage.compute({**held, Bank: name})
+        out = bank_stage.apply({**forwarded, Bank: name})
         for key in bank_stage.per_call_outputs:
             acc[key].push(out[key])
-result = final_stage.compute({k: a.value for k, a in acc.items()})
+result = final_stage.apply({k: a.value for k, a in acc.items()})
 ```
 
-With several stages inside a loop, such as the triplet stage and the per-run step of Bifrost (section 6.3), the run stage outputs the forwarded values of all of them, and each stage takes those among its own held keys.
-`Stage.compute` accepts exactly the inputs of the stage, so the driver selects the values for each stage, `{k: v for k, v in held.items() if k in stage.inputs}`.
+With several stages inside a loop, such as the triplet stage and the per-run step of Bifrost (section 6.3), the run stage outputs the forwarded values of all of them, and each stage takes those among its own cached keys.
+`Stage.apply` accepts exactly the inputs of the stage, so the driver selects the values for each stage, `{k: v for k, v in forwarded.items() if k in stage.inputs}`.
 
 Building the stages of nested loops this way has two pitfalls:
 
 - **An output of the inner stage that depends on the outer loop only.**
-  A key that depends on the run but not on the bank, declared as an output of the bank stage, is held by the stage built for inspection, so it is held and forwarded.
-  The bank stage built by `build_stages` does not take its own output as input; it computes the key again on every call.
+  A key that depends on the run but not on the bank, declared as an output of the bank stage, is cached by the stage built for inspection, so it is cached and forwarded.
+  The bank stage built by `prepare_stages` does not take its own output as input; it computes the key again on every call.
   If the key depends only on forwarded values, it is in `per_call_outputs`, and the driver pushes it once per bank.
   The combined value is wrong without any error.
   Run-level accumulation keys are outputs of the run stage instead.
 - **A run-level value that is not forwarded.**
-  If `forwarded` misses a value that the bank stage reads and that depends on the run, the bank stage takes `Filename` as input as well, since every stage is cut at every key in `inputs`.
+  If `forwarded_keys` misses a value that the bank stage reads and that depends on the run, the bank stage takes `Filename` as input as well, since every stage is cut at every key in `inputs`.
   The results cannot be wrong: a call without `Filename` fails, and a driver that supplies it computes the value once per bank instead of once per run.
   A driver can reject this when it builds the stages, by checking that `Filename` is not in `bank_stage.inputs`.
   This relies on the driver building its stages in one call, which it does anyway so that shared work is done once.
-  Stages built separately are not cut at each other's inputs, and a stage inside the run loop that holds a value depending on `Filename` uses the one run set on the pipeline.
+  Stages built separately are not cut at each other's inputs, and a stage inside the run loop that caches a value depending on `Filename` uses the one run set on the pipeline.
 
 A function that derives these stages, such as `enclose`, is a likely later addition.
 
 ### What is deliberately not in sciline
 
-- **Loops, held values, and accumulators.**
-  The driver decides what is held, for how long, and when accumulators are made and discarded, so memory is bounded by what it holds, for example one run.
+- **Loops, cached values, and accumulators.**
+  The driver decides what is kept, for how long, and when accumulators are made and discarded, so memory is bounded by what it holds, for example one run.
 - **Parallelism over members.**
   A stage call is a plain function call, so the driver can map it over members with threads, processes, or dask.
   This is the one thing that computing everything in one graph provided for free.
@@ -251,8 +251,8 @@ It is built from a pipeline with all parameters set, so setting the runs is the 
 To change a parameter, the user builds a new object; nearly every parameter is read per run, so this costs no more than rebuilding only the affected stages would.
 It holds one contribute stage per run type (sample and background), one finalize stage from the accumulation keys of both to the outputs, and the contributions of each run type by filename.
 `set_runs(run_type, runs)` records the runs and drops the contributions of runs no longer listed.
-All stages are built in one call to `build_stages` when the object is created.
-`compute()` contributes the runs that have no contribution yet, pushes the held contributions into new accumulators, and finalizes.
+All stages are built in one call to `prepare_stages` when the object is created.
+`compute()` contributes the runs that have no contribution yet, pushes the kept contributions into new accumulators, and finalizes.
 
 The background stage reads `DetectorMasks`, which in esssans depends on the detector IDs of the sample run set on the pipeline.
 With several sample runs, this run is not defined.
@@ -263,7 +263,7 @@ The validation script takes the detector IDs from the empty-beam run instead, so
 ### 6.2 Several loops, one final stage
 
 Sample runs and background runs are two loops on the same pipeline, and a final stage outside both loops takes the accumulation keys of both as inputs.
-All stages are built in one call to `build_stages`, so work they share, such as reading a mask file, is done once.
+All stages are built in one call to `prepare_stages`, so work they share, such as reading a mask file, is done once.
 
 ### 6.3 Runs times banks
 
@@ -300,9 +300,9 @@ A result enters another driver as an ordinary parameter of the flat pipeline; th
 
 ```python
 banks = Stage(pipeline, outputs=(EmptyDetector,), inputs=(NeXusDetectorName,))
-acc = Buffered(combine_banks)()
+acc = Buffered(combine_banks)
 for name in bank_names:
-    acc.push(banks.compute({NeXusDetectorName: name})[EmptyDetector])
+    acc.push(banks.apply({NeXusDetectorName: name})[EmptyDetector])
 pipeline[EmptyDetector] = acc.value
 processor = StreamProcessor(pipeline, ...)
 ```
@@ -321,13 +321,13 @@ chunk_stages = [Stage(pipeline, inputs=keys, outputs=acc_keys)
 finalize_stage = Stage(pipeline, inputs=(*all_acc_keys, *bypass_keys),
                        outputs=accumulated_targets)
 # Rebuilt as in section 5: the context stage computes, from context_keys,
-# context_only_targets and what these stages hold that depends on the context.
+# context_only_targets and what these stages cache that depends on the context.
 ```
 
 `set_context` calls the context stage and holds its result in a forwarder.
 `accumulate` calls each chunk stage whose inputs the chunk supplies and pushes into the accumulators.
 `finalize` calls the finalize stage.
-What the chunk and finalize stages read from the context, today found by `_find_descendants` and `_find_parents`, is derived from their held keys.
+What the chunk and finalize stages read from the context, today found by `_find_descendants` and `_find_parents`, is derived from their cached keys.
 A target that depends on the context alone is an output of the context stage, and `allow_bypass` becomes an explicit input of the finalize stage.
 A target that depends on no input belongs to no loop; a plain `Stage` without inputs computes it.
 The accumulator classes, the grouping of accumulators by dynamic keys, the validation of key sets, `on_finalize`, `clear`, and `visualize` stay.
@@ -339,7 +339,7 @@ The only reset tied to the context, the reset-on-move of `NoCopyAccumulator`, co
 The extra work is at most one rebuild of the detector projection when a rare key (an ROI edit, or a wavelength lookup table after a chopper change) is updated in a job with moving detector geometry.
 The calls inside `StreamProcessor` must also honour esslivedata's choice of scheduler (section 8.7).
 
-`test_stream_of_chunks_with_context_held_between_changes` in `tests/stage_test.py` runs this shape with stages built by hand, including a context update that keeps the accumulator.
+`test_stream_of_chunks_with_context_kept_between_changes` in `tests/stage_test.py` runs this shape with stages built by hand, including a context update that keeps the accumulator.
 
 ### 6.7 essapps
 
@@ -371,14 +371,14 @@ It uses them in four places:
   assert set(contribute_stage.per_call_outputs) == set(ACC_KEYS)  # each varies per run
 
   def contribute(filename):   # CONTRIBUTE: one run -> accumulation keys, exposed as outputs
-      return contribute_stage.compute({Filename[SampleRun]: filename})
+      return contribute_stage.apply({Filename[SampleRun]: filename})
 
   def combine(contributions): # COMBINE: references to the outputs of CONTRIBUTE -> result
       acc = {k: make() for k, make in ACCUMULATORS.items()}
       for contribution in contributions:
           for k, a in acc.items():
               a.push(contribution[k])
-      return final_stage.compute({k: a.value for k, a in acc.items()})
+      return final_stage.apply({k: a.value for k, a in acc.items()})
   ```
 
   Each record describes only its own computation, so no check that the contributions agree is needed.
@@ -415,9 +415,9 @@ The parameter-tables guide is replaced by the guide on stages, and the generic-p
 
 ### 8.1 Connectors as separate objects, not tiers inside `Stage`
 
-The alternative was a `Stage` with several tiers of inputs and a policy per tier for what to hold, which hides the held values inside one class and puts policy into sciline.
-One plain stage per loop gives the same boundaries, and every held value is an object the driver can inspect, clear, serialize, or send to another process: the explicit lifetime that scipp/sciline#241 asks for.
-`Stage` keeps its held values itself.
+The alternative was a `Stage` with several tiers of inputs and a policy per tier for what to hold, which hides the cached values inside one class and puts policy into sciline.
+One plain stage per loop gives the same boundaries, and every cached value is an object the driver can inspect, clear, serialize, or send to another process: the explicit lifetime that scipp/sciline#241 asks for.
+`Stage` keeps its cached values itself.
 A stage without inputs followed by a forwarder would do the same.
 It is built in because every stage needs it.
 
@@ -433,13 +433,13 @@ If package objects turn out to repeat the same code, that repetition is the basi
 
 Three callers need the same boundary: the context keys of `StreamProcessor`, runs times banks in esssans, and runs times triplets in Bifrost.
 Chosen by hand, it fails silently: a run-level key left out is recomputed per bank, which costs time but gives the right result.
-It is derived from the held keys of the stages inside the loop instead (section 5).
+It is derived from the cached keys of the stages inside the loop instead (section 5).
 
 Stages are connected in two ways:
 
 | Connection | From | To | Given by |
 |---|---|---|---|
-| forwarded value | outer stage | stages inside its loop | derived from the held keys |
+| forwarded value | outer stage | stages inside its loop | derived from the cached keys |
 | accumulation key | stages inside a loop | a stage after the loop | declared as outputs of one stage and inputs of the next |
 
 The accumulation keys are declared, not derived: the combine happens outside the graph, so the graph cannot tell that a key such as `NormalizedDetector` comes after combining the triplets.
@@ -465,7 +465,7 @@ It was prototyped and dropped:
 - `compute(table)` invited the flat runs-times-banks table, which counts a run-level accumulation key once per bank without an error.
 - Its one guarantee, that a key not depending on the members is not accumulated, is `Stage.per_call_outputs`.
 
-Its accumulator factories remain as `Buffered` and `Reduced`, and their reason remains: a driver makes new accumulators per computation (section 4).
+`Buffered` and `Reduced` are accumulators, not factories; a driver creates new ones per computation (section 4).
 
 ### 8.6 No bridge back into a pipeline
 
@@ -505,7 +505,7 @@ An earlier version of the stage tests was run on the generics branch and passed.
 
 The tests cover:
 
-- **Stage:** held values computed once and the per-call part on each call; an intermediate input cuts off its ancestors; inputs the outputs do not need are rejected; pass-through of an output that is an input; `compute` rejects a missing input and a value for a key that is not an input; snapshot behaviour; `build_stages` cuts every stage at every input, so a stage reading a value that depends on another stage's input takes that input itself, and allows a stage that takes as input a value that another stage holds; `build_stages` computes shared work once, gives each stage the inputs it needs, and rejects an input that no stage takes and an output not in the pipeline; concurrent calls compute the held values only once; an expensive load before a cheap parameter (the shape of tuning in essapps); the default scheduler follows a replacement of `sciline.task_graph.DaskScheduler`; the `StreamProcessor` shape with a context update; `visualize_stages` fills what each stage computes with the color of that stage, and applies the styles of groups given by the caller.
+- **Stage:** cached values computed once and the per-call part on each call; an intermediate input cuts off its ancestors; inputs the outputs do not need are rejected; pass-through of an output that is an input; `apply` rejects a missing input and a value for a key that is not an input; snapshot behaviour; `prepare_stages` cuts every stage at every input, so a stage reading a value that depends on another stage's input takes that input itself, and allows a stage that takes as input a value that another stage holds; `prepare_stages` computes shared work once, gives each stage the inputs it needs, and rejects an input that no stage takes and an output not in the pipeline; concurrent calls compute the held values only once; an expensive load before a cheap parameter (the shape of tuning in essapps); the default scheduler follows a replacement of `sciline.task_graph.DaskScheduler`; the `StreamProcessor` shape with a context update; `visualize_stages` fills what each stage computes with the color of that stage, and applies the styles of groups given by the caller.
 - **Accumulators:** push order, the first push as result, reading without pushes, pushing combined values gives the same result.
 
 ### Nested drivers
@@ -529,7 +529,7 @@ Results:
 - `BackgroundSubtractedIofQ` and `BackgroundSubtractedIofQxy` are identical to the reference (`assert_identical`).
 - Per-run `NormalizedQ` equals both a single-run computation and `compute_mapped`.
 - Contributing, combining, and finalizing as separate calls, with the sample runs combined as a chain, gives the same result as `SansReduction.compute`.
-- Provider call counts equal the reference, including a single read of the mask file, which requires building all three stages in one call to `build_stages`.
+- Provider call counts equal the reference, including a single read of the mask file, which requires building all three stages in one call to `prepare_stages`.
   The exception is `to_detector_mask`, called once instead of three times, because the masks depend on no run.
 - Wall time with the naive scheduler: 6.9 s for the prototype and 7.1 to 7.2 s for the reference, in two runs.
   With sciline's default dask scheduler the reference is about 1.7 s faster, because the single graph computes the two sample runs in parallel threads; over stages this parallelism is up to the driver.
@@ -542,11 +542,11 @@ Not validated: the rewrite of `StreamProcessor` against its real tests.
 
 ### What changes for each project
 
-- **sciline:** adds `Stage`, `build_stages`, `Accumulator`, `Buffered`, `Reduced`, and `Pipeline.provide`, and later removes what section 7 lists.
+- **sciline:** adds `Stage`, `prepare_stages`, the `accumulators` module with `Accumulator`, `Buffered`, `Reduced`, and `Pipeline.provide`, and later removes what section 7 lists.
   Users outside ESS need a documented replacement for `map(...).reduce(...)`: a loop over a stage with accumulators.
   No "experimental" label; the staged rollout below is the trial period.
   `Stage` also needs a `reporter` argument, so that progress reaches the ESS widgets.
-- **ess.reduce:** the accumulators satisfy `sciline.Accumulator` once `maybe_hist` moves out of their base class, and a `Forwarder` is added.
+- **ess.reduce:** the accumulators satisfy `sciline.accumulators.Accumulator` once `maybe_hist` moves out of their base class, and a `Forwarder` is added.
   `StreamProcessor` is rewritten on stages against its existing tests (section 6.6).
   `parameter_mappers`, which maps a list-valued parameter to a `with_*` helper that returns a pipeline, is replaced by a common interface of the package objects (section 11).
   `get_parameters` is unaffected, because it works on the flat pipeline.
@@ -600,7 +600,7 @@ Not validated: the rewrite of `StreamProcessor` against its real tests.
   The validation script uses the empty-beam run, which gives identical results on the test data, where all runs have the same detector IDs.
   esssans decides when it migrates, for example detector IDs from the geometry or from a run chosen by a parameter.
 - **Work computed once across processes.**
-  Stages in one process share their work computed once when built together by `build_stages`; a contribute call in a short-lived process recomputes it.
+  Stages in one process share their work computed once when built together by `prepare_stages`; a contribute call in a short-lived process recomputes it.
   This is the cost that essapps estimates for its stateless model of interactive work, not a new cost.
 - **`sciline.v2` or a major release?**
   A `v2` namespace would let esslivedata and external users keep the old `Pipeline` next to the new one.

@@ -109,7 +109,7 @@ def to_graphviz(
 # Node styles for graphs cut into parts, such as the part of a stage computed once
 # and its per-call part. Where a key is in several parts, the later part's style wins.
 ONCE_STYLE = {'style': 'filled', 'fillcolor': '#e8e8e8'}
-HELD_STYLE = {'style': 'filled', 'fillcolor': '#e8e8e8', 'penwidth': '2.5'}
+CACHED_STYLE = {'style': 'filled', 'fillcolor': '#e8e8e8', 'penwidth': '2.5'}
 INPUT_STYLE = {'style': 'filled', 'fillcolor': '#90ee90', 'penwidth': '2.5'}
 PER_CALL_STYLE = {'style': 'filled', 'fillcolor': '#d4f4d4'}
 OUTPUT_STYLE = {'peripheries': '2'}

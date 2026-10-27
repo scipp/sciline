@@ -6,10 +6,11 @@ from typing import Any, NewType, TypeVar
 import pytest
 
 import sciline as sl
-from sciline import Stage, build_stages
+from sciline import Stage, prepare_stages
+from sciline.accumulators import Reduced
 from sciline.reporter import Reporter
 from sciline.typing import Graph
-from sciline.visualize import HELD_STYLE, INPUT_STYLE, ONCE_STYLE, PER_CALL_STYLE
+from sciline.visualize import CACHED_STYLE, INPUT_STYLE, ONCE_STYLE, PER_CALL_STYLE
 
 Filename = NewType('Filename', str)
 Mask = NewType('Mask', str)
@@ -74,14 +75,14 @@ def pipeline(calls: Calls) -> sl.Pipeline:
     )
 
 
-def test_stage_computes_held_values_once_and_per_call_part_per_call(
+def test_stage_computes_cached_values_once_and_per_call_part_per_call(
     pipeline: sl.Pipeline, calls: Calls
 ) -> None:
     stage = Stage(pipeline, outputs=(Numerator, Denominator), inputs=(Filename,))
-    assert stage.held == (Calibration, Bins)
+    assert stage.cached == (Calibration, Bins)
     assert set(stage.per_call) == {Filename, Loaded, Masked, Numerator, Denominator}
-    a = stage.compute({Filename: 'ab'})
-    b = stage.compute({Filename: 'cde'})
+    a = stage.apply({Filename: 'ab'})
+    b = stage.apply({Filename: 'cde'})
     assert a[Numerator] == [97.0 * 4, 98.0 * 4]
     assert a[Denominator] == (97.0 + 98.0) * 4
     assert b[Denominator] == (99.0 + 100.0 + 101.0) * 4
@@ -93,12 +94,11 @@ def test_stage_with_intermediate_input_cuts_its_ancestors(
     pipeline: sl.Pipeline, calls: Calls
 ) -> None:
     stage = Stage(pipeline, outputs=(IofQ,), inputs=(Numerator, Denominator, Scale))
-    assert stage.held == ()
+    assert stage.cached == ()
     assert Filename not in stage.keys
     assert Calibration not in stage.keys
     assert (
-        stage.compute({Numerator: [2.0, 4.0], Denominator: 3.0, Scale: 2.0})[IofQ]
-        == 4.0
+        stage.apply({Numerator: [2.0, 4.0], Denominator: 3.0, Scale: 2.0})[IofQ] == 4.0
     )
     assert calls.counts == {'normalize': 1}
 
@@ -126,7 +126,7 @@ def test_stage_does_not_compute_ancestors_of_intermediate_input_shared_with_inpu
         scheduler=sl.scheduler.NaiveScheduler(),
     )
     assert Loaded not in stage.keys
-    assert stage.compute({Masked: [2.0], Filename: 'ab'})[Denominator] == 4.0
+    assert stage.apply({Masked: [2.0], Filename: 'ab'})[Denominator] == 4.0
     assert calls.counts == {}
 
 
@@ -166,7 +166,7 @@ def test_stage_rejects_call_with_wrong_keys(
 ) -> None:
     stage = Stage(pipeline, outputs=(IofQ,), inputs=(Numerator, Denominator))
     with pytest.raises(ValueError, match='Expected values for'):
-        stage.compute(values)
+        stage.apply(values)
 
 
 def test_stage_holds_expensive_part_up_to_cheap_parameter(
@@ -176,9 +176,9 @@ def test_stage_holds_expensive_part_up_to_cheap_parameter(
     expected = pipeline.compute(IofQ)
     calls.reset()
     stage = Stage(pipeline, outputs=(IofQ,), inputs=(Scale,))
-    assert stage.held == (Numerator, Denominator)
-    assert stage.compute({Scale: 1.0})[IofQ] == pytest.approx(expected)
-    assert stage.compute({Scale: 3.0})[IofQ] == pytest.approx(3.0 * expected)
+    assert stage.cached == (Numerator, Denominator)
+    assert stage.apply({Scale: 1.0})[IofQ] == pytest.approx(expected)
+    assert stage.apply({Scale: 3.0})[IofQ] == pytest.approx(3.0 * expected)
     assert calls['load'] == 1
     assert calls['normalize'] == 2
 
@@ -186,12 +186,10 @@ def test_stage_holds_expensive_part_up_to_cheap_parameter(
 def test_stage_with_shared_ancestor_input_holds_the_rest(
     pipeline: sl.Pipeline,
 ) -> None:
-    # Numerator is supplied; Denominator and Scale are held.
+    # Numerator is supplied; Denominator and Scale are cached.
     stage = Stage(pipeline, outputs=(IofQ,), inputs=(Numerator,))
-    assert stage.held == (Denominator, Scale)
-    assert stage.compute({Numerator: [1.0]})[IofQ] == 1.0 / (
-        sum(map(ord, 'unused')) * 4
-    )
+    assert stage.cached == (Denominator, Scale)
+    assert stage.apply({Numerator: [1.0]})[IofQ] == 1.0 / (sum(map(ord, 'unused')) * 4)
 
 
 def test_stage_passes_through_an_output_that_is_an_input(
@@ -199,7 +197,7 @@ def test_stage_passes_through_an_output_that_is_an_input(
 ) -> None:
     stage = Stage(pipeline, outputs=(Numerator, IofQ), inputs=(Numerator,))
     assert stage.per_call_outputs == (Numerator, IofQ)
-    assert stage.compute({Numerator: [1.0]})[Numerator] == [1.0]
+    assert stage.apply({Numerator: [1.0]})[Numerator] == [1.0]
     assert calls['numerator'] == 0
 
 
@@ -208,13 +206,13 @@ def test_stage_passes_through_an_output_that_is_an_unset_parameter() -> None:
         return Scale(float(bins))
 
     stage = Stage(sl.Pipeline([scale]), outputs=(Bins, Scale), inputs=(Bins,))
-    assert stage.compute({Bins: 3}) == {Bins: 3, Scale: 3.0}
+    assert stage.apply({Bins: 3}) == {Bins: 3, Scale: 3.0}
 
 
 def test_stage_is_a_snapshot_of_the_pipeline(pipeline: sl.Pipeline) -> None:
     stage = Stage(pipeline, outputs=(Numerator,), inputs=(Filename,))
     pipeline[Bins] = 1
-    assert stage.compute({Filename: 'ab'})[Numerator] == [97.0 * 4, 98.0 * 4]
+    assert stage.apply({Filename: 'ab'})[Numerator] == [97.0 * 4, 98.0 * 4]
 
 
 def test_stage_uses_given_scheduler(scheduler: sl.scheduler.Scheduler) -> None:
@@ -228,8 +226,8 @@ def test_stage_uses_given_scheduler(scheduler: sl.scheduler.Scheduler) -> None:
 
     pipeline = sl.Pipeline([length, scaled], params={float: 0.5})
     stage = Stage(pipeline, outputs=(complex,), inputs=(str,), scheduler=scheduler)
-    assert stage.held == (float,)
-    assert stage.compute({str: 'abcd'})[complex] == 2.0 + 0.0j
+    assert stage.cached == (float,)
+    assert stage.apply({str: 'abcd'})[complex] == 2.0 + 0.0j
 
 
 def test_replacing_task_graph_dask_scheduler_changes_default_of_stage_and_pipeline(
@@ -246,9 +244,7 @@ def test_replacing_task_graph_dask_scheduler_changes_default_of_stage_and_pipeli
 
     # ESSlivedata selects its scheduler by replacing this name.
     monkeypatch.setattr(sl.task_graph, 'DaskScheduler', Recording)
-    Stage(pipeline, outputs=(Denominator,), inputs=(Filename,)).compute(
-        {Filename: 'ab'}
-    )
+    Stage(pipeline, outputs=(Denominator,), inputs=(Filename,)).apply({Filename: 'ab'})
     assert used
     used.clear()
     pipeline.compute(Calibration)
@@ -265,22 +261,22 @@ def test_stage_rejects_object_that_is_not_a_scheduler(pipeline: sl.Pipeline) -> 
         )
 
 
-def test_build_stages_computes_shared_work_once(
+def test_prepare_stages_computes_shared_work_once(
     pipeline: sl.Pipeline, calls: Calls
 ) -> None:
-    numerator, denominator = build_stages(
+    numerator, denominator = prepare_stages(
         pipeline, inputs=(Filename,), outputs=[(Numerator,), (Denominator,)]
     )
     assert calls['calibration'] == 1
-    assert numerator.held_values() == {Calibration: 4.0, Bins: 2}
-    assert denominator.held_values() == {Calibration: 4.0}
-    numerator.compute({Filename: 'ab'})
-    denominator.compute({Filename: 'ab'})
+    assert numerator.cached_values() == {Calibration: 4.0, Bins: 2}
+    assert denominator.cached_values() == {Calibration: 4.0}
+    numerator.apply({Filename: 'ab'})
+    denominator.apply({Filename: 'ab'})
     assert calls['calibration'] == 1
 
 
-def test_build_stages_takes_inputs_each_stage_needs(pipeline: sl.Pipeline) -> None:
-    contribute, finalize = build_stages(
+def test_prepare_stages_takes_inputs_each_stage_needs(pipeline: sl.Pipeline) -> None:
+    contribute, finalize = prepare_stages(
         pipeline,
         inputs=(Filename, Numerator, Denominator),
         outputs=[(Numerator, Denominator), (IofQ,)],
@@ -291,7 +287,7 @@ def test_build_stages_takes_inputs_each_stage_needs(pipeline: sl.Pipeline) -> No
     assert finalize.outputs == (IofQ,)
 
 
-def test_build_stages_with_missing_parameter_raises_unsatisfied() -> None:
+def test_prepare_stages_with_missing_parameter_raises_unsatisfied() -> None:
     def calibration(mask: Mask) -> Calibration:
         return Calibration(float(len(mask)))
 
@@ -300,26 +296,26 @@ def test_build_stages_with_missing_parameter_raises_unsatisfied() -> None:
 
     pipeline = sl.Pipeline([calibration, numerator])
     with pytest.raises(sl.UnsatisfiedRequirement):
-        build_stages(pipeline, inputs=(Filename,), outputs=[(Numerator,)])
+        prepare_stages(pipeline, inputs=(Filename,), outputs=[(Numerator,)])
 
 
-def test_build_stages_cuts_every_stage_at_every_input(
+def test_prepare_stages_cuts_every_stage_at_every_input(
     pipeline: sl.Pipeline,
 ) -> None:
     # Numerator reads Masked, which depends on Filename. Without the cut, the second
     # stage would hold Masked for the Filename set on the pipeline.
-    per_file, per_bins = build_stages(
+    per_file, per_bins = prepare_stages(
         pipeline, inputs=(Filename, Bins), outputs=[(Denominator,), (Numerator,)]
     )
     assert per_file.inputs == (Filename,)
     assert per_bins.inputs == (Filename, Bins)
-    assert per_bins.compute({Filename: 'ab', Bins: 1}) == {Numerator: [388.0]}
+    assert per_bins.apply({Filename: 'ab', Bins: 1}) == {Numerator: [388.0]}
 
 
-def test_build_stages_allows_stage_taking_a_value_that_another_stage_holds(
+def test_prepare_stages_allows_stage_taking_a_value_that_another_stage_holds(
     pipeline: sl.Pipeline, calls: Calls
 ) -> None:
-    _, masking = build_stages(
+    _, masking = prepare_stages(
         pipeline,
         inputs=(Filename, Loaded, Calibration),
         outputs=[(Calibration, Loaded), (Masked,)],
@@ -328,14 +324,14 @@ def test_build_stages_allows_stage_taking_a_value_that_another_stage_holds(
     assert calls['calibration'] == 1
 
 
-def test_build_stages_rejects_input_of_no_stage(pipeline: sl.Pipeline) -> None:
+def test_prepare_stages_rejects_input_of_no_stage(pipeline: sl.Pipeline) -> None:
     with pytest.raises(ValueError, match=r'Inputs \[.*Scale.*\] are not inputs'):
-        build_stages(pipeline, inputs=(Filename, Scale), outputs=[(Numerator,)])
+        prepare_stages(pipeline, inputs=(Filename, Scale), outputs=[(Numerator,)])
 
 
-def test_build_stages_rejects_output_not_in_pipeline(pipeline: sl.Pipeline) -> None:
+def test_prepare_stages_rejects_output_not_in_pipeline(pipeline: sl.Pipeline) -> None:
     with pytest.raises(ValueError, match='neither a provider nor a value'):
-        build_stages(pipeline, inputs=(Filename,), outputs=[(int,)])
+        prepare_stages(pipeline, inputs=(Filename,), outputs=[(int,)])
 
 
 SampleRun = NewType('SampleRun', int)
@@ -369,12 +365,43 @@ def test_stage_with_generic_keys(generic_pipeline: sl.Pipeline) -> None:
     stage = Stage(
         generic_pipeline, outputs=(Normalized[SampleRun],), inputs=(RunData[SampleRun],)
     )
-    assert stage.held == (Scale,)
-    assert stage.compute({RunData[SampleRun]: 3.0}) == {Normalized[SampleRun]: 6.0}
+    assert stage.cached == (Scale,)
+    assert stage.apply({RunData[SampleRun]: 3.0}) == {Normalized[SampleRun]: 6.0}
 
 
-def test_build_stages_with_generic_keys(generic_pipeline: sl.Pipeline) -> None:
-    sample, background, final = build_stages(
+def test_stage_caches_one_specialization_and_computes_another_per_call(
+    generic_pipeline: sl.Pipeline,
+) -> None:
+    generic_pipeline[RunData[BackgroundRun]] = 1.0
+    stage = Stage(generic_pipeline, outputs=(Subtracted,), inputs=(RunData[SampleRun],))
+    assert set(stage.cached) == {Scale, Normalized[BackgroundRun]}
+    assert stage.cached_values()[Normalized[BackgroundRun]] == 2.0
+    assert Normalized[SampleRun] in stage.per_call
+    assert stage.apply({RunData[SampleRun]: 3.0}) == {Subtracted: 4.0}
+
+
+def test_stage_uses_specialized_provider_instead_of_generic_one(
+    generic_pipeline: sl.Pipeline,
+) -> None:
+    def normalize_background(
+        data: RunData[BackgroundRun], scale: Scale
+    ) -> Normalized[BackgroundRun]:
+        return Normalized[BackgroundRun](10 * data * scale)
+
+    generic_pipeline.insert(normalize_background)
+    stage = Stage(
+        generic_pipeline,
+        outputs=(Normalized[SampleRun], Normalized[BackgroundRun]),
+        inputs=(RunData[SampleRun], RunData[BackgroundRun]),
+    )
+    assert stage.apply({RunData[SampleRun]: 1.0, RunData[BackgroundRun]: 1.0}) == {
+        Normalized[SampleRun]: 2.0,
+        Normalized[BackgroundRun]: 20.0,
+    }
+
+
+def test_prepare_stages_with_generic_keys(generic_pipeline: sl.Pipeline) -> None:
+    sample, background, final = prepare_stages(
         generic_pipeline,
         inputs=(
             RunData[SampleRun],
@@ -388,10 +415,10 @@ def test_build_stages_with_generic_keys(generic_pipeline: sl.Pipeline) -> None:
     assert background.inputs == (RunData[BackgroundRun],)
     assert final.inputs == (Normalized[SampleRun], Normalized[BackgroundRun])
     normalized = {
-        **sample.compute({RunData[SampleRun]: 3.0}),
-        **background.compute({RunData[BackgroundRun]: 1.0}),
+        **sample.apply({RunData[SampleRun]: 3.0}),
+        **background.apply({RunData[BackgroundRun]: 1.0}),
     }
-    assert final.compute(normalized) == {Subtracted: 4.0}
+    assert final.apply(normalized) == {Subtracted: 4.0}
 
 
 # A stream: chunks of events are histogrammed against a geometry that depends on
@@ -419,7 +446,7 @@ def add_histograms(left: Histogram, right: Histogram) -> Histogram:
     return Histogram({k: left.get(k, 0) + right.get(k, 0) for k in left | right})
 
 
-def test_stream_of_chunks_with_context_held_between_changes(calls: Calls) -> None:
+def test_stream_of_chunks_with_context_kept_between_changes(calls: Calls) -> None:
     def geometry(angle: Angle) -> Geometry:
         calls.hit('geometry')
         return Geometry([angle, 2 * angle])
@@ -436,29 +463,29 @@ def test_stream_of_chunks_with_context_held_between_changes(calls: Calls) -> Non
     # chunk-dependent ones, are derived from the stages rather than declared.
     per_chunk = Stage(pipeline, outputs=(Histogram,), inputs=(Events,))
     context_keys = Stage(
-        pipeline, outputs=per_chunk.held, inputs=(Angle,)
+        pipeline, outputs=per_chunk.cached, inputs=(Angle,)
     ).per_call_outputs
     assert context_keys == (Geometry,)
     context_stage = Stage(pipeline, outputs=context_keys, inputs=(Angle,))
     chunk_stage = Stage(pipeline, outputs=(Histogram,), inputs=(Events, *context_keys))
     finalize_stage = Stage(pipeline, outputs=(Result,), inputs=(Histogram,))
 
-    held = Latest()
-    acc = sl.Reduced(add_histograms)()
+    context = Latest()
+    acc = Reduced(add_histograms)
 
-    held.push(context_stage.compute({Angle: 1.0}))
+    context.push(context_stage.apply({Angle: 1.0}))
     for chunk in ([1.0, 2.0], [2.0, 3.0]):
-        acc.push(chunk_stage.compute({Events: chunk, **held.value})[Histogram])
+        acc.push(chunk_stage.apply({Events: chunk, **context.value})[Histogram])
     assert calls['geometry'] == 1
-    assert finalize_stage.compute({Histogram: acc.value})[Result] == {
+    assert finalize_stage.apply({Histogram: acc.value})[Result] == {
         1: 0.5,
         2: 1.0,
         3: 0.5,
     }
 
-    held.push(context_stage.compute({Angle: 3.0}))  # context update, accumulator kept
-    acc.push(chunk_stage.compute({Events: [1.0], **held.value})[Histogram])
-    assert finalize_stage.compute({Histogram: acc.value})[Result] == {
+    context.push(context_stage.apply({Angle: 3.0}))  # context update, accumulator kept
+    acc.push(chunk_stage.apply({Events: [1.0], **context.value})[Histogram])
+    assert finalize_stage.apply({Histogram: acc.value})[Result] == {
         1: 2.0,
         2: 1.0,
         3: 0.5,
@@ -466,7 +493,7 @@ def test_stream_of_chunks_with_context_held_between_changes(calls: Calls) -> Non
     assert calls['geometry'] == 2
 
 
-def test_stage_called_from_threads_computes_held_values_once(calls: Calls) -> None:
+def test_stage_called_from_threads_computes_cached_values_once(calls: Calls) -> None:
     from concurrent.futures import ThreadPoolExecutor
     from time import sleep
 
@@ -481,7 +508,7 @@ def test_stage_called_from_threads_computes_held_values_once(calls: Calls) -> No
     pipeline = sl.Pipeline([calibration, load], params={Mask: 'mask'})
     stage = Stage(pipeline, outputs=(Loaded,), inputs=(Filename,))
     with ThreadPoolExecutor(max_workers=4) as pool:
-        results = list(pool.map(stage.compute, [{Filename: 'ab'}] * 4))
+        results = list(pool.map(stage.apply, [{Filename: 'ab'}] * 4))
     assert calls['calibration'] == 1
     assert all(r == results[0] for r in results)
 
@@ -498,14 +525,14 @@ def node_line(source: str, key: type, attr: str = '') -> str:
     )
 
 
-def test_stage_visualize_marks_inputs_held_and_per_call_nodes(
+def test_stage_visualize_marks_inputs_cached_and_per_call_nodes(
     pipeline: sl.Pipeline,
 ) -> None:
     stage = Stage(pipeline, outputs=(Numerator,), inputs=(Filename,))
     source: str = stage.visualize().source
     assert INPUT_STYLE['fillcolor'] in node_line(source, Filename)
     assert ONCE_STYLE['fillcolor'] in node_line(source, Mask)
-    assert HELD_STYLE['penwidth'] in node_line(source, Calibration)
+    assert CACHED_STYLE['penwidth'] in node_line(source, Calibration)
     assert PER_CALL_STYLE['fillcolor'] in node_line(source, Masked)
     assert 'peripheries=2' in node_line(source, Numerator)
     assert 'cluster_legend' in source
@@ -516,10 +543,10 @@ def test_stage_visualize_without_legend(pipeline: sl.Pipeline) -> None:
     assert 'cluster_legend' not in stage.visualize(show_legend=False).source
 
 
-def test_stage_visualize_can_hide_held_ancestors(pipeline: sl.Pipeline) -> None:
+def test_stage_visualize_can_hide_cached_ancestors(pipeline: sl.Pipeline) -> None:
     stage = Stage(pipeline, outputs=(Numerator,), inputs=(Filename,))
-    source: str = stage.visualize(show_held_ancestors=False).source
-    assert HELD_STYLE['penwidth'] in node_line(source, Calibration)
+    source: str = stage.visualize(show_cached_ancestors=False).source
+    assert CACHED_STYLE['penwidth'] in node_line(source, Calibration)
     assert 'Mask [' not in source
     assert 'Computed once, not kept' not in source
 

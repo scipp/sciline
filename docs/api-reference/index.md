@@ -17,9 +17,9 @@
    scheduler.NaiveScheduler
    TaskGraph
    Stage
-   Accumulator
-   Buffered
-   Reduced
+   accumulators.Accumulator
+   accumulators.Buffered
+   accumulators.Reduced
    HandleAsBuildTimeException
    HandleAsComputeTimeException
 ```
@@ -31,7 +31,7 @@
    :toctree: ../generated/functions
    :recursive:
 
-   build_stages
+   prepare_stages
    compute_mapped
    get_mapped_node_names
    visualize_stages

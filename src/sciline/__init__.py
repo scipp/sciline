@@ -9,9 +9,8 @@ try:
 except importlib.metadata.PackageNotFoundError:
     __version__ = "0.0.0"
 
-from . import scheduler
+from . import accumulators, scheduler
 from ._provider import Provider, UnboundTypeVar
-from .accumulators import Accumulator, Buffered, Reduced
 from .domain import Scope
 from .handler import (
     HandleAsBuildTimeException,
@@ -19,25 +18,23 @@ from .handler import (
     UnsatisfiedRequirement,
 )
 from .pipeline import Pipeline, compute_mapped, get_mapped_node_names
-from .stage import Stage, build_stages, visualize_stages
+from .stage import Stage, prepare_stages, visualize_stages
 from .task_graph import TaskGraph
 
 __all__ = [
-    "Accumulator",
-    "Buffered",
     "HandleAsBuildTimeException",
     "HandleAsComputeTimeException",
     "Pipeline",
     "Provider",
-    "Reduced",
     "Scope",
     "Stage",
     'TaskGraph',
     "UnboundTypeVar",
     "UnsatisfiedRequirement",
-    "build_stages",
+    "accumulators",
     "compute_mapped",
     "get_mapped_node_names",
+    "prepare_stages",
     "scheduler",
     "visualize_stages",
 ]
