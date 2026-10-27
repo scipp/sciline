@@ -24,13 +24,20 @@ if TYPE_CHECKING:
     import graphviz
 
 
-def _task_graph(pipeline: Pipeline, targets: tuple[Key, ...]) -> Graph:
-    unknown = [k for k in targets if k not in pipeline.underlying_graph]
-    if unknown:
-        raise ValueError(f'Outputs {unknown} are not in the pipeline')
-    return to_task_graph(
+def _task_graph(
+    pipeline: Pipeline, targets: tuple[Key, ...], inputs: tuple[Key, ...]
+) -> Graph:
+    # Check the task graph, not the pipeline, since building the task graph may add
+    # keys the pipeline does not hold yet, such as instances of generic providers.
+    graph = to_task_graph(
         pipeline, targets=targets, handler=HandleAsComputeTimeException()
     )
+    unknown = [k for k in targets if graph[k].kind == 'unsatisfied' and k not in inputs]
+    if unknown:
+        raise ValueError(
+            f'Outputs {unknown} have neither a provider nor a value in the pipeline'
+        )
+    return graph
 
 
 def _dependency_graph(graph: Graph) -> nx.DiGraph:
@@ -109,13 +116,13 @@ class Stage:
         Raises
         ------
         ValueError
-            If an output is not in the pipeline or an input is not needed by the
-            outputs.
+            If the pipeline has neither a provider nor a value for an output that
+            is not an input, or an input is not needed by the outputs.
         """
         self._outputs = tuple(outputs)
         self._inputs = tuple(inputs)
         self._scheduler = scheduler_or_default(scheduler)
-        graph = _task_graph(pipeline, self._outputs)
+        graph = _task_graph(pipeline, self._outputs, self._inputs)
         # Cut off the providers of the inputs, then drop what only they needed.
         deps = _cut(_dependency_graph(graph), self._inputs)
         used = _upstream(deps, self._outputs)
@@ -336,13 +343,13 @@ def build_stages(
     Raises
     ------
     ValueError
-        If a key in ``inputs`` is not an input of any stage, or an output is not in
-        the pipeline.
+        If a key in ``inputs`` is not an input of any stage, or the pipeline has
+        neither a provider nor a value for an output that is not an input.
     """
     inputs = tuple(inputs)
     stage_outputs = [tuple(outs) for outs in outputs]
     targets = tuple(dict.fromkeys(k for outs in stage_outputs for k in outs))
-    deps = _dependency_graph(_task_graph(pipeline, targets))
+    deps = _dependency_graph(_task_graph(pipeline, targets, inputs))
     stage_inputs = []
     for outs in stage_outputs:
         cut = _cut(deps, [k for k in inputs if k not in outs])

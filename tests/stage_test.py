@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright (c) 2026 Scipp contributors (https://github.com/scipp)
 from collections.abc import Hashable
-from typing import Any, NewType
+from typing import Any, NewType, TypeVar
 
 import pytest
 
@@ -143,8 +143,17 @@ def test_stage_rejects_input_needed_only_through_another_input(
 
 
 def test_stage_rejects_output_not_in_pipeline(pipeline: sl.Pipeline) -> None:
-    with pytest.raises(ValueError, match='not in the pipeline'):
+    with pytest.raises(ValueError, match='neither a provider nor a value'):
         Stage(pipeline, outputs=(Events,), inputs=(Filename,))
+
+
+def test_stage_rejects_output_that_is_an_unset_parameter() -> None:
+    def scale(bins: Bins) -> Scale:
+        return Scale(float(bins))
+
+    pipeline = sl.Pipeline([scale])
+    with pytest.raises(ValueError, match=r'Outputs \[.*Bins.*\] have neither'):
+        Stage(pipeline, outputs=(Bins, Scale), inputs=())
 
 
 @pytest.mark.parametrize(
@@ -192,6 +201,14 @@ def test_stage_passes_through_an_output_that_is_an_input(
     assert stage.per_call_outputs == (Numerator, IofQ)
     assert stage.compute({Numerator: [1.0]})[Numerator] == [1.0]
     assert calls['numerator'] == 0
+
+
+def test_stage_passes_through_an_output_that_is_an_unset_parameter() -> None:
+    def scale(bins: Bins) -> Scale:
+        return Scale(float(bins))
+
+    stage = Stage(sl.Pipeline([scale]), outputs=(Bins, Scale), inputs=(Bins,))
+    assert stage.compute({Bins: 3}) == {Bins: 3, Scale: 3.0}
 
 
 def test_stage_is_a_snapshot_of_the_pipeline(pipeline: sl.Pipeline) -> None:
@@ -317,8 +334,64 @@ def test_build_stages_rejects_input_of_no_stage(pipeline: sl.Pipeline) -> None:
 
 
 def test_build_stages_rejects_output_not_in_pipeline(pipeline: sl.Pipeline) -> None:
-    with pytest.raises(ValueError, match='not in the pipeline'):
+    with pytest.raises(ValueError, match='neither a provider nor a value'):
         build_stages(pipeline, inputs=(Filename,), outputs=[(int,)])
+
+
+SampleRun = NewType('SampleRun', int)
+BackgroundRun = NewType('BackgroundRun', int)
+RunType = TypeVar('RunType', SampleRun, BackgroundRun)
+
+
+class RunData(sl.Scope[RunType, float], float): ...
+
+
+class Normalized(sl.Scope[RunType, float], float): ...
+
+
+Subtracted = NewType('Subtracted', float)
+
+
+@pytest.fixture
+def generic_pipeline() -> sl.Pipeline:
+    def normalize(data: RunData[RunType], scale: Scale) -> Normalized[RunType]:
+        return Normalized[RunType](data * scale)
+
+    def subtract(
+        sample: Normalized[SampleRun], background: Normalized[BackgroundRun]
+    ) -> Subtracted:
+        return Subtracted(sample - background)
+
+    return sl.Pipeline([normalize, subtract], params={Scale: 2.0})
+
+
+def test_stage_with_generic_keys(generic_pipeline: sl.Pipeline) -> None:
+    stage = Stage(
+        generic_pipeline, outputs=(Normalized[SampleRun],), inputs=(RunData[SampleRun],)
+    )
+    assert stage.held == (Scale,)
+    assert stage.compute({RunData[SampleRun]: 3.0}) == {Normalized[SampleRun]: 6.0}
+
+
+def test_build_stages_with_generic_keys(generic_pipeline: sl.Pipeline) -> None:
+    sample, background, final = build_stages(
+        generic_pipeline,
+        inputs=(
+            RunData[SampleRun],
+            RunData[BackgroundRun],
+            Normalized[SampleRun],
+            Normalized[BackgroundRun],
+        ),
+        outputs=[(Normalized[SampleRun],), (Normalized[BackgroundRun],), (Subtracted,)],
+    )
+    assert sample.inputs == (RunData[SampleRun],)
+    assert background.inputs == (RunData[BackgroundRun],)
+    assert final.inputs == (Normalized[SampleRun], Normalized[BackgroundRun])
+    normalized = {
+        **sample.compute({RunData[SampleRun]: 3.0}),
+        **background.compute({RunData[BackgroundRun]: 1.0}),
+    }
+    assert final.compute(normalized) == {Subtracted: 4.0}
 
 
 # A stream: chunks of events are histogrammed against a geometry that depends on

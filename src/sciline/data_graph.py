@@ -260,13 +260,15 @@ def to_task_graph(
 ) -> Graph:
     graph = data_graph.to_networkx()
     handler = handler or HandleAsBuildTimeException()
-    ancestors = list(targets)
+    out: Graph = {}
+    ancestors = []
     for target in targets:
-        if target not in graph:
-            handler.handle_unsatisfied_requirement(target)
-        ancestors.extend(nx.ancestors(graph, target))
+        if target in graph:
+            ancestors.append(target)
+            ancestors.extend(nx.ancestors(graph, target))
+        else:
+            out[target] = handler.handle_unsatisfied_requirement(target)
     graph = graph.subgraph(set(ancestors))
-    out = {}
 
     for key in graph.nodes:
         node = graph.nodes[key]
