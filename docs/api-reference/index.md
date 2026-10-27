@@ -16,6 +16,10 @@
    scheduler.DaskScheduler
    scheduler.NaiveScheduler
    TaskGraph
+   Stage
+   accumulators.Accumulator
+   accumulators.Buffered
+   accumulators.Reduced
    HandleAsBuildTimeException
    HandleAsComputeTimeException
 ```
@@ -27,8 +31,10 @@
    :toctree: ../generated/functions
    :recursive:
 
+   prepare_stages
    compute_mapped
    get_mapped_node_names
+   visualize_stages
 ```
 
 ## Exceptions
