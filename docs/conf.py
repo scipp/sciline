@@ -210,7 +210,7 @@ html_favicon = "_static/favicon.ico"
 # so a file named "default.css" will overwrite the builtin "default.css".
 html_static_path = ['_static']
 html_css_files: list[str] = []
-html_js_files = ["anaconda-icon.js"]
+html_js_files = [("anaconda-icon.js", {"defer": "defer"})]
 
 # -- Options for HTMLHelp output ------------------------------------------
 
