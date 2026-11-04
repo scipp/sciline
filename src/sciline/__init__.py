@@ -11,7 +11,7 @@ except importlib.metadata.PackageNotFoundError:
 
 from . import scheduler
 from ._provider import Provider, UnboundTypeVar
-from .domain import Scope
+from .domain import NativeScope, Scope, native_scope
 from .handler import (
     HandleAsBuildTimeException,
     HandleAsComputeTimeException,
@@ -23,6 +23,7 @@ from .task_graph import TaskGraph
 __all__ = [
     "HandleAsBuildTimeException",
     "HandleAsComputeTimeException",
+    "NativeScope",
     "Pipeline",
     "Provider",
     "Scope",
@@ -31,6 +32,7 @@ __all__ = [
     "UnsatisfiedRequirement",
     "compute_mapped",
     "get_mapped_node_names",
+    "native_scope",
     "scheduler",
 ]
 
