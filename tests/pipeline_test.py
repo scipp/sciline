@@ -1079,6 +1079,13 @@ def test_compute_time_handler_allows_for_building_but_not_computing() -> None:
         graph.compute()
 
 
+def test_compute_time_handler_defers_error_for_target_without_provider() -> None:
+    pipeline = sl.Pipeline([int_to_float])
+    graph = pipeline.get(str, handler=sl.HandleAsComputeTimeException())
+    with pytest.raises(sl.UnsatisfiedRequirement, match='str'):
+        graph.compute()
+
+
 def test_pipeline_copy_simple() -> None:
     a = sl.Pipeline([int_to_float, make_int])
     b = a.copy()

@@ -7,4 +7,5 @@ maxdepth: 2
 
 workflow-design
 rewrite
+map-reduce-outside-the-graph
 ```
