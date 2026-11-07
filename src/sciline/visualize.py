@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 # Copyright (c) 2023 Scipp contributors (https://github.com/scipp)
 import html
-from collections.abc import Hashable
+from collections.abc import Hashable, Mapping
 from dataclasses import dataclass
 from typing import Any, Literal, get_args, get_origin
 
@@ -35,6 +35,7 @@ def to_graphviz(
     mode: Literal['data', 'task', 'both'] = 'data',
     cluster_generics: bool = True,
     cluster_color: str | None = '#f0f0ff',
+    node_attrs: Mapping[Key, Mapping[str, str]] | None = None,
     **kwargs: Any,
 ) -> Digraph:
     """
@@ -54,6 +55,8 @@ def to_graphviz(
         If True, generic products are grouped into clusters.
     cluster_color:
         Background color of clusters. If None, clusters are dotted.
+    node_attrs:
+        Extra graphviz attributes for individual data nodes, keyed by graph key.
     kwargs:
         Keyword arguments passed to :py:class:`graphviz.Digraph`.
     """
@@ -81,6 +84,9 @@ def to_graphviz(
     # Compound is required for connecting edges to clusters
     dot.graph_attr['compound'] = 'true'
     formatted_graph = _format_graph(graph, compact=compact)
+    attrs_by_name = {
+        _format_type(k, compact=compact).name: v for k, v in (node_attrs or {}).items()
+    }
     ordered_graph = dict(
         sorted(formatted_graph.items(), key=lambda item: item[1].ret.name)
     )
@@ -102,7 +108,9 @@ def to_graphviz(
                 # duplication and clutter in general.
                 origin = next(iter(subgraph.values())).ret.name.split('[')[0]
                 dot_subgraph.attr(label=f'{origin}')
-            _add_subgraph(subgraph, dot, dot_subgraph, mode=mode)
+            _add_subgraph(
+                subgraph, dot, dot_subgraph, mode=mode, node_attrs=attrs_by_name
+            )
     return dot
 
 
@@ -120,6 +128,7 @@ def _add_subgraph(
     dot: Digraph,
     subgraph: Digraph,
     mode: Literal['data', 'task', 'both'],
+    node_attrs: Mapping[str, Mapping[str, str]],
 ) -> None:
     cluster = subgraph.name is not None
     cluster_connected = []
@@ -144,6 +153,7 @@ def _add_subgraph(
             else:
                 name = f'{name[:-1]}<br/>{via}>'
         shape = 'box3d' if formatted_p.ret.collapsed else 'rectangle'
+        extra = node_attrs.get(ret_name, {})
         if formatted_p.kind == 'unsatisfied':
             subgraph.node(
                 ret_name,
@@ -154,7 +164,7 @@ def _add_subgraph(
                 style='dashed',
             )
         elif mode != 'task' or formatted_p.kind == 'parameter':
-            subgraph.node(ret_name, name, shape=shape)
+            subgraph.node(ret_name, name, **{'shape': shape, **extra})
         if formatted_p.kind == 'function':
             if mode == 'both':
                 dot.node(p, formatted_p.name, shape='ellipse')

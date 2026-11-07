@@ -11,6 +11,7 @@ except importlib.metadata.PackageNotFoundError:
 
 from . import scheduler
 from ._provider import Provider, UnboundTypeVar
+from .batch_processor import BatchProcessor, MultiParam, batch_processor
 from .domain import Scope
 from .handler import (
     HandleAsBuildTimeException,
@@ -21,14 +22,17 @@ from .pipeline import Pipeline, compute_mapped, get_mapped_node_names
 from .task_graph import TaskGraph
 
 __all__ = [
+    "BatchProcessor",
     "HandleAsBuildTimeException",
     "HandleAsComputeTimeException",
+    "MultiParam",
     "Pipeline",
     "Provider",
     "Scope",
     'TaskGraph',
     "UnboundTypeVar",
     "UnsatisfiedRequirement",
+    "batch_processor",
     "compute_mapped",
     "get_mapped_node_names",
     "scheduler",

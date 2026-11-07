@@ -2,7 +2,7 @@
 # Copyright (c) 2023 Scipp contributors (https://github.com/scipp)
 from __future__ import annotations
 
-from collections.abc import Generator, Hashable, Sequence
+from collections.abc import Generator, Hashable, Mapping, Sequence
 from html import escape
 from typing import TYPE_CHECKING, Any, Literal, TypeVar
 
@@ -141,6 +141,7 @@ class TaskGraph:
         mode: Literal['data', 'task', 'both'] = 'data',
         cluster_generics: bool = True,
         cluster_color: str | None = '#f0f0ff',
+        node_attrs: Mapping[Key, Mapping[str, str]] | None = None,
         **kwargs: Any,
     ) -> graphviz.Digraph:
         """
@@ -158,6 +159,8 @@ class TaskGraph:
             If True, generic products are grouped into clusters.
         cluster_color:
             Background color of clusters. If None, clusters are dotted.
+        node_attrs:
+            Extra graphviz attributes for individual data nodes, keyed by graph key.
         kwargs:
             Keyword arguments passed to :py:class:`graphviz.Digraph`.
         """
@@ -169,6 +172,7 @@ class TaskGraph:
             mode=mode,
             cluster_generics=cluster_generics,
             cluster_color=cluster_color,
+            node_attrs=node_attrs,
             **kwargs,
         )
 
