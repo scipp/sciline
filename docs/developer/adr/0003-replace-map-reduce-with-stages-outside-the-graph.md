@@ -62,8 +62,8 @@ Add building blocks that work on an ordinary flat pipeline and add nothing to it
 
 ```python
 stage = Stage(pipeline, inputs=(Filename,), outputs=(Result,))
-stage.apply({Filename: 'run1.nxs'})  # -> {Result: ...}
-stage.apply({Filename: 'run2.nxs'})  # -> {Result: ...}, calibration not loaded again
+stage.run({Filename: 'run1.nxs'})  # -> {Result: ...}
+stage.run({Filename: 'run2.nxs'})  # -> {Result: ...}, calibration not loaded again
 ```
 
 A stage splits the graph needed for the outputs into two parts:
@@ -102,8 +102,8 @@ contribute = Stage(pipeline, inputs=(Filename[SampleRun],), outputs=(DetectorDat
 finalize = Stage(pipeline, inputs=(DetectorData,), outputs=(IofQ,))
 acc = Buffered(merge)
 for run in ['run1.nxs', 'run2.nxs']:
-    acc.push(contribute.apply({Filename[SampleRun]: run})[DetectorData])
-finalize.apply({DetectorData: acc.value})
+    acc.push(contribute.run({Filename[SampleRun]: run})[DetectorData])
+finalize.run({DetectorData: acc.value})
 ```
 
 Contributing, combining, and finalizing can run at different times or in different processes, since a contribution is a plain dict; the same loop without the accumulator replaces `compute_mapped`.
@@ -125,9 +125,9 @@ run_stage, bank_stage, final_stage = prepare_stages(
 )
 
 for filename in filenames:
-    forwarded = run_stage.apply({Filename: filename})
+    forwarded = run_stage.run({Filename: filename})
     for bank in banks:
-        out = bank_stage.apply({**forwarded, Bank: bank})
+        out = bank_stage.run({**forwarded, Bank: bank})
         ...  # push out[Numerator] and out[Denominator] into accumulators
 ```
 

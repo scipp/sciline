@@ -102,7 +102,7 @@ class Stage:
     Everything the outputs need that does not depend on the inputs is computed once,
     on first use or by :py:func:`prepare_stages`. Of this part, the stage caches the
     values that the per-call part reads, and the outputs that do not depend on the
-    inputs. Each call to :py:meth:`apply` supplies values for the inputs and
+    inputs. Each call to :py:meth:`run` supplies values for the inputs and
     computes only what lies downstream of them. An input may be a parameter or an
     intermediate result; in both cases its own provider and ancestors are cut off.
     An output that is also an input is passed through.
@@ -111,7 +111,7 @@ class Stage:
     the pipeline do not affect it. Parameter values are kept by reference, not
     copied, so modifying a value in place can change what the stage computes.
 
-    :py:meth:`apply` may be called from several threads at once. Even then, the
+    :py:meth:`run` may be called from several threads at once. Even then, the
     part that does not depend on the inputs is computed only once.
     """
 
@@ -262,7 +262,7 @@ class Stage:
             **kwargs,
         )
 
-    def apply(self, values: Mapping[Key, Any]) -> dict[Key, Any]:
+    def run(self, values: Mapping[Key, Any]) -> dict[Key, Any]:
         """Compute the values of the outputs from the values of the inputs.
 
         Parameters
@@ -335,7 +335,7 @@ def prepare_stages(
     Intermediate results shared by several stages are computed once and released;
     each stage keeps only its cached values, as a :py:class:`Stage` built on
     its own does. The stages are returned warm, so the first call to
-    :py:meth:`Stage.apply` computes only the per-call part.
+    :py:meth:`Stage.run` computes only the per-call part.
 
     Parameters
     ----------

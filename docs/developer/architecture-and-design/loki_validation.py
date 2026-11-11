@@ -167,7 +167,19 @@ def accumulators_for(run_type: type) -> dict[Any, Any]:
 
 
 def reduction_stages(pipeline: sciline.Pipeline) -> tuple[dict[type, Stage], Stage]:
-    """One contribute stage per run type, and their shared finalize stage."""
+    """One contribute stage per run type, and their shared finalize stage.
+
+    ``prepare_stages`` makes every accumulation key an input of the finalize stage,
+    so the driver pushes every accumulation key for every run, not only the
+    ``per_call_outputs`` as in the user guide. This relies on two properties of the
+    workflow, which a user who inserts providers can break. Neither fails on the
+    tutorial data; the checks below turn them into errors when the stages are built:
+
+    - Each contribute stage takes only the filename of its own run type. Otherwise,
+      the first call fails, with a less clear error.
+    - Each accumulation key depends on the run. Otherwise, it would be pushed once
+      per run and counted that many times, without any error.
+    """
     run_types = (SampleRun, BackgroundRun)
     acc_keys = [tuple(accumulators_for(rt)) for rt in run_types]
     *stages, final = prepare_stages(
@@ -235,9 +247,9 @@ class SansReduction:
             contributions = self._contributions[run_type]
             for run in self._runs[run_type]:
                 if run not in contributions:
-                    contributions[run] = stage.apply({Filename[run_type]: run})
+                    contributions[run] = stage.run({Filename[run_type]: run})
             combined |= combine(run_type, contributions.values())
-        return self._finalize.apply(combined)
+        return self._finalize.run(combined)
 
 
 def main() -> None:
@@ -312,8 +324,7 @@ def main() -> None:
     key = NormalizedQ[SampleRun, Numerator]
     per_run = Stage(flat, outputs=(key,), inputs=(Filename[SampleRun],))
     members = {
-        i: per_run.apply({Filename[SampleRun]: f})[key]
-        for i, f in enumerate(sample_runs)
+        i: per_run.run({Filename[SampleRun]: f})[key] for i, f in enumerate(sample_runs)
     }
     single = sans.with_pixel_mask_filenames(base, masks)
     print('per-member NormalizedQ[SampleRun, Numerator] vs single-run compute:')
@@ -329,16 +340,16 @@ def main() -> None:
     calls.clear()
     stages, finalize = reduction_stages(flat)
     # Sample runs combined as a chain, one new run onto the previous result.
-    sample = stages[SampleRun].apply({Filename[SampleRun]: sample_runs[0]})
+    sample = stages[SampleRun].run({Filename[SampleRun]: sample_runs[0]})
     for run in sample_runs[1:]:
-        new = stages[SampleRun].apply({Filename[SampleRun]: run})
+        new = stages[SampleRun].run({Filename[SampleRun]: run})
         sample = combine(SampleRun, [sample, new])
     background_stage = stages[BackgroundRun]
     background = combine(
         BackgroundRun,
-        (background_stage.apply({Filename[BackgroundRun]: r}) for r in background_runs),
+        (background_stage.run({Filename[BackgroundRun]: r}) for r in background_runs),
     )
-    staged = finalize.apply({**sample, **background})
+    staged = finalize.run({**sample, **background})
     print(f'separate calls (calls {calls}):')
     for key in OUTPUTS:
         compare(key.__name__, staged[key], results[key])

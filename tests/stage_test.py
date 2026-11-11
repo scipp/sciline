@@ -81,8 +81,8 @@ def test_stage_computes_cached_values_once_and_per_call_part_per_call(
     stage = Stage(pipeline, outputs=(Numerator, Denominator), inputs=(Filename,))
     assert stage.cached == (Calibration, Bins)
     assert set(stage.per_call) == {Filename, Loaded, Masked, Numerator, Denominator}
-    a = stage.apply({Filename: 'ab'})
-    b = stage.apply({Filename: 'cde'})
+    a = stage.run({Filename: 'ab'})
+    b = stage.run({Filename: 'cde'})
     assert a[Numerator] == [97.0 * 4, 98.0 * 4]
     assert a[Denominator] == (97.0 + 98.0) * 4
     assert b[Denominator] == (99.0 + 100.0 + 101.0) * 4
@@ -97,9 +97,7 @@ def test_stage_with_intermediate_input_cuts_its_ancestors(
     assert stage.cached == ()
     assert Filename not in stage.keys
     assert Calibration not in stage.keys
-    assert (
-        stage.apply({Numerator: [2.0, 4.0], Denominator: 3.0, Scale: 2.0})[IofQ] == 4.0
-    )
+    assert stage.run({Numerator: [2.0, 4.0], Denominator: 3.0, Scale: 2.0})[IofQ] == 4.0
     assert calls.counts == {'normalize': 1}
 
 
@@ -126,7 +124,7 @@ def test_stage_does_not_compute_ancestors_of_intermediate_input_shared_with_inpu
         scheduler=sl.scheduler.NaiveScheduler(),
     )
     assert Loaded not in stage.keys
-    assert stage.apply({Masked: [2.0], Filename: 'ab'})[Denominator] == 4.0
+    assert stage.run({Masked: [2.0], Filename: 'ab'})[Denominator] == 4.0
     assert calls.counts == {}
 
 
@@ -166,7 +164,7 @@ def test_stage_rejects_call_with_wrong_keys(
 ) -> None:
     stage = Stage(pipeline, outputs=(IofQ,), inputs=(Numerator, Denominator))
     with pytest.raises(ValueError, match='Expected values for'):
-        stage.apply(values)
+        stage.run(values)
 
 
 def test_stage_holds_expensive_part_up_to_cheap_parameter(
@@ -177,8 +175,8 @@ def test_stage_holds_expensive_part_up_to_cheap_parameter(
     calls.reset()
     stage = Stage(pipeline, outputs=(IofQ,), inputs=(Scale,))
     assert stage.cached == (Numerator, Denominator)
-    assert stage.apply({Scale: 1.0})[IofQ] == pytest.approx(expected)
-    assert stage.apply({Scale: 3.0})[IofQ] == pytest.approx(3.0 * expected)
+    assert stage.run({Scale: 1.0})[IofQ] == pytest.approx(expected)
+    assert stage.run({Scale: 3.0})[IofQ] == pytest.approx(3.0 * expected)
     assert calls['load'] == 1
     assert calls['normalize'] == 2
 
@@ -189,7 +187,7 @@ def test_stage_with_shared_ancestor_input_holds_the_rest(
     # Numerator is supplied; Denominator and Scale are cached.
     stage = Stage(pipeline, outputs=(IofQ,), inputs=(Numerator,))
     assert stage.cached == (Denominator, Scale)
-    assert stage.apply({Numerator: [1.0]})[IofQ] == 1.0 / (sum(map(ord, 'unused')) * 4)
+    assert stage.run({Numerator: [1.0]})[IofQ] == 1.0 / (sum(map(ord, 'unused')) * 4)
 
 
 def test_stage_passes_through_an_output_that_is_an_input(
@@ -197,7 +195,7 @@ def test_stage_passes_through_an_output_that_is_an_input(
 ) -> None:
     stage = Stage(pipeline, outputs=(Numerator, IofQ), inputs=(Numerator,))
     assert stage.per_call_outputs == (Numerator, IofQ)
-    assert stage.apply({Numerator: [1.0]})[Numerator] == [1.0]
+    assert stage.run({Numerator: [1.0]})[Numerator] == [1.0]
     assert calls['numerator'] == 0
 
 
@@ -206,13 +204,13 @@ def test_stage_passes_through_an_output_that_is_an_unset_parameter() -> None:
         return Scale(float(bins))
 
     stage = Stage(sl.Pipeline([scale]), outputs=(Bins, Scale), inputs=(Bins,))
-    assert stage.apply({Bins: 3}) == {Bins: 3, Scale: 3.0}
+    assert stage.run({Bins: 3}) == {Bins: 3, Scale: 3.0}
 
 
 def test_stage_is_a_snapshot_of_the_pipeline(pipeline: sl.Pipeline) -> None:
     stage = Stage(pipeline, outputs=(Numerator,), inputs=(Filename,))
     pipeline[Bins] = 1
-    assert stage.apply({Filename: 'ab'})[Numerator] == [97.0 * 4, 98.0 * 4]
+    assert stage.run({Filename: 'ab'})[Numerator] == [97.0 * 4, 98.0 * 4]
 
 
 def test_stage_uses_given_scheduler(scheduler: sl.scheduler.Scheduler) -> None:
@@ -227,7 +225,7 @@ def test_stage_uses_given_scheduler(scheduler: sl.scheduler.Scheduler) -> None:
     pipeline = sl.Pipeline([length, scaled], params={float: 0.5})
     stage = Stage(pipeline, outputs=(complex,), inputs=(str,), scheduler=scheduler)
     assert stage.cached == (float,)
-    assert stage.apply({str: 'abcd'})[complex] == 2.0 + 0.0j
+    assert stage.run({str: 'abcd'})[complex] == 2.0 + 0.0j
 
 
 def test_replacing_task_graph_dask_scheduler_changes_default_of_stage_and_pipeline(
@@ -244,7 +242,7 @@ def test_replacing_task_graph_dask_scheduler_changes_default_of_stage_and_pipeli
 
     # ESSlivedata selects its scheduler by replacing this name.
     monkeypatch.setattr(sl.task_graph, 'DaskScheduler', Recording)
-    Stage(pipeline, outputs=(Denominator,), inputs=(Filename,)).apply({Filename: 'ab'})
+    Stage(pipeline, outputs=(Denominator,), inputs=(Filename,)).run({Filename: 'ab'})
     assert used
     used.clear()
     pipeline.compute(Calibration)
@@ -270,8 +268,8 @@ def test_prepare_stages_computes_shared_work_once(
     assert calls['calibration'] == 1
     assert numerator.cached_values() == {Calibration: 4.0, Bins: 2}
     assert denominator.cached_values() == {Calibration: 4.0}
-    numerator.apply({Filename: 'ab'})
-    denominator.apply({Filename: 'ab'})
+    numerator.run({Filename: 'ab'})
+    denominator.run({Filename: 'ab'})
     assert calls['calibration'] == 1
 
 
@@ -309,7 +307,7 @@ def test_prepare_stages_cuts_every_stage_at_every_input(
     )
     assert per_file.inputs == (Filename,)
     assert per_bins.inputs == (Filename, Bins)
-    assert per_bins.apply({Filename: 'ab', Bins: 1}) == {Numerator: [388.0]}
+    assert per_bins.run({Filename: 'ab', Bins: 1}) == {Numerator: [388.0]}
 
 
 def test_prepare_stages_allows_stage_taking_a_value_that_another_stage_holds(
@@ -366,7 +364,7 @@ def test_stage_with_generic_keys(generic_pipeline: sl.Pipeline) -> None:
         generic_pipeline, outputs=(Normalized[SampleRun],), inputs=(RunData[SampleRun],)
     )
     assert stage.cached == (Scale,)
-    assert stage.apply({RunData[SampleRun]: 3.0}) == {Normalized[SampleRun]: 6.0}
+    assert stage.run({RunData[SampleRun]: 3.0}) == {Normalized[SampleRun]: 6.0}
 
 
 def test_stage_caches_one_specialization_and_computes_another_per_call(
@@ -377,7 +375,7 @@ def test_stage_caches_one_specialization_and_computes_another_per_call(
     assert set(stage.cached) == {Scale, Normalized[BackgroundRun]}
     assert stage.cached_values()[Normalized[BackgroundRun]] == 2.0
     assert Normalized[SampleRun] in stage.per_call
-    assert stage.apply({RunData[SampleRun]: 3.0}) == {Subtracted: 4.0}
+    assert stage.run({RunData[SampleRun]: 3.0}) == {Subtracted: 4.0}
 
 
 def test_stage_uses_specialized_provider_instead_of_generic_one(
@@ -394,7 +392,7 @@ def test_stage_uses_specialized_provider_instead_of_generic_one(
         outputs=(Normalized[SampleRun], Normalized[BackgroundRun]),
         inputs=(RunData[SampleRun], RunData[BackgroundRun]),
     )
-    assert stage.apply({RunData[SampleRun]: 1.0, RunData[BackgroundRun]: 1.0}) == {
+    assert stage.run({RunData[SampleRun]: 1.0, RunData[BackgroundRun]: 1.0}) == {
         Normalized[SampleRun]: 2.0,
         Normalized[BackgroundRun]: 20.0,
     }
@@ -415,10 +413,10 @@ def test_prepare_stages_with_generic_keys(generic_pipeline: sl.Pipeline) -> None
     assert background.inputs == (RunData[BackgroundRun],)
     assert final.inputs == (Normalized[SampleRun], Normalized[BackgroundRun])
     normalized = {
-        **sample.apply({RunData[SampleRun]: 3.0}),
-        **background.apply({RunData[BackgroundRun]: 1.0}),
+        **sample.run({RunData[SampleRun]: 3.0}),
+        **background.run({RunData[BackgroundRun]: 1.0}),
     }
-    assert final.apply(normalized) == {Subtracted: 4.0}
+    assert final.run(normalized) == {Subtracted: 4.0}
 
 
 # A stream: chunks of events are histogrammed against a geometry that depends on
@@ -473,19 +471,19 @@ def test_stream_of_chunks_with_context_kept_between_changes(calls: Calls) -> Non
     context = Latest()
     acc = Reduced(add_histograms)
 
-    context.push(context_stage.apply({Angle: 1.0}))
+    context.push(context_stage.run({Angle: 1.0}))
     for chunk in ([1.0, 2.0], [2.0, 3.0]):
-        acc.push(chunk_stage.apply({Events: chunk, **context.value})[Histogram])
+        acc.push(chunk_stage.run({Events: chunk, **context.value})[Histogram])
     assert calls['geometry'] == 1
-    assert finalize_stage.apply({Histogram: acc.value})[Result] == {
+    assert finalize_stage.run({Histogram: acc.value})[Result] == {
         1: 0.5,
         2: 1.0,
         3: 0.5,
     }
 
-    context.push(context_stage.apply({Angle: 3.0}))  # context update, accumulator kept
-    acc.push(chunk_stage.apply({Events: [1.0], **context.value})[Histogram])
-    assert finalize_stage.apply({Histogram: acc.value})[Result] == {
+    context.push(context_stage.run({Angle: 3.0}))  # context update, accumulator kept
+    acc.push(chunk_stage.run({Events: [1.0], **context.value})[Histogram])
+    assert finalize_stage.run({Histogram: acc.value})[Result] == {
         1: 2.0,
         2: 1.0,
         3: 0.5,
@@ -508,7 +506,7 @@ def test_stage_called_from_threads_computes_cached_values_once(calls: Calls) -> 
     pipeline = sl.Pipeline([calibration, load], params={Mask: 'mask'})
     stage = Stage(pipeline, outputs=(Loaded,), inputs=(Filename,))
     with ThreadPoolExecutor(max_workers=4) as pool:
-        results = list(pool.map(stage.apply, [{Filename: 'ab'}] * 4))
+        results = list(pool.map(stage.run, [{Filename: 'ab'}] * 4))
     assert calls['calibration'] == 1
     assert all(r == results[0] for r in results)
 

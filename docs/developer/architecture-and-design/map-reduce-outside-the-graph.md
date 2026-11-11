@@ -67,7 +67,7 @@ Terms used in this document:
 ```python
 stage = Stage(pipeline, inputs=(Filename,), outputs=(Numerator, Denominator))
 stage.cached                            # keys whose values the stage caches
-stage.apply({Filename: 'run1.nxs'}) # -> {Numerator: ..., Denominator: ...}
+stage.run({Filename: 'run1.nxs'}) # -> {Numerator: ..., Denominator: ...}
 
 # Several stages from one pipeline, with their cached values computed in one run:
 contribute, finalize = prepare_stages(
@@ -199,16 +199,16 @@ A driver for runs times banks:
 ```python
 acc = {Numerator: Buffered(concat), Denominator: Reduced(add)}
 for filename in filenames:
-    forwarded = run_stage.apply({Filename: filename})
+    forwarded = run_stage.run({Filename: filename})
     for name in bank_names:
-        out = bank_stage.apply({**forwarded, Bank: name})
+        out = bank_stage.run({**forwarded, Bank: name})
         for key in bank_stage.per_call_outputs:
             acc[key].push(out[key])
-result = final_stage.apply({k: a.value for k, a in acc.items()})
+result = final_stage.run({k: a.value for k, a in acc.items()})
 ```
 
 With several stages inside a loop, such as the triplet stage and the per-run step of Bifrost (section 6.3), the run stage outputs the forwarded values of all of them, and each stage takes those among its own cached keys.
-`Stage.apply` accepts exactly the inputs of the stage, so the driver selects the values for each stage, `{k: v for k, v in forwarded.items() if k in stage.inputs}`.
+`Stage.run` accepts exactly the inputs of the stage, so the driver selects the values for each stage, `{k: v for k, v in forwarded.items() if k in stage.inputs}`.
 
 Building the stages of nested loops this way has two pitfalls:
 
@@ -302,7 +302,7 @@ A result enters another driver as an ordinary parameter of the flat pipeline; th
 banks = Stage(pipeline, outputs=(EmptyDetector,), inputs=(NeXusDetectorName,))
 acc = Buffered(combine_banks)
 for name in bank_names:
-    acc.push(banks.apply({NeXusDetectorName: name})[EmptyDetector])
+    acc.push(banks.run({NeXusDetectorName: name})[EmptyDetector])
 pipeline[EmptyDetector] = acc.value
 processor = StreamProcessor(pipeline, ...)
 ```
@@ -371,14 +371,14 @@ It uses them in four places:
   assert set(contribute_stage.per_call_outputs) == set(ACC_KEYS)  # each varies per run
 
   def contribute(filename):   # CONTRIBUTE: one run -> accumulation keys, exposed as outputs
-      return contribute_stage.apply({Filename[SampleRun]: filename})
+      return contribute_stage.run({Filename[SampleRun]: filename})
 
   def combine(contributions): # COMBINE: references to the outputs of CONTRIBUTE -> result
       acc = {k: make() for k, make in ACCUMULATORS.items()}
       for contribution in contributions:
           for k, a in acc.items():
               a.push(contribution[k])
-      return final_stage.apply({k: a.value for k, a in acc.items()})
+      return final_stage.run({k: a.value for k, a in acc.items()})
   ```
 
   Each record describes only its own computation, so no check that the contributions agree is needed.
@@ -505,7 +505,7 @@ An earlier version of the stage tests was run on the generics branch and passed.
 
 The tests cover:
 
-- **Stage:** cached values computed once and the per-call part on each call; an intermediate input cuts off its ancestors; inputs the outputs do not need are rejected; pass-through of an output that is an input; `apply` rejects a missing input and a value for a key that is not an input; snapshot behaviour; `prepare_stages` cuts every stage at every input, so a stage reading a value that depends on another stage's input takes that input itself, and allows a stage that takes as input a value that another stage holds; `prepare_stages` computes shared work once, gives each stage the inputs it needs, and rejects an input that no stage takes and an output not in the pipeline; concurrent calls compute the held values only once; an expensive load before a cheap parameter (the shape of tuning in essapps); the default scheduler follows a replacement of `sciline.task_graph.DaskScheduler`; the `StreamProcessor` shape with a context update; `visualize_stages` fills what each stage computes with the color of that stage, and applies the styles of groups given by the caller.
+- **Stage:** cached values computed once and the per-call part on each call; an intermediate input cuts off its ancestors; inputs the outputs do not need are rejected; pass-through of an output that is an input; `run` rejects a missing input and a value for a key that is not an input; snapshot behaviour; `prepare_stages` cuts every stage at every input, so a stage reading a value that depends on another stage's input takes that input itself, and allows a stage that takes as input a value that another stage holds; `prepare_stages` computes shared work once, gives each stage the inputs it needs, and rejects an input that no stage takes and an output not in the pipeline; concurrent calls compute the held values only once; an expensive load before a cheap parameter (the shape of tuning in essapps); the default scheduler follows a replacement of `sciline.task_graph.DaskScheduler`; the `StreamProcessor` shape with a context update; `visualize_stages` fills what each stage computes with the color of that stage, and applies the styles of groups given by the caller.
 - **Accumulators:** push order, the first push as result, reading without pushes, pushing combined values gives the same result.
 
 ### Nested drivers
