@@ -128,16 +128,23 @@ def test_stage_does_not_compute_ancestors_of_intermediate_input_shared_with_inpu
     assert calls.counts == {}
 
 
-def test_stage_rejects_input_the_outputs_do_not_need(pipeline: sl.Pipeline) -> None:
-    with pytest.raises(ValueError, match='not needed'):
-        Stage(pipeline, outputs=(Denominator,), inputs=(Scale,))
+def test_stage_drops_input_the_outputs_do_not_need(pipeline: sl.Pipeline) -> None:
+    stage = Stage(pipeline, outputs=(Denominator,), inputs=(Filename, Scale))
+    assert stage.inputs == (Filename,)
+    assert Scale not in stage.keys
 
 
-def test_stage_rejects_input_needed_only_through_another_input(
+def test_stage_drops_input_needed_only_through_another_input(
     pipeline: sl.Pipeline,
 ) -> None:
-    with pytest.raises(ValueError, match='not needed'):
-        Stage(pipeline, outputs=(Denominator,), inputs=(Masked, Filename))
+    stage = Stage(pipeline, outputs=(Denominator,), inputs=(Masked, Filename))
+    assert stage.inputs == (Masked,)
+
+
+def test_stage_run_rejects_value_for_dropped_input(pipeline: sl.Pipeline) -> None:
+    stage = Stage(pipeline, outputs=(Denominator,), inputs=(Masked, Filename))
+    with pytest.raises(ValueError, match='Expected values for'):
+        stage.run({Masked: [1.0], Filename: 'ab'})
 
 
 def test_stage_rejects_output_not_in_pipeline(pipeline: sl.Pipeline) -> None:
@@ -322,9 +329,16 @@ def test_prepare_stages_allows_stage_taking_a_value_that_another_stage_holds(
     assert calls['calibration'] == 1
 
 
-def test_prepare_stages_rejects_input_of_no_stage(pipeline: sl.Pipeline) -> None:
-    with pytest.raises(ValueError, match=r'Inputs \[.*Scale.*\] are not inputs'):
-        prepare_stages(pipeline, inputs=(Filename, Scale), outputs=[(Numerator,)])
+def test_prepare_stages_drops_inputs_a_stage_does_not_need(
+    pipeline: sl.Pipeline,
+) -> None:
+    numerator, iofq = prepare_stages(
+        pipeline,
+        inputs=(Filename, Scale, Numerator, Denominator),
+        outputs=[(Numerator,), (IofQ,)],
+    )
+    assert numerator.inputs == (Filename,)
+    assert iofq.inputs == (Scale, Numerator, Denominator)
 
 
 def test_prepare_stages_rejects_output_not_in_pipeline(pipeline: sl.Pipeline) -> None:
