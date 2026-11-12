@@ -320,23 +320,28 @@ chunk_stages = [Stage(pipeline, inputs=keys, outputs=acc_keys)
                 for keys, acc_keys in groups]    # accumulators by the dynamic keys they read
 finalize_stage = Stage(pipeline, inputs=(*all_acc_keys, *bypass_keys),
                        outputs=accumulated_targets)
-# Rebuilt as in section 5: the context stage computes, from context_keys,
-# context_only_targets and what these stages cache that depends on the context.
+# Rebuilt as in section 5: context stages compute, from context_keys,
+# context_only_targets and what these stages cache that depends on the context,
+# one stage per group of values that depend on the same context keys.
 ```
 
-`set_context` calls the context stage and holds its result in a forwarder.
+`set_context` calls the context stages that read an updated key or a value recomputed by an earlier context stage, and holds their results.
 `accumulate` calls each chunk stage whose inputs the chunk supplies and pushes into the accumulators.
 `finalize` calls the finalize stage.
-What the chunk and finalize stages read from the context, today found by `_find_descendants` and `_find_parents`, is derived from their cached keys.
-A target that depends on the context alone is an output of the context stage, and `allow_bypass` becomes an explicit input of the finalize stage.
+What the chunk and finalize stages read from the context, previously found by `_find_descendants` and `_find_parents`, is derived from their cached keys.
+A target that depends on the context alone is an output of a context stage, and `allow_bypass` becomes an explicit input of the finalize stage.
 A target that depends on no input belongs to no loop; a plain `Stage` without inputs computes it.
 The accumulator classes, the grouping of accumulators by dynamic keys, the validation of key sets, `on_finalize`, `clear`, and `visualize` stay.
 The module shrinks to its policy, which values are transient and which are held, as scipp/ess#732 proposed.
 
-With one context stage, an update of any context key recomputes all context-derived values, where `StreamProcessor` today recomputes only what depends on the updated keys.
-In esslivedata this costs compute and changes no results.
-The only reset tied to the context, the reset-on-move of `NoCopyAccumulator`, compares coordinate values on each push, and values recomputed from unchanged inputs are identical; nothing inspects which context nodes were recomputed.
-The extra work is at most one rebuild of the detector projection when a rare key (an ROI edit, or a wavelength lookup table after a chopper change) is updated in a job with moving detector geometry.
+A single context stage would recompute all context-derived values on an update of any context key.
+In esslivedata this changes no results: the only reset tied to the context, the reset-on-move of `NoCopyAccumulator`, compares coordinate values on each push, values recomputed from unchanged inputs are identical, and nothing inspects which values were recomputed.
+But it costs compute on every update of a frequent key.
+On the LOKI rear detector in wavelength mode, with live transforms of the sample motors, each sample motor message rebuilt the detector projection, which does not depend on the sample: about 80 ms per batch instead of 12 ms.
+
+So there is one context stage per group of context-derived values that depend on the same context keys, and an update recomputes only what depends on the updated keys.
+A group that reads a value of another group depends on a strict superset of that group's context keys, so ordering the stages by the number of context keys runs each after those it reads.
+It takes that value as input instead of recomputing it: on the same detector, an ROI edit costs 1.6 ms, where the implementation before stages rebuilt the projection (77 ms).
 The calls inside `StreamProcessor` must also honour esslivedata's choice of scheduler (section 8.7).
 
 `test_stream_of_chunks_with_context_kept_between_changes` in `tests/stage_test.py` runs this shape with stages built by hand, including a context update that keeps the accumulator.
@@ -394,7 +399,8 @@ This document supersedes that branch's design document where map/reduce is conce
 **Removed:** `map`, `reduce`, `index_names`, `indices`, `get_mapped_node_names`, `compute_mapped`, computing a `pandas.Series` of keys, `visualize(compact=)`, `constraints=`, and cyclebane.
 The graph becomes a plain `networkx.DiGraph`, and grafting with `__getitem__`/`__setitem__` needs about a hundred lines of networkx.
 
-**Added:** `provide(key, callable)`, which registers a provider for a key known only at run time, so that `StreamProcessor` no longer needs to patch annotations (scipp/sciline#241).
+**Not needed:** `provide(key, callable)`, which would register a provider for a key known only at run time, was planned so that `StreamProcessor` no longer needs to patch annotations (scipp/sciline#241).
+The rewrite on stages passes values with `Stage.run` and inserts no providers, so no use of `provide` remains.
 
 **Kept, with the same interface:** construction from providers and `params`, `__setitem__` (values and grafted sub-pipelines), `__getitem__`, `insert`, `copy`, `get`, `compute`, `visualize`, `bind_and_call`, `output_keys`, and `underlying_graph` as a `networkx.DiGraph` with `value` and `provider` node attributes (read by `ess.reduce.workflow`).
 Scheduler, task graph, reporter, handlers, and serialization are reused unchanged.
@@ -515,7 +521,7 @@ Per-iteration work ran once per iteration of its loop, except work that depends 
 A prototype `StreamProcessor` gave the results of `ess.reduce.streaming.StreamProcessor` for two dynamic keys in separate chunks, a context key, a context-only target, and `allow_bypass`.
 These prototypes were built with an earlier helper, since dropped, which builds the same stages as section 5 for these shapes.
 They need esssans and ess.reduce and are not part of this repository.
-The `StreamProcessor` rewrite still has to pass the ess.reduce tests (section 10).
+The `StreamProcessor` rewrite on stages (scipp/ess#867) passes the ess.reduce tests and the esslivedata test suite.
 
 ### LoKI multi-run reduction
 
@@ -536,17 +542,15 @@ Results:
 - Adding a second sample run after computing with one costs one contribution: one more `apply_pixel_masks` call and no second read of the mask file.
 - Changing `QBins` means a new `SansReduction`, which makes the same provider calls as the first one.
 
-Not validated: the rewrite of `StreamProcessor` against its real tests.
-
 ## 10. Migration
 
 ### What changes for each project
 
-- **sciline:** adds `Stage`, `prepare_stages`, the `accumulators` module with `Accumulator`, `Buffered`, `Reduced`, and `Pipeline.provide`, and later removes what section 7 lists.
+- **sciline:** adds `Stage`, `prepare_stages`, and the `accumulators` module with `Accumulator`, `Buffered`, `Reduced`, and later removes what section 7 lists.
   Users outside ESS need a documented replacement for `map(...).reduce(...)`: a loop over a stage with accumulators.
   No "experimental" label; the staged rollout below is the trial period.
   `Stage` also needs a `reporter` argument, so that progress reaches the ESS widgets.
-- **ess.reduce:** the accumulators satisfy `sciline.accumulators.Accumulator` once `maybe_hist` moves out of their base class, and a `Forwarder` is added.
+- **ess.reduce:** the accumulators satisfy `sciline.accumulators.Accumulator` once `maybe_hist` moves out of their base class. The `StreamProcessor` rewrite holds the context and the values derived from it in a plain mapping, so it needs no `Forwarder`.
   `StreamProcessor` is rewritten on stages against its existing tests (section 6.6).
   `parameter_mappers`, which maps a list-valued parameter to a `with_*` helper that returns a pipeline, is replaced by a common interface of the package objects (section 11).
   `get_parameters` is unaffected, because it works on the flat pipeline.
@@ -583,7 +587,7 @@ Not validated: the rewrite of `StreamProcessor` against its real tests.
 2. The packages migrate one at a time, each in its own pull request, while map/reduce still exists.
    esssans goes first, because it is the validated case and sets the pattern for package objects and for the interface that replaces `parameter_mappers`.
    The other packages depend only on the additive release and can then migrate in parallel.
-   The `StreamProcessor` rewrite follows independently, but needs `Pipeline.provide` and the `reporter` argument of `Stage` in a sciline release first.
+   The `StreamProcessor` rewrite follows independently and needs only the additive release (scipp/ess#867).
    It must keep honouring esslivedata's replacement of `sciline.task_graph.DaskScheduler`, or sciline first offers a public way to set the default scheduler and esslivedata switches to it.
    esslivedata follows the `StreamProcessor` rewrite through the essreduce version bump.
 3. The last minor release of sciline deprecates `map`, `reduce`, `compute_mapped`, `get_mapped_node_names`, `constraints=`, and `visualize(compact=)`, once esslivedata has migrated.
