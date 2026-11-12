@@ -323,8 +323,17 @@ def test_prepare_stages_allows_stage_taking_a_value_that_another_stage_holds(
 
 
 def test_prepare_stages_rejects_input_of_no_stage(pipeline: sl.Pipeline) -> None:
-    with pytest.raises(ValueError, match=r'Inputs \[.*Scale.*\] are not inputs'):
+    with pytest.raises(ValueError, match=r'Inputs \[.*Scale.*\] are neither inputs'):
         prepare_stages(pipeline, inputs=(Filename, Scale), outputs=[(Numerator,)])
+
+
+def test_prepare_stages_accepts_input_that_is_only_an_output(
+    pipeline: sl.Pipeline,
+) -> None:
+    (stage,) = prepare_stages(
+        pipeline, inputs=(Filename, Numerator), outputs=[(Numerator,)]
+    )
+    assert stage.inputs == (Filename,)
 
 
 def test_prepare_stages_rejects_output_not_in_pipeline(pipeline: sl.Pipeline) -> None:

@@ -325,6 +325,10 @@ def prepare_stages(
     ``outputs=[(Numerator,), (Result,)]``, the first stage computes ``Numerator``
     from ``Filename``, and the second computes ``Result`` from ``Numerator``.
 
+    A key in ``inputs`` that one stage outputs need not be an input of another stage.
+    The driver then reads it from the outputs of that stage, for example an
+    accumulation key that is also a final result.
+
     Since every stage is cut at every key in ``inputs``, no stage caches a value that
     depends on one of them. A stage that needs such a value, and does not get it
     through another key in ``inputs``, takes the key the value depends on as input.
@@ -358,8 +362,9 @@ def prepare_stages(
     Raises
     ------
     ValueError
-        If a key in ``inputs`` is not an input of any stage, or the pipeline has
-        neither a provider nor a value for an output that is not an input.
+        If a key in ``inputs`` is neither an input nor an output of any stage, or
+        the pipeline has neither a provider nor a value for an output that is not
+        an input.
     """
     inputs = tuple(inputs)
     stage_outputs = [tuple(outs) for outs in outputs]
@@ -370,9 +375,18 @@ def prepare_stages(
         cut = _cut(deps, [k for k in inputs if k not in outs])
         needed = _upstream(cut, outs)
         stage_inputs.append(tuple(k for k in inputs if k in needed and k not in outs))
-    unused = [k for k in inputs if not any(k in ins for ins in stage_inputs)]
+    # A key that one stage outputs and no stage takes is an output the driver reads
+    # directly, such as an accumulation key that is also a final result.
+    unused = [
+        k
+        for k in inputs
+        if not any(
+            k in ins or k in outs
+            for ins, outs in zip(stage_inputs, stage_outputs, strict=True)
+        )
+    ]
     if unused:
-        raise ValueError(f'Inputs {unused} are not inputs of any stage')
+        raise ValueError(f'Inputs {unused} are neither inputs nor outputs of any stage')
     scheduler = scheduler_or_default(scheduler)
     stages = tuple(
         Stage(pipeline, outputs=outs, inputs=ins, scheduler=scheduler)
