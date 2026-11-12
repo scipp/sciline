@@ -19,6 +19,43 @@ if TYPE_CHECKING:
 T = TypeVar("T")
 
 
+def scheduler_or_default(scheduler: Scheduler | None) -> Scheduler:
+    """Return the given scheduler, or the default one if none is given.
+
+    The default is :py:class:`DaskScheduler` if dask is installed and
+    :py:class:`NaiveScheduler` otherwise.
+
+    ``DaskScheduler`` is looked up in this module on each call, so that replacing
+    ``sciline.task_graph.DaskScheduler`` changes the default for pipelines and stages
+    alike. ESSlivedata does this to select its scheduler.
+
+    Parameters
+    ----------
+    scheduler:
+        A scheduler, or None to select the default.
+
+    Returns
+    -------
+    :
+        The scheduler to use.
+
+    Raises
+    ------
+    ValueError
+        If ``scheduler`` does not implement :py:class:`Scheduler`.
+    """
+    if scheduler is None:
+        try:
+            return DaskScheduler()
+        except ImportError:
+            return NaiveScheduler()
+    if not isinstance(scheduler, Scheduler):
+        raise ValueError(
+            "Scheduler interface must be compatible with sciline.Scheduler"
+        )
+    return scheduler
+
+
 def _list_items(items: Sequence[str]) -> str:
     return '\n'.join(
         (
@@ -81,16 +118,7 @@ class TaskGraph:
     ) -> None:
         self._graph = graph
         self._keys = targets
-        if scheduler is None:
-            try:
-                scheduler = DaskScheduler()
-            except ImportError:
-                scheduler = NaiveScheduler()
-        elif not isinstance(scheduler, Scheduler):
-            raise ValueError(
-                "Scheduler interface must be compatible with sciline.Scheduler"
-            )
-        self._scheduler = scheduler
+        self._scheduler = scheduler_or_default(scheduler)
 
     def compute(
         self, targets: Targets | None = None, reporter: Reporter | None = None
