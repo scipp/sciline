@@ -68,16 +68,6 @@ def _downstream(deps: nx.DiGraph, keys: Sequence[Key]) -> set[Key]:
     return set(keys).union(*(nx.descendants(deps, key) for key in keys))
 
 
-def _used_graph(
-    graph: Graph, deps: nx.DiGraph, inputs: tuple[Key, ...], outputs: tuple[Key, ...]
-) -> Graph:
-    """Return the part of ``graph`` that the outputs need, given the cut ``deps``."""
-    used = _upstream(deps, outputs)
-    if missing := [k for k in inputs if k not in used]:
-        raise ValueError(f'Inputs {missing} are not needed by outputs {outputs}')
-    return {k: p for k, p in graph.items() if k in used}
-
-
 def _cached_keys(
     per_call_graph: Graph, per_call: set[Key], outputs: tuple[Key, ...]
 ) -> tuple[Key, ...]:
@@ -105,7 +95,9 @@ class Stage:
     inputs. Each call to :py:meth:`run` supplies values for the inputs and
     computes only what lies downstream of them. An input may be a parameter or an
     intermediate result; in both cases its own provider and ancestors are cut off.
-    An output that is also an input is passed through.
+    An output that is also an input is passed through. Keys given as inputs that the
+    outputs do not need, for example because another input cuts them off, are
+    dropped; :py:attr:`inputs` lists the rest.
 
     A stage is a snapshot of the pipeline at the time it is built. Later changes to
     the pipeline do not affect it. Parameter values are kept by reference, not
@@ -131,7 +123,8 @@ class Stage:
         outputs:
             Keys whose values the stage computes.
         inputs:
-            Keys supplied on each call. Each must be needed by the outputs.
+            Keys at which the pipeline is cut, supplied on each call. Those the
+            outputs do not need are dropped.
         scheduler:
             Scheduler for computing the cached values and the per-call part. If not
             given, :py:class:`sciline.scheduler.DaskScheduler` is used if dask is
@@ -141,15 +134,17 @@ class Stage:
         ------
         ValueError
             If the pipeline has neither a provider nor a value for an output that
-            is not an input, or an input is not needed by the outputs.
+            is not an input.
         """
         self._outputs = tuple(outputs)
-        self._inputs = tuple(inputs)
+        inputs = tuple(inputs)
         self._scheduler = scheduler_or_default(scheduler)
-        graph = _task_graph(pipeline, self._outputs, self._inputs)
+        graph = _task_graph(pipeline, self._outputs, inputs)
         # Cut off the providers of the inputs, then drop what only they needed.
-        deps = _cut(_dependency_graph(graph), self._inputs)
-        graph = _used_graph(graph, deps, self._inputs, self._outputs)
+        deps = _cut(_dependency_graph(graph), inputs)
+        used = _upstream(deps, self._outputs)
+        self._inputs = tuple(k for k in inputs if k in used)
+        graph = {k: p for k, p in graph.items() if k in used}
         # Every ancestor of a used key is used, so restricting to used keys after
         # following the edges drops only keys the outputs do not need.
         per_call = _downstream(deps, self._inputs) & graph.keys()
@@ -173,7 +168,7 @@ class Stage:
 
     @property
     def inputs(self) -> tuple[Key, ...]:
-        """Keys supplied on each call."""
+        """Keys supplied on each call: those given as inputs that the outputs need."""
         return self._inputs
 
     @property
@@ -320,7 +315,8 @@ def prepare_stages(
     one run.
 
     Every stage is cut at every key in ``inputs``, except at its own outputs. Its
-    inputs are those of ``inputs`` that its outputs still need after this cut. For
+    inputs are those of ``inputs`` that its outputs still need after this cut, as for
+    a :py:class:`Stage` built on its own. For
     example, with ``inputs=(Filename, Numerator)`` and
     ``outputs=[(Numerator,), (Result,)]``, the first stage computes ``Numerator``
     from ``Filename``, and the second computes ``Result`` from ``Numerator``.
@@ -358,25 +354,19 @@ def prepare_stages(
     Raises
     ------
     ValueError
-        If a key in ``inputs`` is not an input of any stage, or the pipeline has
-        neither a provider nor a value for an output that is not an input.
+        If the pipeline has neither a provider nor a value for an output that is not
+        an input.
     """
     inputs = tuple(inputs)
-    stage_outputs = [tuple(outs) for outs in outputs]
-    targets = tuple(dict.fromkeys(k for outs in stage_outputs for k in outs))
-    deps = _dependency_graph(_task_graph(pipeline, targets, inputs))
-    stage_inputs = []
-    for outs in stage_outputs:
-        cut = _cut(deps, [k for k in inputs if k not in outs])
-        needed = _upstream(cut, outs)
-        stage_inputs.append(tuple(k for k in inputs if k in needed and k not in outs))
-    unused = [k for k in inputs if not any(k in ins for ins in stage_inputs)]
-    if unused:
-        raise ValueError(f'Inputs {unused} are not inputs of any stage')
     scheduler = scheduler_or_default(scheduler)
     stages = tuple(
-        Stage(pipeline, outputs=outs, inputs=ins, scheduler=scheduler)
-        for outs, ins in zip(stage_outputs, stage_inputs, strict=True)
+        Stage(
+            pipeline,
+            outputs=outs,
+            inputs=[k for k in inputs if k not in outs],
+            scheduler=scheduler,
+        )
+        for outs in map(tuple, outputs)
     )
     # The stages are cut from one pipeline, so they agree on every key they share.
     graph: Graph = {}
