@@ -134,15 +134,17 @@ def test_stage_drops_input_the_outputs_do_not_need(pipeline: sl.Pipeline) -> Non
     assert Scale not in stage.keys
 
 
-def test_stage_drops_input_needed_only_through_another_input(
-    pipeline: sl.Pipeline,
-) -> None:
+def test_stage_drops_input_cut_off_by_another_input(pipeline: sl.Pipeline) -> None:
+    # Denominator needs Filename only through Masked, whose ancestors are cut off.
     stage = Stage(pipeline, outputs=(Denominator,), inputs=(Masked, Filename))
     assert stage.inputs == (Masked,)
+    assert Filename not in stage.keys
+    assert Loaded not in stage.keys
 
 
 def test_stage_run_rejects_value_for_dropped_input(pipeline: sl.Pipeline) -> None:
     stage = Stage(pipeline, outputs=(Denominator,), inputs=(Masked, Filename))
+    assert stage.run({Masked: [1.0]}) == {Denominator: 1.0}
     with pytest.raises(ValueError, match='Expected values for'):
         stage.run({Masked: [1.0], Filename: 'ab'})
 

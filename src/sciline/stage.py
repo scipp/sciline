@@ -168,7 +168,8 @@ class Stage:
 
     @property
     def inputs(self) -> tuple[Key, ...]:
-        """Keys supplied on each call: those given as inputs that the outputs need."""
+        """Keys supplied on each call: those given as inputs that the outputs need,
+        in the order given."""
         return self._inputs
 
     @property
