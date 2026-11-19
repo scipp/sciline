@@ -81,7 +81,7 @@ Every stage is cut at every key in `inputs`, except at its own outputs, and take
 No stage therefore caches a value that depends on a key another stage varies.
 
 This is the operation that `StreamProcessor` builds by hand and that scipp/sciline#241 asks for.
-`Pipeline.provide(key, callable)`, the other request of that issue, is added as well.
+`Pipeline.provide(key, callable)`, the other request of that issue, is not needed: a driver passes values with `Stage.run`.
 
 ### Accumulators: combine the results of many members
 
@@ -145,7 +145,7 @@ Everything stateful belongs to the driver: which members exist, which contributi
 - Each reduction package returns its own small object in place of the map/reduced pipeline.
   For esssans it holds a contribute stage per run type, a finalize stage, and the contributions by filename.
   A drop-in replacement for the map/reduced pipeline is a non-goal.
-- `StreamProcessor` in ess.reduce becomes a driver over a context stage, with chunk stages and a finalize stage inside its loop, with its existing accumulators and an object that holds the current context.
+- `StreamProcessor` in ess.reduce becomes a driver over context stages, with chunk stages and a finalize stage inside its loop, with its existing accumulators, holding the current context and the values derived from it.
   The accumulators fit the `Accumulator` protocol once histogramming moves out of their base class.
 - Nested structures, such as banks within runs, are loops over one stage per loop; no graph contains another graph.
 
@@ -206,7 +206,7 @@ A `sciline.v2` namespace that keeps the old `Pipeline` would serve them equally,
   In nested loops this is not enough: a run-level key declared as an output of the bank stage is per-call there and is counted once per bank, without an error.
   A stage inside a loop cannot cache a value that depends on the inputs of the loop, if the driver builds all its stages in one call to `prepare_stages`.
   If the driver does not forward such a value, the stage takes the input of the loop as well, and a call without it fails.
-- With one context stage, a `StreamProcessor` context update recomputes all context-derived values (in esslivedata compute only; no accumulators reset).
+- `StreamProcessor` needs one context stage per group of values depending on the same context keys, so that an update of a frequent key, such as a sample motor position, does not recompute values that do not depend on it, such as the detector projection.
 - The esssans background stage reads masks that depend on the sample run, so it takes `Filename[SampleRun]` as input, which the background loop cannot supply; esssans has to decide which run's detector IDs the background masks use.
 - esslivedata selects its scheduler by replacing `sciline.task_graph.DaskScheduler`; sciline keeps that working for stages, until it offers a public way.
 - Stages keep their cached values, and package objects keep contributions (binned events for some workflows), so package objects need a way to clear them.
@@ -214,5 +214,5 @@ A `sciline.v2` namespace that keeps the old `Pipeline` would serve them equally,
   Progress reporting through `Stage` is not implemented yet.
 - networkx becomes a direct dependency; today it comes through cyclebane.
 
-Not yet done: the `StreamProcessor` rewrite against its streaming and visualize tests.
+Done: the `StreamProcessor` rewrite against its streaming and visualize tests (scipp/ess#867).
 Not yet decided: whether the breaking change ships as a major release or as `sciline.v2` (recommendation: major release).
