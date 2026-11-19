@@ -86,6 +86,9 @@ finalize.inputs                       # (Numerator, Denominator)
   The inputs and everything that depends on them form the per-call part; the rest is the part computed once.
   An input can be a parameter or an intermediate result.
   In both cases its provider and everything upstream of it are removed from the stage.
+  Keys given as inputs that the outputs do not need, for example because another input cuts them off, are dropped, and `inputs` lists the rest.
+  This matches `Pipeline`, which ignores parameters its targets do not need, and lets a driver pass the same candidate keys to stages with different outputs.
+  A value supplied for a dropped key is still an error (see **Calls**), so a mistaken input fails on the first call instead of when the stage is built.
 - **Cached values.**
   On first use, or when built by `prepare_stages`, the stage computes its cached values and keeps them.
   Nothing else of the part computed once is kept.
@@ -112,7 +115,6 @@ finalize.inputs                       # (Numerator, Denominator)
   All stages are cut from one pipeline at one moment, so they agree on every key they share by construction.
   `inputs` is one set of keys for all stages: every stage is cut at every one of them, except at its own outputs, and takes those that its outputs still need.
   So no stage caches a value that depends on a key that another stage takes as input; a stage that needs such a value takes the key as input itself.
-  A key in `inputs` that no stage takes is rejected.
 - **Threads.**
   A stage can be called from several threads at once; the cached values are still computed only once.
 
@@ -505,7 +507,7 @@ An earlier version of the stage tests was run on the generics branch and passed.
 
 The tests cover:
 
-- **Stage:** cached values computed once and the per-call part on each call; an intermediate input cuts off its ancestors; inputs the outputs do not need are rejected; pass-through of an output that is an input; `run` rejects a missing input and a value for a key that is not an input; snapshot behaviour; `prepare_stages` cuts every stage at every input, so a stage reading a value that depends on another stage's input takes that input itself, and allows a stage that takes as input a value that another stage holds; `prepare_stages` computes shared work once, gives each stage the inputs it needs, and rejects an input that no stage takes and an output not in the pipeline; concurrent calls compute the held values only once; an expensive load before a cheap parameter (the shape of tuning in essapps); the default scheduler follows a replacement of `sciline.task_graph.DaskScheduler`; the `StreamProcessor` shape with a context update; `visualize_stages` fills what each stage computes with the color of that stage, and applies the styles of groups given by the caller.
+- **Stage:** cached values computed once and the per-call part on each call; an intermediate input cuts off its ancestors; inputs the outputs do not need are dropped, and `run` rejects a value for one; pass-through of an output that is an input; `run` rejects a missing input and a value for a key that is not an input; snapshot behaviour; `prepare_stages` cuts every stage at every input, so a stage reading a value that depends on another stage's input takes that input itself, and allows a stage that takes as input a value that another stage holds; `prepare_stages` computes shared work once, gives each stage the inputs it needs, and rejects an output not in the pipeline; concurrent calls compute the held values only once; an expensive load before a cheap parameter (the shape of tuning in essapps); the default scheduler follows a replacement of `sciline.task_graph.DaskScheduler`; the `StreamProcessor` shape with a context update; `visualize_stages` fills what each stage computes with the color of that stage, and applies the styles of groups given by the caller.
 - **Accumulators:** push order, the first push as result, reading without pushes, pushing combined values gives the same result.
 
 ### Nested drivers
