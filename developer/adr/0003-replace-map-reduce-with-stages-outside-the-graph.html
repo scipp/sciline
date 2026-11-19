@@ -1,0 +1,850 @@
+
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="../../" >
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>ADR 0003: Replace map/reduce with stages composed outside the graph &#8212; Sciline</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "";
+  </script>
+  <!--
+    this give us a css class that will be invisible only if js is disabled
+  -->
+  <noscript>
+    <style>
+      .pst-js-only { display: none !important; }
+
+    </style>
+  </noscript>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="../../_static/styles/theme.css?digest=55c26ed414f5f8a31ebb" rel="stylesheet" />
+<link href="../../_static/styles/pydata-sphinx-theme.css?digest=55c26ed414f5f8a31ebb" rel="stylesheet" />
+
+    <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=03e43079" />
+    <link rel="stylesheet" type="text/css" href="../../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../../_static/autodoc_pydantic.css" />
+    <link rel="stylesheet" type="text/css" href="../../_static/sphinx-design.min.css?v=95c83b7e" />
+  
+  <!-- So that users can add custom icons -->
+  <script defer src="../../_static/scripts/fontawesome.js?digest=55c26ed414f5f8a31ebb"></script>
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="../../_static/scripts/bootstrap.js?digest=55c26ed414f5f8a31ebb" />
+<link rel="preload" as="script" href="../../_static/scripts/pydata-sphinx-theme.js?digest=55c26ed414f5f8a31ebb" />
+
+    <script src="../../_static/documentation_options.js?v=1b289170"></script>
+    <script src="../../_static/doctools.js?v=9bcbadda"></script>
+    <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../../_static/copybutton.js?v=f281be69"></script>
+    <script src="../../_static/design-tabs.js?v=f930bc37"></script>
+    <script crossorigin="anonymous" integrity="sha256-Ae2Vz/4ePdIu6ZyI/5ZGsYnb+m0JlOmKPjt6XZ9JJkA=" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js"></script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'developer/adr/0003-replace-map-reduce-with-stages-outside-the-graph';</script>
+    <script>DOCUMENTATION_OPTIONS.search_as_you_type = false;</script>
+    <script defer="defer" src="../../_static/anaconda-icon.js?v=461bdc62"></script>
+    <link rel="icon" href="../../_static/favicon.ico"/>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" />
+    <link rel="next" title="About" href="../../about/index.html" />
+    <link rel="prev" title="ADR 0002: Remove special handling of Optional and Union" href="0002-remove-special-handling-of-optional-and-union.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="docsearch:language" content="en"/>
+  <meta name="docsearch:version" content="26.11.0" />
+  
+    
+    <script src="../../_static/searchtools.js"></script>
+    <script src="../../_static/language_data.js"></script>
+    <script src="../../searchindex.js"></script>
+  
+  </head>
+  <body data-default-mode="">
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+  
+  
+  
+  
+  <dialog id="pst-search-dialog">
+    
+<form class="bd-search d-flex align-items-center"
+      action="../../search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         placeholder="Search the docs ..."
+         aria-label="Search the docs ..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form>
+  </dialog>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header id="pst-header" class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+<div class="bd-header__inner bd-page-width">
+  <button class="pst-navbar-icon sidebar-toggle primary-toggle" aria-label="Site navigation">
+    <span class="fa-solid fa-bars"></span>
+  </button>
+  
+  
+  <div class="col-lg-3 navbar-header-items__start">
+    
+      <div class="navbar-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="../../index.html">
+  
+  
+  
+  
+  
+    
+    
+      
+    
+    
+    <img src="../../_static/logo.svg" class="logo__image only-light" alt="Sciline - Home"/>
+    <img src="../../_static/logo-dark.svg" class="logo__image only-dark pst-js-only" alt="Sciline - Home"/>
+  
+  
+</a></div>
+    
+  </div>
+  
+  <div class="col-lg-9 navbar-header-items">
+    
+    <div class="me-auto navbar-header-items__center">
+      
+        <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../user-guide/index.html">
+    User Guide
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../recipes/index.html">
+    Recipes
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../api-reference/index.html">
+    API Reference
+  </a>
+</li>
+
+
+<li class="nav-item current active">
+  <a class="nav-link nav-internal" href="../index.html">
+    Development
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../about/index.html">
+    About
+  </a>
+</li>
+
+            <li class="nav-item dropdown">
+                <button class="btn dropdown-toggle nav-item" type="button"
+                data-bs-toggle="dropdown" aria-expanded="false"
+                aria-controls="pst-nav-more-links">
+                    More
+                </button>
+                <ul id="pst-nav-more-links" class="dropdown-menu">
+                    
+<li class=" ">
+  <a class="nav-link dropdown-item nav-external" href="https://scipp.github.io/cyclebane">
+    Cyclebane
+  </a>
+</li>
+
+
+<li class=" ">
+  <a class="nav-link dropdown-item nav-external" href="https://scipp.github.io">
+    Scipp
+  </a>
+</li>
+
+                </ul>
+            </li>
+            
+  </ul>
+</nav></div>
+      
+    </div>
+    
+    
+    <div class="navbar-header-items__end">
+      
+        <div class="navbar-item navbar-persistent--container">
+          
+
+<button class="btn btn-sm pst-navbar-icon search-button search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="fa-solid fa-magnifying-glass fa-lg"></i>
+</button>
+        </div>
+      
+      
+        <div class="navbar-item">
+
+<button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button pst-js-only" aria-label="Color mode" data-bs-title="Color mode"  data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <i class="theme-switch fa-solid fa-sun                fa-lg" data-mode="light" title="Light"></i>
+  <i class="theme-switch fa-solid fa-moon               fa-lg" data-mode="dark"  title="Dark"></i>
+  <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"  title="System Settings"></i>
+</button></div>
+      
+        <div class="navbar-item"><ul class="navbar-icon-links"
+    aria-label="Icon Links">
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://github.com/scipp/sciline" title="GitHub" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fa-brands fa-github fa-lg" aria-hidden="true"></i>
+            <span class="sr-only">GitHub</span></a>
+        </li>
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://pypi.org/project/sciline/" title="PyPI" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fa-brands fa-python fa-lg" aria-hidden="true"></i>
+            <span class="sr-only">PyPI</span></a>
+        </li>
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://anaconda.org/conda-forge/sciline" title="Conda" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fa-custom fa-anaconda fa-lg" aria-hidden="true"></i>
+            <span class="sr-only">Conda</span></a>
+        </li>
+</ul></div>
+      
+    </div>
+    
+  </div>
+  
+  
+    <div class="navbar-persistent--mobile">
+
+<button class="btn btn-sm pst-navbar-icon search-button search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="fa-solid fa-magnifying-glass fa-lg"></i>
+</button>
+    </div>
+  
+
+  
+</div>
+
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+      <dialog id="pst-primary-sidebar-modal"></dialog>
+      <div id="pst-primary-sidebar" class="bd-sidebar-primary bd-sidebar">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+      <div class="sidebar-header-items__center">
+        
+          
+          
+            <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../user-guide/index.html">
+    User Guide
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../recipes/index.html">
+    Recipes
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../api-reference/index.html">
+    API Reference
+  </a>
+</li>
+
+
+<li class="nav-item current active">
+  <a class="nav-link nav-internal" href="../index.html">
+    Development
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../about/index.html">
+    About
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-external" href="https://scipp.github.io/cyclebane">
+    Cyclebane
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-external" href="https://scipp.github.io">
+    Scipp
+  </a>
+</li>
+
+  </ul>
+</nav></div>
+          
+        
+      </div>
+    
+    
+    
+      <div class="sidebar-header-items__end">
+        
+          <div class="navbar-item">
+
+<button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button pst-js-only" aria-label="Color mode" data-bs-title="Color mode"  data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <i class="theme-switch fa-solid fa-sun                fa-lg" data-mode="light" title="Light"></i>
+  <i class="theme-switch fa-solid fa-moon               fa-lg" data-mode="dark"  title="Dark"></i>
+  <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"  title="System Settings"></i>
+</button></div>
+        
+          <div class="navbar-item"><ul class="navbar-icon-links"
+    aria-label="Icon Links">
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://github.com/scipp/sciline" title="GitHub" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fa-brands fa-github fa-lg" aria-hidden="true"></i>
+            <span class="sr-only">GitHub</span></a>
+        </li>
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://pypi.org/project/sciline/" title="PyPI" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fa-brands fa-python fa-lg" aria-hidden="true"></i>
+            <span class="sr-only">PyPI</span></a>
+        </li>
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://anaconda.org/conda-forge/sciline" title="Conda" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fa-custom fa-anaconda fa-lg" aria-hidden="true"></i>
+            <span class="sr-only">Conda</span></a>
+        </li>
+</ul></div>
+        
+      </div>
+    
+  </div>
+  
+    <div class="sidebar-primary-items__start sidebar-primary__section">
+        <div class="sidebar-primary-item">
+
+<nav class="bd-docs-nav bd-links"
+     aria-label="Section Navigation">
+  <p class="bd-links__title" role="heading" aria-level="1">Section Navigation</p>
+  <div class="bd-toc-item navbar-nav"><ul class="current nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../getting-started.html">Getting started</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../coding-conventions.html">Coding conventions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../dependency-management.html">Dependency management</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../architecture-and-design/index.html">Architecture and Design</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="../architecture-and-design/workflow-design.html">Workflow Design</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../architecture-and-design/rewrite.html">Rewrite of Sciline’s Pipeline as a Data Graph</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../architecture-and-design/map-reduce-outside-the-graph.html">Map and reduce outside the graph</a></li>
+</ul>
+</details></li>
+<li class="toctree-l1 current active has-children"><a class="reference internal" href="../architecture-decision-records.html">Architecture Decision Records</a><details open="open"><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="0001-remove-isinstance-checks-when-setting-parameters.html">ADR 0001: Remove isinstance checks when setting parameters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="0002-remove-special-handling-of-optional-and-union.html">ADR 0002: Remove special handling of Optional and Union</a></li>
+<li class="toctree-l2 current active"><a class="current reference internal" href="#">ADR 0003: Replace map/reduce with stages composed outside the graph</a></li>
+</ul>
+</details></li>
+</ul>
+</div>
+</nav></div>
+        <div class="sidebar-primary-item">
+<div
+    id="pst-page-navigation-heading-2"
+    class="page-toc tocsection onthispage">
+    <i class="fa-solid fa-list"></i> On this page
+  </div>
+  <nav id="pst-page-toc-nav" class="page-toc" aria-labelledby="pst-page-navigation-heading-2">
+    <ul class="pst-show_toc_level nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#context">Context</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#what-map-reduce-does">What map/reduce does</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#why-it-has-to-go">Why it has to go</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#what-is-needed-instead">What is needed instead</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#decision">Decision</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#stage-a-part-of-a-pipeline-from-chosen-inputs-to-chosen-outputs"><code class="docutils literal notranslate"><span class="pre">Stage</span></code>: a part of a pipeline, from chosen inputs to chosen outputs</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#accumulators-combine-the-results-of-many-members">Accumulators: combine the results of many members</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#nested-loops">Nested loops</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#who-owns-what">Who owns what</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#rollout">Rollout</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#alternatives-considered">Alternatives considered</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#consequences">Consequences</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#positive">Positive</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#negative">Negative</a></li>
+</ul>
+</li>
+</ul>
+  </nav></div>
+    </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+      <div class="sidebar-primary-item">
+
+  <div class="tocsection sourcelink">
+    <a href="../../_sources/developer/adr/0003-replace-map-reduce-with-stages-outside-the-graph.md">
+      <i class="fa-solid fa-file-lines"></i> Show Source
+    </a>
+  </div>
+</div>
+  </div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item">
+
+<nav aria-label="Breadcrumb" class="d-print-none">
+  <ul class="bd-breadcrumbs">
+    
+    <li class="breadcrumb-item breadcrumb-home">
+      <a href="../../index.html" class="nav-link" aria-label="Home">
+        <i class="fa-solid fa-home"></i>
+      </a>
+    </li>
+    
+    <li class="breadcrumb-item"><a href="../index.html" class="nav-link">Development</a></li>
+    
+    
+    <li class="breadcrumb-item"><a href="../architecture-decision-records.html" class="nav-link">Architecture Decision Records</a></li>
+    
+    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">ADR 0003: Replace map/reduce with stages composed outside the graph</span></li>
+  </ul>
+</nav>
+</div>
+      
+    </div>
+  
+  
+</div>
+</div>
+              
+              
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <section class="tex2jax_ignore mathjax_ignore" id="adr-0003-replace-map-reduce-with-stages-composed-outside-the-graph">
+<h1>ADR 0003: Replace map/reduce with stages composed outside the graph<a class="headerlink" href="#adr-0003-replace-map-reduce-with-stages-composed-outside-the-graph" title="Link to this heading">#</a></h1>
+<ul class="simple">
+<li><p>Status: proposed</p></li>
+<li><p>Deciders: Simon (proposer); to be discussed with Jan-Lukas, Johannes, Mridul, Neil, Sunyoung</p></li>
+<li><p>Date: 2026-09-11</p></li>
+</ul>
+<p>The design document, with the prototype, the survey of current uses, and the rollout plan, is <a class="reference internal" href="../architecture-and-design/map-reduce-outside-the-graph.html"><span class="std std-doc">Map and reduce outside the graph</span></a>.</p>
+<section id="context">
+<h2>Context<a class="headerlink" href="#context" title="Link to this heading">#</a></h2>
+<section id="what-map-reduce-does">
+<h3>What map/reduce does<a class="headerlink" href="#what-map-reduce-does" title="Link to this heading">#</a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">Pipeline.map</span></code> takes a table of parameter values and copies the part of the graph that depends on them, once per row.
+<code class="docutils literal notranslate"><span class="pre">Pipeline.reduce</span></code> adds a node that combines the copies with a function.
+The result is still one graph, computed in one call.
+The ESS packages use this to process several runs, banks, or files and combine them, usually by grafting the combined value back onto the pipeline:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">runs</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">({</span><span class="n">Filename</span><span class="p">[</span><span class="n">SampleRun</span><span class="p">]:</span> <span class="p">[</span><span class="s1">&#39;run1.nxs&#39;</span><span class="p">,</span> <span class="s1">&#39;run2.nxs&#39;</span><span class="p">]})</span>
+<span class="n">workflow</span><span class="p">[</span><span class="n">DetectorData</span><span class="p">]</span> <span class="o">=</span> <span class="n">workflow</span><span class="p">[</span><span class="n">DetectorData</span><span class="p">]</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="n">runs</span><span class="p">)</span><span class="o">.</span><span class="n">reduce</span><span class="p">(</span><span class="n">func</span><span class="o">=</span><span class="n">merge</span><span class="p">)</span>
+<span class="n">workflow</span><span class="o">.</span><span class="n">compute</span><span class="p">(</span><span class="n">IofQ</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Sciline documents this for all users in the parameter-tables guide, so it is not only an ESS feature.</p>
+</section>
+<section id="why-it-has-to-go">
+<h3>Why it has to go<a class="headerlink" href="#why-it-has-to-go" title="Link to this heading">#</a></h3>
+<ul class="simple">
+<li><p><strong>It blocks the PEP 695 generics.</strong>
+<code class="docutils literal notranslate"><span class="pre">map</span></code> relabels every node that depends on the table at the time it is called.
+With generic providers, most of those nodes do not exist until a target is requested.
+Both prototypes (scipp/sciline#236 and #237, closed unmerged) worked around this, and every breaking change and every open question in them came from map/reduce.
+For example, #237 forbids the <code class="docutils literal notranslate"><span class="pre">workflow[K]</span> <span class="pre">=</span> <span class="pre">workflow[K].map(...).reduce(...)</span></code> idiom above, and it needs an unreleased cyclebane (scipp/cyclebane#32).</p></li>
+<li><p><strong>It is expensive to keep.</strong>
+This is the second implementation (parameter tables in 23.08, cyclebane in 24.06), and it carries the cyclebane dependency.
+Users cannot write the name of a mapped node, so they need <code class="docutils literal notranslate"><span class="pre">get_mapped_node_names</span></code> and <code class="docutils literal notranslate"><span class="pre">compute_mapped</span></code>, which require pandas.
+<code class="docutils literal notranslate"><span class="pre">groupby</span></code> is announced in the guide but was never implemented, and no ESS package uses <code class="docutils literal notranslate"><span class="pre">index_names</span></code> or <code class="docutils literal notranslate"><span class="pre">indices</span></code>.</p></li>
+</ul>
+</section>
+<section id="what-is-needed-instead">
+<h3>What is needed instead<a class="headerlink" href="#what-is-needed-instead" title="Link to this heading">#</a></h3>
+<p>Several consumers need a related operation that map/reduce cannot express:
+run one part of a graph many times with different inputs, combine the results <em>outside</em> the graph, then run the rest once.</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">ess.reduce.streaming.StreamProcessor</span></code> does this for the chunks of a stream.
+Sciline gives it no way to split a graph, so it prunes branches by setting keys to <code class="docutils literal notranslate"><span class="pre">None</span></code>, grafts subgraphs, and patches provider annotations at run time.
+scipp/sciline#241 asks for proper support.</p></li>
+<li><p>The planned reduction service (essapps) needs to cache everything upstream of the parameters a user tunes, to add a run to a held sum without reducing the others again, and to reduce the runs of a sum in separate processes and combine them later.</p></li>
+</ul>
+<p>Map/reduce cannot serve these because the loop and the combined value live inside a single <code class="docutils literal notranslate"><span class="pre">compute</span></code> call.
+There is no way to push a new member later, to keep per-member results between calls, or to run members in different processes.</p>
+<p>If sciline offers this operation, map/reduce can be expressed with it, and the multi-run helpers of esssans, essreflectometry, and bifrost can migrate to it.</p>
+</section>
+</section>
+<section id="decision">
+<h2>Decision<a class="headerlink" href="#decision" title="Link to this heading">#</a></h2>
+<p>Remove from sciline: <code class="docutils literal notranslate"><span class="pre">map</span></code>, <code class="docutils literal notranslate"><span class="pre">reduce</span></code>, <code class="docutils literal notranslate"><span class="pre">index_names</span></code>, <code class="docutils literal notranslate"><span class="pre">indices</span></code>, <code class="docutils literal notranslate"><span class="pre">get_mapped_node_names</span></code>, <code class="docutils literal notranslate"><span class="pre">compute_mapped</span></code>, <code class="docutils literal notranslate"><span class="pre">visualize(compact=)</span></code>, and the cyclebane dependency.
+Do not add <code class="docutils literal notranslate"><span class="pre">groupby</span></code>.
+<code class="docutils literal notranslate"><span class="pre">constraints=</span></code> is removed in the same release, because the PEP 695 generics do not need it.</p>
+<p>Add building blocks that work on an ordinary flat pipeline and add nothing to it: <code class="docutils literal notranslate"><span class="pre">Stage</span></code> with <code class="docutils literal notranslate"><span class="pre">prepare_stages</span></code>, and accumulators.</p>
+<section id="stage-a-part-of-a-pipeline-from-chosen-inputs-to-chosen-outputs">
+<h3><code class="docutils literal notranslate"><span class="pre">Stage</span></code>: a part of a pipeline, from chosen inputs to chosen outputs<a class="headerlink" href="#stage-a-part-of-a-pipeline-from-chosen-inputs-to-chosen-outputs" title="Link to this heading">#</a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">stage</span> <span class="o">=</span> <span class="n">Stage</span><span class="p">(</span><span class="n">pipeline</span><span class="p">,</span> <span class="n">inputs</span><span class="o">=</span><span class="p">(</span><span class="n">Filename</span><span class="p">,),</span> <span class="n">outputs</span><span class="o">=</span><span class="p">(</span><span class="n">Result</span><span class="p">,))</span>
+<span class="n">stage</span><span class="o">.</span><span class="n">run</span><span class="p">({</span><span class="n">Filename</span><span class="p">:</span> <span class="s1">&#39;run1.nxs&#39;</span><span class="p">})</span>  <span class="c1"># -&gt; {Result: ...}</span>
+<span class="n">stage</span><span class="o">.</span><span class="n">run</span><span class="p">({</span><span class="n">Filename</span><span class="p">:</span> <span class="s1">&#39;run2.nxs&#39;</span><span class="p">})</span>  <span class="c1"># -&gt; {Result: ...}, calibration not loaded again</span>
+</pre></div>
+</div>
+<p>A stage splits the graph needed for the outputs into two parts:</p>
+<ul class="simple">
+<li><p>The part <em>computed once</em> does not depend on the inputs, for example loading a calibration.
+It is computed once, on first use, and the stage keeps the values that the per-call part reads, plus outputs that do not depend on the inputs (<code class="docutils literal notranslate"><span class="pre">stage.cached</span></code>).</p></li>
+<li><p>The <em>per-call</em> part depends on the inputs.
+It is computed on every call, and nothing of it is kept after the call returns.</p></li>
+</ul>
+<p>An input can be a parameter or an intermediate result; in the second case everything upstream of it is cut off.
+A stage is a snapshot: changing the pipeline afterwards does not change the stage.
+The snapshot copies the graph but not the parameter values, so a value modified in place, rather than set anew, can change what the stage computes.
+<code class="docutils literal notranslate"><span class="pre">prepare_stages(pipeline,</span> <span class="pre">inputs=...,</span> <span class="pre">outputs=[...])</span></code> builds several stages from one pipeline, one per tuple of outputs, and computes the cached values of all of them together, so that work they share is done once.
+Every stage is cut at every key in <code class="docutils literal notranslate"><span class="pre">inputs</span></code>, except at its own outputs, and takes those of the keys that it needs.
+No stage therefore caches a value that depends on a key another stage varies.</p>
+<p>This is the operation that <code class="docutils literal notranslate"><span class="pre">StreamProcessor</span></code> builds by hand and that scipp/sciline#241 asks for.
+<code class="docutils literal notranslate"><span class="pre">Pipeline.provide(key,</span> <span class="pre">callable)</span></code>, the other request of that issue, is not needed: a driver passes values with <code class="docutils literal notranslate"><span class="pre">Stage.run</span></code>.</p>
+</section>
+<section id="accumulators-combine-the-results-of-many-members">
+<h3>Accumulators: combine the results of many members<a class="headerlink" href="#accumulators-combine-the-results-of-many-members" title="Link to this heading">#</a></h3>
+<p>Terms, using multiple runs as the example:</p>
+<ul class="simple">
+<li><p>A <strong>member</strong> is one run, given by the values of the inputs of a stage, such as <code class="docutils literal notranslate"><span class="pre">Filename[SampleRun]</span></code>.</p></li>
+<li><p>An <strong>accumulation key</strong> is a key at which the per-member values are combined, such as <code class="docutils literal notranslate"><span class="pre">DetectorData</span></code>.</p></li>
+<li><p>A <strong>contribution</strong> is the dict of values at the accumulation keys for one member.</p></li>
+<li><p>An <strong>accumulator</strong> combines the values of all members at one accumulation key: <code class="docutils literal notranslate"><span class="pre">push(value)</span></code> adds one member’s value, <code class="docutils literal notranslate"><span class="pre">value</span></code> returns the combination (<code class="docutils literal notranslate"><span class="pre">Accumulator</span></code> protocol).
+<code class="docutils literal notranslate"><span class="pre">Buffered(func)</span></code> keeps all pushed values and applies an n-ary function, like the <code class="docutils literal notranslate"><span class="pre">func</span></code> of <code class="docutils literal notranslate"><span class="pre">reduce</span></code> today.
+<code class="docutils literal notranslate"><span class="pre">Reduced(func)</span></code> keeps only a running result of a binary function, which saves memory for sums of large arrays.</p></li>
+<li><p>The <strong>driver</strong> is the loop that calls the stages and pushes into the accumulators.</p></li>
+</ul>
+<p>The replacement for <code class="docutils literal notranslate"><span class="pre">map(...).reduce(...)</span></code> is a loop over a stage with accumulators, and a stage for the rest:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">contribute</span> <span class="o">=</span> <span class="n">Stage</span><span class="p">(</span><span class="n">pipeline</span><span class="p">,</span> <span class="n">inputs</span><span class="o">=</span><span class="p">(</span><span class="n">Filename</span><span class="p">[</span><span class="n">SampleRun</span><span class="p">],),</span> <span class="n">outputs</span><span class="o">=</span><span class="p">(</span><span class="n">DetectorData</span><span class="p">,))</span>
+<span class="n">finalize</span> <span class="o">=</span> <span class="n">Stage</span><span class="p">(</span><span class="n">pipeline</span><span class="p">,</span> <span class="n">inputs</span><span class="o">=</span><span class="p">(</span><span class="n">DetectorData</span><span class="p">,),</span> <span class="n">outputs</span><span class="o">=</span><span class="p">(</span><span class="n">IofQ</span><span class="p">,))</span>
+<span class="n">acc</span> <span class="o">=</span> <span class="n">Buffered</span><span class="p">(</span><span class="n">merge</span><span class="p">)</span>
+<span class="k">for</span> <span class="n">run</span> <span class="ow">in</span> <span class="p">[</span><span class="s1">&#39;run1.nxs&#39;</span><span class="p">,</span> <span class="s1">&#39;run2.nxs&#39;</span><span class="p">]:</span>
+    <span class="n">acc</span><span class="o">.</span><span class="n">push</span><span class="p">(</span><span class="n">contribute</span><span class="o">.</span><span class="n">run</span><span class="p">({</span><span class="n">Filename</span><span class="p">[</span><span class="n">SampleRun</span><span class="p">]:</span> <span class="n">run</span><span class="p">})[</span><span class="n">DetectorData</span><span class="p">])</span>
+<span class="n">finalize</span><span class="o">.</span><span class="n">run</span><span class="p">({</span><span class="n">DetectorData</span><span class="p">:</span> <span class="n">acc</span><span class="o">.</span><span class="n">value</span><span class="p">})</span>
+</pre></div>
+</div>
+<p>Contributing, combining, and finalizing can run at different times or in different processes, since a contribution is a plain dict; the same loop without the accumulator replaces <code class="docutils literal notranslate"><span class="pre">compute_mapped</span></code>.</p>
+</section>
+<section id="nested-loops">
+<h3>Nested loops<a class="headerlink" href="#nested-loops" title="Link to this heading">#</a></h3>
+<p>Banks within runs, or chunks of a stream within a context, are loops in loops.
+The inner level reads values that depend on the outer level only, such as a run’s monitor, and those should be computed once per outer iteration.
+A stage built for the inner loop caches these values.
+The driver builds one stage per loop: the outer stage computes the cached values of the inner stage that depend on the outer inputs, and the inner stage takes these <em>forwarded values</em> as inputs:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">bank_cached</span> <span class="o">=</span> <span class="n">Stage</span><span class="p">(</span><span class="n">pipeline</span><span class="p">,</span> <span class="n">inputs</span><span class="o">=</span><span class="p">(</span><span class="n">Bank</span><span class="p">,),</span> <span class="n">outputs</span><span class="o">=</span><span class="p">(</span><span class="n">Numerator</span><span class="p">,</span> <span class="n">Denominator</span><span class="p">))</span><span class="o">.</span><span class="n">cached</span>
+<span class="n">forwarded_keys</span> <span class="o">=</span> <span class="n">Stage</span><span class="p">(</span><span class="n">pipeline</span><span class="p">,</span> <span class="n">inputs</span><span class="o">=</span><span class="p">(</span><span class="n">Filename</span><span class="p">,),</span> <span class="n">outputs</span><span class="o">=</span><span class="n">bank_cached</span><span class="p">)</span><span class="o">.</span><span class="n">per_call_outputs</span>
+<span class="n">run_stage</span><span class="p">,</span> <span class="n">bank_stage</span><span class="p">,</span> <span class="n">final_stage</span> <span class="o">=</span> <span class="n">prepare_stages</span><span class="p">(</span>
+    <span class="n">pipeline</span><span class="p">,</span>
+    <span class="n">inputs</span><span class="o">=</span><span class="p">(</span><span class="n">Filename</span><span class="p">,</span> <span class="o">*</span><span class="n">forwarded_keys</span><span class="p">,</span> <span class="n">Bank</span><span class="p">,</span> <span class="n">Numerator</span><span class="p">,</span> <span class="n">Denominator</span><span class="p">),</span>
+    <span class="n">outputs</span><span class="o">=</span><span class="p">[</span><span class="n">forwarded_keys</span><span class="p">,</span> <span class="p">(</span><span class="n">Numerator</span><span class="p">,</span> <span class="n">Denominator</span><span class="p">),</span> <span class="p">(</span><span class="n">IofQ</span><span class="p">,)],</span>
+<span class="p">)</span>
+
+<span class="k">for</span> <span class="n">filename</span> <span class="ow">in</span> <span class="n">filenames</span><span class="p">:</span>
+    <span class="n">forwarded</span> <span class="o">=</span> <span class="n">run_stage</span><span class="o">.</span><span class="n">run</span><span class="p">({</span><span class="n">Filename</span><span class="p">:</span> <span class="n">filename</span><span class="p">})</span>
+    <span class="k">for</span> <span class="n">bank</span> <span class="ow">in</span> <span class="n">banks</span><span class="p">:</span>
+        <span class="n">out</span> <span class="o">=</span> <span class="n">bank_stage</span><span class="o">.</span><span class="n">run</span><span class="p">({</span><span class="o">**</span><span class="n">forwarded</span><span class="p">,</span> <span class="n">Bank</span><span class="p">:</span> <span class="n">bank</span><span class="p">})</span>
+        <span class="o">...</span>  <span class="c1"># push out[Numerator] and out[Denominator] into accumulators</span>
+</pre></div>
+</div>
+<p>The two stages built first are only inspected, so they never compute their cached values.</p>
+<p>A function that derives these stages, such as <code class="docutils literal notranslate"><span class="pre">enclose</span></code>, is a likely later addition.</p>
+</section>
+<section id="who-owns-what">
+<h3>Who owns what<a class="headerlink" href="#who-owns-what" title="Link to this heading">#</a></h3>
+<p>Sciline provides the mechanism: cutting a graph into stages and combining the values of members.
+Stages cache values computed once but no contributions and no member list, and they do not react to parameter changes; a changed parameter means new stages.</p>
+<p>Everything stateful belongs to the driver: which members exist, which contributions are kept, what a parameter change invalidates, and whether members run in parallel:</p>
+<ul class="simple">
+<li><p>Each reduction package returns its own small object in place of the map/reduced pipeline.
+For esssans it holds a contribute stage per run type, a finalize stage, and the contributions by filename.
+A drop-in replacement for the map/reduced pipeline is a non-goal.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">StreamProcessor</span></code> in ess.reduce becomes a driver over context stages, with chunk stages and a finalize stage inside its loop, with its existing accumulators, holding the current context and the values derived from it.
+The accumulators fit the <code class="docutils literal notranslate"><span class="pre">Accumulator</span></code> protocol once histogramming moves out of their base class.</p></li>
+<li><p>Nested structures, such as banks within runs, are loops over one stage per loop; no graph contains another graph.</p></li>
+</ul>
+</section>
+<section id="rollout">
+<h3>Rollout<a class="headerlink" href="#rollout" title="Link to this heading">#</a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">Stage</span></code>, <code class="docutils literal notranslate"><span class="pre">prepare_stages</span></code>, and the accumulators are added in a minor release.
+The ESS packages then migrate one at a time while map/reduce still exists.
+The removal comes last, in a major release (recommended; a <code class="docutils literal notranslate"><span class="pre">sciline.v2</span></code> namespace is the open alternative, see below).
+Users who depend on map/reduce and do not need the new generics can stay on the last release before the removal.
+A <code class="docutils literal notranslate"><span class="pre">sciline.v2</span></code> namespace that keeps the old <code class="docutils literal notranslate"><span class="pre">Pipeline</span></code> would serve them equally, but nobody intends to maintain it.</p>
+</section>
+</section>
+<section id="alternatives-considered">
+<h2>Alternatives considered<a class="headerlink" href="#alternatives-considered" title="Link to this heading">#</a></h2>
+<ul class="simple">
+<li><p><strong>Keep map/reduce and land the generics on top.</strong>
+Two prototypes tried this and did not resolve the problems described above.</p></li>
+<li><p><strong>Keep map/reduce, deprecated, next to the new building blocks.</strong>
+This keeps cyclebane, still blocks the generics, and leaves two mechanisms for one job.
+The staged rollout gives users the same transition period without keeping both.</p></li>
+<li><p><strong>An <code class="docutils literal notranslate"><span class="pre">Aggregation</span></code> object</strong> with a contribute stage, accumulators, a finalize stage, and <code class="docutils literal notranslate"><span class="pre">compute(table)</span></code>.
+Prototyped and dropped: no real driver used its finalize stage or <code class="docutils literal notranslate"><span class="pre">compute</span></code>, since the SANS finalize reads two run types and the Bifrost per-run finalize also reads run-level values.
+<code class="docutils literal notranslate"><span class="pre">compute(table)</span></code> invited a flat runs-times-banks table, which counts run-level keys once per bank without an error, and its one guarantee is <code class="docutils literal notranslate"><span class="pre">Stage.per_call_outputs</span></code>.</p></li>
+<li><p><strong>Choosing the per-run keys of nested loops by hand.</strong>
+Prototyped for LoKI and Bifrost: a key left out is recomputed per bank with a correct result, so the mistake goes unnoticed.</p></li>
+<li><p><strong>Let an aggregation turn back into a pipeline</strong> (<code class="docutils literal notranslate"><span class="pre">as_pipeline()</span></code>), so that the <code class="docutils literal notranslate"><span class="pre">with_*</span></code> helpers could keep returning a pipeline.
+Prototyped and dropped: it became the only way to combine two aggregations, fixed the members at construction, and hid a loop inside a provider.</p></li>
+<li><p><strong>Let the sciline objects hold state</strong> (member tables, kept contributions, rules for what a parameter change invalidates).
+Prototyped and dropped: it rebuilt the map/reduced pipeline in a different form, and it was hard to predict what a parameter change would recompute.</p></li>
+<li><p><strong>An n-ary combine function per accumulation key</strong>, as <code class="docutils literal notranslate"><span class="pre">reduce(func=)</span></code> takes today, instead of accumulators.
+This forces holding all contributions in memory before combining.
+<code class="docutils literal notranslate"><span class="pre">Buffered</span></code> keeps the n-ary function for the common case.</p></li>
+<li><p><strong>A generic object that wires stages and accumulators together.</strong>
+The existing uses disagree on when to push and what to reset (stream chunks, context updates, loops over runs), and such an object would be nested workflows under a new name.
+Deferred: if the package objects end up repeating the same code, that code is its starting point.</p></li>
+<li><p><strong>Nested workflows</strong> (a graph inside a node).
+Rejected earlier because parameters had to be passed between levels and the inner graph was hidden.
+Stages are cut from one flat graph, so neither problem arises.</p></li>
+</ul>
+</section>
+<section id="consequences">
+<h2>Consequences<a class="headerlink" href="#consequences" title="Link to this heading">#</a></h2>
+<section id="positive">
+<h3>Positive<a class="headerlink" href="#positive" title="Link to this heading">#</a></h3>
+<ul class="simple">
+<li><p>Sciline drops map/reduce and cyclebane, and the PEP 695 generics can land.</p></li>
+<li><p>Users outside ESS keep a documented replacement; the parameter-tables guide becomes a guide on stages.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">StreamProcessor</span></code> is expected to lose its graph manipulation and keep only its policy.</p></li>
+<li><p>The same terms (stage, accumulator, accumulation key, contribution, contribute/combine) apply in sciline, ess.reduce, and essapps.
+Accumulator, contribution, and contribute/combine follow Beam, Flink, and Spark.</p></li>
+<li><p>Every parameter is set on one flat pipeline, and everything held is a plain object that the driver can inspect, clear, or serialize.</p></li>
+<li><p>The prototype reproduces the LoKI multi-run reduction with identical results and the same or fewer provider calls, and adding a run costs only that run’s contribution.
+Prototype drivers, which are not in this repository, gave the results of plain loops for banks or triplets times runs, and a prototype <code class="docutils literal notranslate"><span class="pre">StreamProcessor</span></code> gave those of the real class.</p></li>
+</ul>
+</section>
+<section id="negative">
+<h3>Negative<a class="headerlink" href="#negative" title="Link to this heading">#</a></h3>
+<ul class="simple">
+<li><p>Breaking for the <code class="docutils literal notranslate"><span class="pre">with_*</span></code> helpers in esssans, essreflectometry, and bifrost, for <code class="docutils literal notranslate"><span class="pre">ess.reduce.parameter_mappers</span></code> and the widgets built on it, for essreflectometry’s <code class="docutils literal notranslate"><span class="pre">BatchProcessor</span></code>, for notebooks, and for the bifrost bank fold in esslivedata.</p></li>
+<li><p>The widgets need one interface across the package objects, a base class or one generic object, decided when the second package migrates.</p></li>
+<li><p>Parallelism over members is the driver’s job; with map/reduce, dask ran members in threads for free (about 1.7 s of 7.5 s in the LoKI validation script).</p></li>
+<li><p>A map/reduce inside the per-member work of another one (the pixel masks in esssans) becomes a list parameter and a provider.</p></li>
+<li><p>A driver must push only <code class="docutils literal notranslate"><span class="pre">stage.per_call_outputs</span></code>; other keys are counted once per member.
+In nested loops this is not enough: a run-level key declared as an output of the bank stage is per-call there and is counted once per bank, without an error.
+A stage inside a loop cannot cache a value that depends on the inputs of the loop, if the driver builds all its stages in one call to <code class="docutils literal notranslate"><span class="pre">prepare_stages</span></code>.
+If the driver does not forward such a value, the stage takes the input of the loop as well, and a call without it fails.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">StreamProcessor</span></code> needs one context stage per group of values depending on the same context keys, so that an update of a frequent key, such as a sample motor position, does not recompute values that do not depend on it, such as the detector projection.</p></li>
+<li><p>The esssans background stage reads masks that depend on the sample run, so it takes <code class="docutils literal notranslate"><span class="pre">Filename[SampleRun]</span></code> as input, which the background loop cannot supply; esssans has to decide which run’s detector IDs the background masks use.</p></li>
+<li><p>esslivedata selects its scheduler by replacing <code class="docutils literal notranslate"><span class="pre">sciline.task_graph.DaskScheduler</span></code>; sciline keeps that working for stages, until it offers a public way.</p></li>
+<li><p>Stages keep their cached values, and package objects keep contributions (binned events for some workflows), so package objects need a way to clear them.</p></li>
+<li><p>Visualization of mapped pipelines (<code class="docutils literal notranslate"><span class="pre">compact=</span></code>) goes; <code class="docutils literal notranslate"><span class="pre">Stage.visualize</span></code> and <code class="docutils literal notranslate"><span class="pre">visualize_stages</span></code> replace it in part.
+Progress reporting through <code class="docutils literal notranslate"><span class="pre">Stage</span></code> is not implemented yet.</p></li>
+<li><p>networkx becomes a direct dependency; today it comes through cyclebane.</p></li>
+</ul>
+<p>Done: the <code class="docutils literal notranslate"><span class="pre">StreamProcessor</span></code> rewrite against its streaming and visualize tests (scipp/ess#867).
+Not yet decided: whether the breaking change ships as a major release or as <code class="docutils literal notranslate"><span class="pre">sciline.v2</span></code> (recommendation: major release).</p>
+</section>
+</section>
+</section>
+
+
+                </article>
+              
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+    <a class="left-prev"
+       href="0002-remove-special-handling-of-optional-and-union.html"
+       title="previous page">
+      <i class="fa-solid fa-angle-left"></i>
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">previous</p>
+        <p class="prev-next-title">ADR 0002: Remove special handling of Optional and Union</p>
+      </div>
+    </a>
+    <a class="right-next"
+       href="../../about/index.html"
+       title="next page">
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">next</p>
+        <p class="prev-next-title">About</p>
+      </div>
+      <i class="fa-solid fa-angle-right"></i>
+    </a>
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+          </footer>
+        
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script defer src="../../_static/scripts/bootstrap.js?digest=55c26ed414f5f8a31ebb"></script>
+<script defer src="../../_static/scripts/pydata-sphinx-theme.js?digest=55c26ed414f5f8a31ebb"></script>
+
+  <footer class="bd-footer">
+<div class="bd-footer__inner bd-page-width">
+  
+    <div class="footer-items__start">
+      
+        <div class="footer-item">
+
+  <p class="copyright">
+    
+      © Copyright 2026 Scipp contributors.
+      <br/>
+    
+  </p>
+</div>
+      
+        <div class="footer-item">
+
+  <p class="sphinx-version">
+    Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 8.2.3.
+    <br/>
+  </p>
+</div>
+      
+    </div>
+  
+  
+  
+    <div class="footer-items__end">
+      
+        <div class="footer-item"><!-- This will display the version of the docs -->
+Current Sciline version: 26.11.0 (<a href="https://github.com/scipp/sciline/releases">older versions</a>).</div>
+      
+        <div class="footer-item">
+<p class="theme-version">
+  <!-- # L10n: Setting the PST URL as an argument as this does not need to be localized -->
+  Built with the <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a> 0.17.1.
+</p></div>
+      
+    </div>
+  
+</div>
+
+  </footer>
+  </body>
+</html>

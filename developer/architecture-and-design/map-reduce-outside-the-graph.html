@@ -1,0 +1,1351 @@
+
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="../../" >
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Map and reduce outside the graph &#8212; Sciline</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "";
+  </script>
+  <!--
+    this give us a css class that will be invisible only if js is disabled
+  -->
+  <noscript>
+    <style>
+      .pst-js-only { display: none !important; }
+
+    </style>
+  </noscript>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="../../_static/styles/theme.css?digest=55c26ed414f5f8a31ebb" rel="stylesheet" />
+<link href="../../_static/styles/pydata-sphinx-theme.css?digest=55c26ed414f5f8a31ebb" rel="stylesheet" />
+
+    <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=03e43079" />
+    <link rel="stylesheet" type="text/css" href="../../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../../_static/autodoc_pydantic.css" />
+    <link rel="stylesheet" type="text/css" href="../../_static/sphinx-design.min.css?v=95c83b7e" />
+  
+  <!-- So that users can add custom icons -->
+  <script defer src="../../_static/scripts/fontawesome.js?digest=55c26ed414f5f8a31ebb"></script>
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="../../_static/scripts/bootstrap.js?digest=55c26ed414f5f8a31ebb" />
+<link rel="preload" as="script" href="../../_static/scripts/pydata-sphinx-theme.js?digest=55c26ed414f5f8a31ebb" />
+
+    <script src="../../_static/documentation_options.js?v=1b289170"></script>
+    <script src="../../_static/doctools.js?v=9bcbadda"></script>
+    <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../../_static/copybutton.js?v=f281be69"></script>
+    <script src="../../_static/design-tabs.js?v=f930bc37"></script>
+    <script crossorigin="anonymous" integrity="sha256-Ae2Vz/4ePdIu6ZyI/5ZGsYnb+m0JlOmKPjt6XZ9JJkA=" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js"></script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'developer/architecture-and-design/map-reduce-outside-the-graph';</script>
+    <script>DOCUMENTATION_OPTIONS.search_as_you_type = false;</script>
+    <script defer="defer" src="../../_static/anaconda-icon.js?v=461bdc62"></script>
+    <link rel="icon" href="../../_static/favicon.ico"/>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" />
+    <link rel="next" title="Architecture Decision Records" href="../architecture-decision-records.html" />
+    <link rel="prev" title="Rewrite of Sciline’s Pipeline as a Data Graph" href="rewrite.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="docsearch:language" content="en"/>
+  <meta name="docsearch:version" content="26.11.0" />
+  
+    
+    <script src="../../_static/searchtools.js"></script>
+    <script src="../../_static/language_data.js"></script>
+    <script src="../../searchindex.js"></script>
+  
+  </head>
+  <body data-default-mode="">
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+  
+  
+  
+  
+  <dialog id="pst-search-dialog">
+    
+<form class="bd-search d-flex align-items-center"
+      action="../../search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         placeholder="Search the docs ..."
+         aria-label="Search the docs ..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form>
+  </dialog>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header id="pst-header" class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+<div class="bd-header__inner bd-page-width">
+  <button class="pst-navbar-icon sidebar-toggle primary-toggle" aria-label="Site navigation">
+    <span class="fa-solid fa-bars"></span>
+  </button>
+  
+  
+  <div class="col-lg-3 navbar-header-items__start">
+    
+      <div class="navbar-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="../../index.html">
+  
+  
+  
+  
+  
+    
+    
+      
+    
+    
+    <img src="../../_static/logo.svg" class="logo__image only-light" alt="Sciline - Home"/>
+    <img src="../../_static/logo-dark.svg" class="logo__image only-dark pst-js-only" alt="Sciline - Home"/>
+  
+  
+</a></div>
+    
+  </div>
+  
+  <div class="col-lg-9 navbar-header-items">
+    
+    <div class="me-auto navbar-header-items__center">
+      
+        <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../user-guide/index.html">
+    User Guide
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../recipes/index.html">
+    Recipes
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../api-reference/index.html">
+    API Reference
+  </a>
+</li>
+
+
+<li class="nav-item current active">
+  <a class="nav-link nav-internal" href="../index.html">
+    Development
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../about/index.html">
+    About
+  </a>
+</li>
+
+            <li class="nav-item dropdown">
+                <button class="btn dropdown-toggle nav-item" type="button"
+                data-bs-toggle="dropdown" aria-expanded="false"
+                aria-controls="pst-nav-more-links">
+                    More
+                </button>
+                <ul id="pst-nav-more-links" class="dropdown-menu">
+                    
+<li class=" ">
+  <a class="nav-link dropdown-item nav-external" href="https://scipp.github.io/cyclebane">
+    Cyclebane
+  </a>
+</li>
+
+
+<li class=" ">
+  <a class="nav-link dropdown-item nav-external" href="https://scipp.github.io">
+    Scipp
+  </a>
+</li>
+
+                </ul>
+            </li>
+            
+  </ul>
+</nav></div>
+      
+    </div>
+    
+    
+    <div class="navbar-header-items__end">
+      
+        <div class="navbar-item navbar-persistent--container">
+          
+
+<button class="btn btn-sm pst-navbar-icon search-button search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="fa-solid fa-magnifying-glass fa-lg"></i>
+</button>
+        </div>
+      
+      
+        <div class="navbar-item">
+
+<button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button pst-js-only" aria-label="Color mode" data-bs-title="Color mode"  data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <i class="theme-switch fa-solid fa-sun                fa-lg" data-mode="light" title="Light"></i>
+  <i class="theme-switch fa-solid fa-moon               fa-lg" data-mode="dark"  title="Dark"></i>
+  <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"  title="System Settings"></i>
+</button></div>
+      
+        <div class="navbar-item"><ul class="navbar-icon-links"
+    aria-label="Icon Links">
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://github.com/scipp/sciline" title="GitHub" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fa-brands fa-github fa-lg" aria-hidden="true"></i>
+            <span class="sr-only">GitHub</span></a>
+        </li>
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://pypi.org/project/sciline/" title="PyPI" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fa-brands fa-python fa-lg" aria-hidden="true"></i>
+            <span class="sr-only">PyPI</span></a>
+        </li>
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://anaconda.org/conda-forge/sciline" title="Conda" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fa-custom fa-anaconda fa-lg" aria-hidden="true"></i>
+            <span class="sr-only">Conda</span></a>
+        </li>
+</ul></div>
+      
+    </div>
+    
+  </div>
+  
+  
+    <div class="navbar-persistent--mobile">
+
+<button class="btn btn-sm pst-navbar-icon search-button search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="fa-solid fa-magnifying-glass fa-lg"></i>
+</button>
+    </div>
+  
+
+  
+</div>
+
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+      <dialog id="pst-primary-sidebar-modal"></dialog>
+      <div id="pst-primary-sidebar" class="bd-sidebar-primary bd-sidebar">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+      <div class="sidebar-header-items__center">
+        
+          
+          
+            <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../user-guide/index.html">
+    User Guide
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../recipes/index.html">
+    Recipes
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../api-reference/index.html">
+    API Reference
+  </a>
+</li>
+
+
+<li class="nav-item current active">
+  <a class="nav-link nav-internal" href="../index.html">
+    Development
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../about/index.html">
+    About
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-external" href="https://scipp.github.io/cyclebane">
+    Cyclebane
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-external" href="https://scipp.github.io">
+    Scipp
+  </a>
+</li>
+
+  </ul>
+</nav></div>
+          
+        
+      </div>
+    
+    
+    
+      <div class="sidebar-header-items__end">
+        
+          <div class="navbar-item">
+
+<button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button pst-js-only" aria-label="Color mode" data-bs-title="Color mode"  data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <i class="theme-switch fa-solid fa-sun                fa-lg" data-mode="light" title="Light"></i>
+  <i class="theme-switch fa-solid fa-moon               fa-lg" data-mode="dark"  title="Dark"></i>
+  <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"  title="System Settings"></i>
+</button></div>
+        
+          <div class="navbar-item"><ul class="navbar-icon-links"
+    aria-label="Icon Links">
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://github.com/scipp/sciline" title="GitHub" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fa-brands fa-github fa-lg" aria-hidden="true"></i>
+            <span class="sr-only">GitHub</span></a>
+        </li>
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://pypi.org/project/sciline/" title="PyPI" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fa-brands fa-python fa-lg" aria-hidden="true"></i>
+            <span class="sr-only">PyPI</span></a>
+        </li>
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://anaconda.org/conda-forge/sciline" title="Conda" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fa-custom fa-anaconda fa-lg" aria-hidden="true"></i>
+            <span class="sr-only">Conda</span></a>
+        </li>
+</ul></div>
+        
+      </div>
+    
+  </div>
+  
+    <div class="sidebar-primary-items__start sidebar-primary__section">
+        <div class="sidebar-primary-item">
+
+<nav class="bd-docs-nav bd-links"
+     aria-label="Section Navigation">
+  <p class="bd-links__title" role="heading" aria-level="1">Section Navigation</p>
+  <div class="bd-toc-item navbar-nav"><ul class="current nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="../getting-started.html">Getting started</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../coding-conventions.html">Coding conventions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../dependency-management.html">Dependency management</a></li>
+<li class="toctree-l1 current active has-children"><a class="reference internal" href="index.html">Architecture and Design</a><details open="open"><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="workflow-design.html">Workflow Design</a></li>
+<li class="toctree-l2"><a class="reference internal" href="rewrite.html">Rewrite of Sciline’s Pipeline as a Data Graph</a></li>
+<li class="toctree-l2 current active"><a class="current reference internal" href="#">Map and reduce outside the graph</a></li>
+</ul>
+</details></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../architecture-decision-records.html">Architecture Decision Records</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="../adr/0001-remove-isinstance-checks-when-setting-parameters.html">ADR 0001: Remove isinstance checks when setting parameters</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../adr/0002-remove-special-handling-of-optional-and-union.html">ADR 0002: Remove special handling of Optional and Union</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../adr/0003-replace-map-reduce-with-stages-outside-the-graph.html">ADR 0003: Replace map/reduce with stages composed outside the graph</a></li>
+</ul>
+</details></li>
+</ul>
+</div>
+</nav></div>
+        <div class="sidebar-primary-item">
+<div
+    id="pst-page-navigation-heading-2"
+    class="page-toc tocsection onthispage">
+    <i class="fa-solid fa-list"></i> On this page
+  </div>
+  <nav id="pst-page-toc-nav" class="page-toc" aria-labelledby="pst-page-navigation-heading-2">
+    <ul class="pst-show_toc_level nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#how-map-reduce-is-used-today">1. How map/reduce is used today</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#overview">2. Overview</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#stage">3. <code class="docutils literal notranslate"><span class="pre">Stage</span></code></a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#behaviour">Behaviour</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#implementation-notes">Implementation notes</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#why-it-is-in-sciline">Why it is in sciline</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#accumulators">4. Accumulators</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#the-protocol">The protocol</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#combining-combined-values">Combining combined values</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#relation-to-the-ess-reduce-accumulators">Relation to the ess.reduce accumulators</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#nested-loops">5. Nested loops</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#what-is-deliberately-not-in-sciline">What is deliberately not in sciline</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#composition">6. Composition</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#a-package-object-esssans">6.1 A package object (esssans)</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#several-loops-one-final-stage">6.2 Several loops, one final stage</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#runs-times-banks">6.3 Runs times banks</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#a-reduce-inside-per-member-work-esssans-pixel-masks">6.4 A reduce inside per-member work (esssans pixel masks)</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#passing-a-result-from-one-driver-to-another">6.5 Passing a result from one driver to another</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#streamprocessor">6.6 <code class="docutils literal notranslate"><span class="pre">StreamProcessor</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#essapps">6.7 essapps</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#changes-to-pipeline">7. Changes to <code class="docutils literal notranslate"><span class="pre">Pipeline</span></code></a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#design-choices">8. Design choices</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#connectors-as-separate-objects-not-tiers-inside-stage">8.1 Connectors as separate objects, not tiers inside <code class="docutils literal notranslate"><span class="pre">Stage</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#no-generic-network-object-deferred">8.2 No generic network object (deferred)</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#boundaries-between-levels-are-derived">8.3 Boundaries between levels are derived</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#no-state-in-the-objects-sciline-provides">8.4 No state in the objects sciline provides</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#no-aggregation">8.5 No <code class="docutils literal notranslate"><span class="pre">Aggregation</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#no-bridge-back-into-a-pipeline">8.6 No bridge back into a pipeline</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#default-scheduler">8.7 Default scheduler</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#not-nested-workflows">8.8 Not nested workflows</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#names">8.9 Names</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#validation">9. Validation</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#unit-tests">Unit tests</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#nested-drivers">Nested drivers</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#loki-multi-run-reduction">LoKI multi-run reduction</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#migration">10. Migration</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#what-changes-for-each-project">What changes for each project</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#findings-of-the-survey-that-affect-the-migration">Findings of the survey that affect the migration</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#order">Order</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#open-questions">11. Open questions</a></li>
+</ul>
+  </nav></div>
+    </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+      <div class="sidebar-primary-item">
+
+  <div class="tocsection sourcelink">
+    <a href="../../_sources/developer/architecture-and-design/map-reduce-outside-the-graph.md">
+      <i class="fa-solid fa-file-lines"></i> Show Source
+    </a>
+  </div>
+</div>
+  </div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item">
+
+<nav aria-label="Breadcrumb" class="d-print-none">
+  <ul class="bd-breadcrumbs">
+    
+    <li class="breadcrumb-item breadcrumb-home">
+      <a href="../../index.html" class="nav-link" aria-label="Home">
+        <i class="fa-solid fa-home"></i>
+      </a>
+    </li>
+    
+    <li class="breadcrumb-item"><a href="../index.html" class="nav-link">Development</a></li>
+    
+    
+    <li class="breadcrumb-item"><a href="index.html" class="nav-link">Architecture and Design</a></li>
+    
+    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">Map and reduce outside the graph</span></li>
+  </ul>
+</nav>
+</div>
+      
+    </div>
+  
+  
+</div>
+</div>
+              
+              
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <section class="tex2jax_ignore mathjax_ignore" id="map-and-reduce-outside-the-graph">
+<h1>Map and reduce outside the graph<a class="headerlink" href="#map-and-reduce-outside-the-graph" title="Link to this heading">#</a></h1>
+<p>This document belongs to <a class="reference internal" href="../adr/0003-replace-map-reduce-with-stages-outside-the-graph.html"><span class="std std-doc">ADR 0003</span></a>.
+The ADR explains why <code class="docutils literal notranslate"><span class="pre">Pipeline.map</span></code> and <code class="docutils literal notranslate"><span class="pre">Pipeline.reduce</span></code> should be removed and what replaces them.
+This document gives the details: how the replacement behaves, how it covers each current use of map/reduce, which design options were rejected and why, how the prototype was validated, and how the ESS packages migrate.</p>
+<p>The reader is assumed to know <code class="docutils literal notranslate"><span class="pre">sciline.Pipeline</span></code> and to have read the ADR.</p>
+<section id="how-map-reduce-is-used-today">
+<h2>1. How map/reduce is used today<a class="headerlink" href="#how-map-reduce-is-used-today" title="Link to this heading">#</a></h2>
+<p>The design has to cover every current use.
+A survey of the ESS packages (the scipp/ess monorepo) and esslivedata on 2026-09-11 found these shapes:</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>Shape</p></th>
+<th class="head"><p>Where</p></th>
+<th class="head"><p>How values are combined</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Map over a table, reduce at one or more keys, then continue with further providers</p></td>
+<td><p>esssans runs (four map/reduce pairs per run type), essreflectometry runs (up to seven reduced keys), isissans zoom monitors, bifrost detector triplets (three folds in two workflows), NMX panels and MTZ files, DREAM detectors with a two-column table</p></td>
+<td><p>events by concatenation, dense data by sum, metadata by picking one value, <code class="docutils literal notranslate"><span class="pre">DataGroup</span></code> by key</p></td>
+</tr>
+<tr class="row-odd"><td><p>A reduce that sits inside the per-member work of another map</p></td>
+<td><p>esssans pixel masks: <code class="docutils literal notranslate"><span class="pre">DetectorMasks</span></code> reads the detector IDs of each sample run. (DREAM has the same fold, but there it does not depend on the run.)</p></td>
+<td><p>dicts by union</p></td>
+</tr>
+<tr class="row-even"><td><p>Per-member results without a reduce</p></td>
+<td><p>esssans <code class="docutils literal notranslate"><span class="pre">with_banks</span></code>, LoKI notebook, essreflectometry <code class="docutils literal notranslate"><span class="pre">BatchProcessor</span></code>, a bifrost test</p></td>
+<td><p>not combined; read with <code class="docutils literal notranslate"><span class="pre">compute_mapped</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>Several map/reduces on one pipeline, then one final computation</p></td>
+<td><p>sample runs and background runs</p></td>
+<td><p>as above</p></td>
+</tr>
+<tr class="row-even"><td><p>Map/reduce in the part of a <code class="docutils literal notranslate"><span class="pre">StreamProcessor</span></code> that is computed once</p></td>
+<td><p>esslivedata bifrost: <code class="docutils literal notranslate"><span class="pre">EmptyDetector</span></code> over banks</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">_combine_banks</span></code></p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Two further observations matter for the design:</p>
+<ul class="simple">
+<li><p>The packages graft the reduced node back onto the pipeline (<code class="docutils literal notranslate"><span class="pre">workflow[K]</span> <span class="pre">=</span> <span class="pre">workflow[K].map(df).reduce(func=f)</span></code>), so users see an ordinary pipeline afterwards.
+<code class="docutils literal notranslate"><span class="pre">ess.reduce.parameter_mappers</span></code> and the parameter widgets rely on this.
+The design gives this up (see section 10).</p></li>
+<li><p>essreflectometry wraps each <code class="docutils literal notranslate"><span class="pre">reduce</span></code> in <code class="docutils literal notranslate"><span class="pre">try/except</span></code>, because a key it reduces may not depend on the mapped key at all.</p></li>
+</ul>
+</section>
+<section id="overview">
+<h2>2. Overview<a class="headerlink" href="#overview" title="Link to this heading">#</a></h2>
+<p>The author of a workflow writes one flat pipeline, as today.
+The code that needs repetition, the <em>driver</em>, cuts the pipeline into <em>stages</em>, calls them from an ordinary Python loop, and places objects between the stages that hold state:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>            ┌──────────────┐        ┌─────────────┐        ┌──────────────┐
+ inputs ───▶│   stage A    │──push─▶│  connector  │─value─▶│   stage B    │───▶ outputs
+ per call   └──────────────┘        └─────────────┘        └──────────────┘
+                                 (accumulator or forwarder)
+</pre></div>
+</div>
+<p>Sciline provides the stages and the <code class="docutils literal notranslate"><span class="pre">Accumulator</span></code> protocol with two accumulators, <code class="docutils literal notranslate"><span class="pre">Buffered</span></code> and <code class="docutils literal notranslate"><span class="pre">Reduced</span></code>.
+Everything else, in particular what is kept between calls and when it is discarded, is decided by the code that runs the loop.</p>
+<p>Terms used in this document:</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>Term</p></th>
+<th class="head"><p>Meaning</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>stage</p></td>
+<td><p>The part of a pipeline from a set of input keys to a set of output keys (<code class="docutils literal notranslate"><span class="pre">sciline.Stage</span></code>).</p></td>
+</tr>
+<tr class="row-odd"><td><p>part computed once, per-call part</p></td>
+<td><p>The part of a stage’s graph that does not depend on the inputs, and the part that does.</p></td>
+</tr>
+<tr class="row-even"><td><p>cached keys</p></td>
+<td><p>The keys of the part computed once that the per-call part reads, plus outputs that do not depend on the inputs. A stage caches the values at these keys.</p></td>
+</tr>
+<tr class="row-odd"><td><p>connector</p></td>
+<td><p>An object between stages with <code class="docutils literal notranslate"><span class="pre">push(value)</span></code> and <code class="docutils literal notranslate"><span class="pre">value</span></code>.</p></td>
+</tr>
+<tr class="row-even"><td><p>accumulator</p></td>
+<td><p>A connector that combines all pushed values (<code class="docutils literal notranslate"><span class="pre">sciline.accumulators.Accumulator</span></code>).</p></td>
+</tr>
+<tr class="row-odd"><td><p>forwarder</p></td>
+<td><p>A connector that holds the last pushed value until the next push. Lives in ess.reduce.</p></td>
+</tr>
+<tr class="row-even"><td><p>member</p></td>
+<td><p>One repetition, for example one run, given by the values of the inputs of a stage.</p></td>
+</tr>
+<tr class="row-odd"><td><p>accumulation key</p></td>
+<td><p>A key at which the values of the members are combined.</p></td>
+</tr>
+<tr class="row-even"><td><p>contribution</p></td>
+<td><p>The values at the accumulation keys for one member, as a dict.</p></td>
+</tr>
+<tr class="row-odd"><td><p>contribute stage</p></td>
+<td><p>A stage from the inputs that give a member to the accumulation keys.</p></td>
+</tr>
+<tr class="row-even"><td><p>finalize stage</p></td>
+<td><p>A stage from the accumulation keys to the outputs.</p></td>
+</tr>
+<tr class="row-odd"><td><p>loop</p></td>
+<td><p>One level of the driver’s nested loops, given by the keys whose values the driver supplies on each iteration.</p></td>
+</tr>
+<tr class="row-even"><td><p>outer stage</p></td>
+<td><p>The stage of a loop that computes, once per iteration, the values that the stages inside the loop read and that depend on the inputs of the loop.</p></td>
+</tr>
+<tr class="row-odd"><td><p>forwarded value</p></td>
+<td><p>A value that an outer stage returns and the stages inside its loop take as input.</p></td>
+</tr>
+<tr class="row-even"><td><p>driver</p></td>
+<td><p>The loop that calls stages and pushes into connectors.</p></td>
+</tr>
+<tr class="row-odd"><td><p>package object</p></td>
+<td><p>What a reduction package returns to users in place of today’s map/reduced pipeline. It is a driver.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="stage">
+<h2>3. <code class="docutils literal notranslate"><span class="pre">Stage</span></code><a class="headerlink" href="#stage" title="Link to this heading">#</a></h2>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">stage</span> <span class="o">=</span> <span class="n">Stage</span><span class="p">(</span><span class="n">pipeline</span><span class="p">,</span> <span class="n">inputs</span><span class="o">=</span><span class="p">(</span><span class="n">Filename</span><span class="p">,),</span> <span class="n">outputs</span><span class="o">=</span><span class="p">(</span><span class="n">Numerator</span><span class="p">,</span> <span class="n">Denominator</span><span class="p">))</span>
+<span class="n">stage</span><span class="o">.</span><span class="n">cached</span>                            <span class="c1"># keys whose values the stage caches</span>
+<span class="n">stage</span><span class="o">.</span><span class="n">run</span><span class="p">({</span><span class="n">Filename</span><span class="p">:</span> <span class="s1">&#39;run1.nxs&#39;</span><span class="p">})</span> <span class="c1"># -&gt; {Numerator: ..., Denominator: ...}</span>
+
+<span class="c1"># Several stages from one pipeline, with their cached values computed in one run:</span>
+<span class="n">contribute</span><span class="p">,</span> <span class="n">finalize</span> <span class="o">=</span> <span class="n">prepare_stages</span><span class="p">(</span>
+    <span class="n">pipeline</span><span class="p">,</span>
+    <span class="n">inputs</span><span class="o">=</span><span class="p">(</span><span class="n">Filename</span><span class="p">,</span> <span class="n">Numerator</span><span class="p">,</span> <span class="n">Denominator</span><span class="p">),</span>
+    <span class="n">outputs</span><span class="o">=</span><span class="p">[(</span><span class="n">Numerator</span><span class="p">,</span> <span class="n">Denominator</span><span class="p">),</span> <span class="p">(</span><span class="n">IofQ</span><span class="p">,)],</span>
+<span class="p">)</span>
+<span class="n">contribute</span><span class="o">.</span><span class="n">inputs</span>                     <span class="c1"># (Filename,)</span>
+<span class="n">finalize</span><span class="o">.</span><span class="n">inputs</span>                       <span class="c1"># (Numerator, Denominator)</span>
+</pre></div>
+</div>
+<section id="behaviour">
+<h3>Behaviour<a class="headerlink" href="#behaviour" title="Link to this heading">#</a></h3>
+<ul class="simple">
+<li><p><strong>Partition.</strong>
+The stage takes the graph of all ancestors of the outputs.
+The inputs and everything that depends on them form the per-call part; the rest is the part computed once.
+An input can be a parameter or an intermediate result.
+In both cases its provider and everything upstream of it are removed from the stage.
+Keys given as inputs that the outputs do not need, for example because another input cuts them off, are dropped, and <code class="docutils literal notranslate"><span class="pre">inputs</span></code> lists the rest.
+This matches <code class="docutils literal notranslate"><span class="pre">Pipeline</span></code>, which ignores parameters its targets do not need, and lets a driver pass the same candidate keys to stages with different outputs.
+A value supplied for a dropped key is still an error (see <strong>Calls</strong>), so a mistaken input fails on the first call instead of when the stage is built.</p></li>
+<li><p><strong>Cached values.</strong>
+On first use, or when built by <code class="docutils literal notranslate"><span class="pre">prepare_stages</span></code>, the stage computes its cached values and keeps them.
+Nothing else of the part computed once is kept.</p></li>
+<li><p><strong>Calls.</strong>
+A call supplies a value for each input and for nothing else.
+It computes only the per-call part, reading the cached values, and returns the outputs.
+The supplied and intermediate values are released when the call returns.</p></li>
+<li><p><strong>Pass-through.</strong>
+An output that is also an input is returned as supplied.
+This makes a stage from a key to itself the identity, which a driver needs when its members are already values at its accumulation keys, such as results of other loops.</p></li>
+<li><p><strong>Snapshot.</strong>
+The stage is built from the task graph of the pipeline at construction time.
+Later changes to the pipeline do not affect it; to change a parameter, build a new stage.
+Parameter values are kept by reference, not copied, so a value modified in place, rather than set anew, can change what the stage computes.</p></li>
+<li><p><strong>Introspection.</strong>
+<code class="docutils literal notranslate"><span class="pre">per_call</span></code> lists the keys that depend on the inputs, and <code class="docutils literal notranslate"><span class="pre">per_call_outputs</span></code> the outputs among them.
+<code class="docutils literal notranslate"><span class="pre">keys</span></code> lists every key the stage uses.
+A parameter that is not an input is in <code class="docutils literal notranslate"><span class="pre">keys</span></code> exactly when changing it on the pipeline would change the stage’s results.
+Callers use this to decide what to rebuild (section 6.7).</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">prepare_stages(pipeline,</span> <span class="pre">inputs=...,</span> <span class="pre">outputs=[...])</span></code>.</strong>
+Stages built from one pipeline often share work computed once, for example a file that each of them reads.
+<code class="docutils literal notranslate"><span class="pre">prepare_stages</span></code> builds one stage per tuple of outputs and computes the cached values of all of them in one scheduler run, so shared intermediate results are computed once and then released.
+Each stage keeps only its own cached values, as if it had been built alone.
+All stages are cut from one pipeline at one moment, so they agree on every key they share by construction.
+<code class="docutils literal notranslate"><span class="pre">inputs</span></code> is one set of keys for all stages: every stage is cut at every one of them, except at its own outputs, and takes those that its outputs still need.
+So no stage caches a value that depends on a key that another stage takes as input; a stage that needs such a value takes the key as input itself.</p></li>
+<li><p><strong>Threads.</strong>
+A stage can be called from several threads at once; the cached values are still computed only once.</p></li>
+</ul>
+</section>
+<section id="implementation-notes">
+<h3>Implementation notes<a class="headerlink" href="#implementation-notes" title="Link to this heading">#</a></h3>
+<p>The stage builds its task graph with <code class="docutils literal notranslate"><span class="pre">to_task_graph</span></code> and <code class="docutils literal notranslate"><span class="pre">HandleAsComputeTimeException</span></code>.
+Keys without a value, such as the inputs, thus become nodes that fail only if they are computed, instead of failing when the stage is built.
+The scheduler default is the same as for <code class="docutils literal notranslate"><span class="pre">Pipeline</span></code> (section 8.7).</p>
+</section>
+<section id="why-it-is-in-sciline">
+<h3>Why it is in sciline<a class="headerlink" href="#why-it-is-in-sciline" title="Link to this heading">#</a></h3>
+<p>A stage needs the concrete task graph and the <code class="docutils literal notranslate"><span class="pre">Provider</span></code> objects.
+Outside sciline this means private access, which is how <code class="docutils literal notranslate"><span class="pre">StreamProcessor</span></code> works today, and scipp/sciline#241 asks for a public way.</p>
+<p>In <code class="docutils literal notranslate"><span class="pre">StreamProcessor</span></code>, a stage replaces <code class="docutils literal notranslate"><span class="pre">_build_streaming_workflow</span></code>, <code class="docutils literal notranslate"><span class="pre">_FedWorkflow</span></code>, <code class="docutils literal notranslate"><span class="pre">_find_descendants</span></code>, <code class="docutils literal notranslate"><span class="pre">_find_parents</span></code>, and the pruning of branches by setting keys to <code class="docutils literal notranslate"><span class="pre">None</span></code>.
+It also meets the three requirements of scipp/sciline#241: no graph rebuild per value, a well-defined lifetime for supplied values, and no computation of the ancestors of a supplied key.</p>
+</section>
+</section>
+<section id="accumulators">
+<h2>4. Accumulators<a class="headerlink" href="#accumulators" title="Link to this heading">#</a></h2>
+<section id="the-protocol">
+<h3>The protocol<a class="headerlink" href="#the-protocol" title="Link to this heading">#</a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">Accumulator</span></code> is a structural protocol: any object with <code class="docutils literal notranslate"><span class="pre">push(value)</span></code> and a <code class="docutils literal notranslate"><span class="pre">value</span></code> property satisfies it.
+Sciline provides two accumulators:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">Buffered(func)</span></code> is an accumulator that keeps every pushed value and applies the n-ary function <code class="docutils literal notranslate"><span class="pre">func</span></code> to all of them when <code class="docutils literal notranslate"><span class="pre">value</span></code> is read.
+This is the signature of <code class="docutils literal notranslate"><span class="pre">reduce(func=)</span></code> today, so every existing combine function can be used unchanged.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">Reduced(func)</span></code> is an accumulator that keeps only a running result.
+The first pushed value becomes the result, and each further push replaces it by <code class="docutils literal notranslate"><span class="pre">func(result,</span> <span class="pre">value)</span></code>.
+<code class="docutils literal notranslate"><span class="pre">func</span></code> must be associative and must not modify its arguments, because the pushed values belong to the driver.
+Since the update is not in place, a sum briefly holds the old result, the new result, and the pushed value.
+An accumulator that updates in place has to be written by the workflow author, who then owns the copy of the first value; the accumulators in ess.reduce are such objects.</p></li>
+</ul>
+<p>For concatenation, <code class="docutils literal notranslate"><span class="pre">Buffered</span></code> and <code class="docutils literal notranslate"><span class="pre">Reduced</span></code> cost about the same memory; for a sum of large dense arrays, a running result holds one array instead of one per member.
+A driver makes new accumulators for each computation.
+An accumulator kept from an earlier computation adds the new members to the old result, without an error.</p>
+</section>
+<section id="combining-combined-values">
+<h3>Combining combined values<a class="headerlink" href="#combining-combined-values" title="Link to this heading">#</a></h3>
+<p>A driver may push combined values into a new accumulator, to combine in groups or as a chain, for example one new member at a time onto a previous result, or values combined in separate processes.
+This requires two things of an accumulator:</p>
+<ol class="arabic simple">
+<li><p>What <code class="docutils literal notranslate"><span class="pre">value</span></code> returns can be pushed again.</p></li>
+<li><p>The result does not depend on how the pushes were grouped.</p></li>
+</ol>
+<p><code class="docutils literal notranslate"><span class="pre">Buffered</span></code> satisfies both if its function is associative, that is <code class="docutils literal notranslate"><span class="pre">func(func(a,</span> <span class="pre">b),</span> <span class="pre">c)</span> <span class="pre">==</span> <span class="pre">func(a,</span> <span class="pre">b,</span> <span class="pre">c)</span></code>.
+<code class="docutils literal notranslate"><span class="pre">Reduced</span></code> requires associativity anyway.
+An ess.reduce accumulator satisfies both if its <code class="docutils literal notranslate"><span class="pre">push</span></code> accepts what its <code class="docutils literal notranslate"><span class="pre">value</span></code> returns.
+The histogramming accumulators must keep this property once <code class="docutils literal notranslate"><span class="pre">maybe_hist</span></code> moves out of their base class (see below).</p>
+</section>
+<section id="relation-to-the-ess-reduce-accumulators">
+<h3>Relation to the ess.reduce accumulators<a class="headerlink" href="#relation-to-the-ess-reduce-accumulators" title="Link to this heading">#</a></h3>
+<p>An accumulator over runs and an accumulator in a stream are the same kind of object; whether the values come from many members or from one input over time only matters to the driver.
+The driver also owns their lifetime (<code class="docutils literal notranslate"><span class="pre">clear</span></code>), their identity (contributions by label), and whether the result may depend on the order of pushes.</p>
+<p>The accumulators of <code class="docutils literal notranslate"><span class="pre">ess.reduce.streaming</span></code> satisfy the protocol once <code class="docutils literal notranslate"><span class="pre">maybe_hist</span></code>, which histograms in the base class <code class="docutils literal notranslate"><span class="pre">push</span></code>, moves to the subclasses that need it.
+The base class then adds nothing to the protocol, and a forwarder built on it does not histogram.
+Their <code class="docutils literal notranslate"><span class="pre">clear</span></code> method stays an ess.reduce convention; no base class beyond the protocol is shared.
+<code class="docutils literal notranslate"><span class="pre">Accumulator</span></code> is in sciline because <code class="docutils literal notranslate"><span class="pre">Buffered</span></code> and <code class="docutils literal notranslate"><span class="pre">Reduced</span></code> implement it and drivers use it to type their accumulators; <code class="docutils literal notranslate"><span class="pre">Forwarder</span></code> stays in ess.reduce because nothing in sciline implements or consumes one.</p>
+</section>
+</section>
+<section id="nested-loops">
+<h2>5. Nested loops<a class="headerlink" href="#nested-loops" title="Link to this heading">#</a></h2>
+<p>Banks within runs, or chunks of a stream within a context, are loops in loops.
+The stage of the inner loop reads values that depend on the outer loop only, such as the content of the file of a run.
+These should be computed once per iteration of the outer loop, not once per iteration of the inner loop.
+A stage built for the inner loop alone caches them, for the one run set on the pipeline.
+The driver therefore builds one stage per loop, and the outer stage computes the <em>forwarded values</em> that the inner stage takes as inputs.
+They are the cached values of the inner stage that depend on the inputs of the outer loop:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">bank_cached</span> <span class="o">=</span> <span class="n">Stage</span><span class="p">(</span><span class="n">pipeline</span><span class="p">,</span> <span class="n">inputs</span><span class="o">=</span><span class="p">(</span><span class="n">Bank</span><span class="p">,),</span> <span class="n">outputs</span><span class="o">=</span><span class="p">(</span><span class="n">Numerator</span><span class="p">,</span> <span class="n">Denominator</span><span class="p">))</span><span class="o">.</span><span class="n">cached</span>
+<span class="c1"># What a bank stage alone would cache that depends on the run:</span>
+<span class="n">forwarded_keys</span> <span class="o">=</span> <span class="n">Stage</span><span class="p">(</span><span class="n">pipeline</span><span class="p">,</span> <span class="n">inputs</span><span class="o">=</span><span class="p">(</span><span class="n">Filename</span><span class="p">,),</span> <span class="n">outputs</span><span class="o">=</span><span class="n">bank_cached</span><span class="p">)</span><span class="o">.</span><span class="n">per_call_outputs</span>
+<span class="n">run_stage</span><span class="p">,</span> <span class="n">bank_stage</span><span class="p">,</span> <span class="n">final_stage</span> <span class="o">=</span> <span class="n">prepare_stages</span><span class="p">(</span>
+    <span class="n">pipeline</span><span class="p">,</span>
+    <span class="n">inputs</span><span class="o">=</span><span class="p">(</span><span class="n">Filename</span><span class="p">,</span> <span class="o">*</span><span class="n">forwarded_keys</span><span class="p">,</span> <span class="n">Bank</span><span class="p">,</span> <span class="n">Numerator</span><span class="p">,</span> <span class="n">Denominator</span><span class="p">),</span>
+    <span class="n">outputs</span><span class="o">=</span><span class="p">[</span><span class="n">forwarded_keys</span><span class="p">,</span> <span class="p">(</span><span class="n">Numerator</span><span class="p">,</span> <span class="n">Denominator</span><span class="p">),</span> <span class="p">(</span><span class="n">IofQ</span><span class="p">,)],</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+<p>The two stages built first are only inspected, so they never compute their cached values.
+Cached values that do not depend on the run, such as a calibration, stay cached in the bank stage.
+A driver for runs times banks:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">acc</span> <span class="o">=</span> <span class="p">{</span><span class="n">Numerator</span><span class="p">:</span> <span class="n">Buffered</span><span class="p">(</span><span class="n">concat</span><span class="p">),</span> <span class="n">Denominator</span><span class="p">:</span> <span class="n">Reduced</span><span class="p">(</span><span class="n">add</span><span class="p">)}</span>
+<span class="k">for</span> <span class="n">filename</span> <span class="ow">in</span> <span class="n">filenames</span><span class="p">:</span>
+    <span class="n">forwarded</span> <span class="o">=</span> <span class="n">run_stage</span><span class="o">.</span><span class="n">run</span><span class="p">({</span><span class="n">Filename</span><span class="p">:</span> <span class="n">filename</span><span class="p">})</span>
+    <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">bank_names</span><span class="p">:</span>
+        <span class="n">out</span> <span class="o">=</span> <span class="n">bank_stage</span><span class="o">.</span><span class="n">run</span><span class="p">({</span><span class="o">**</span><span class="n">forwarded</span><span class="p">,</span> <span class="n">Bank</span><span class="p">:</span> <span class="n">name</span><span class="p">})</span>
+        <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">bank_stage</span><span class="o">.</span><span class="n">per_call_outputs</span><span class="p">:</span>
+            <span class="n">acc</span><span class="p">[</span><span class="n">key</span><span class="p">]</span><span class="o">.</span><span class="n">push</span><span class="p">(</span><span class="n">out</span><span class="p">[</span><span class="n">key</span><span class="p">])</span>
+<span class="n">result</span> <span class="o">=</span> <span class="n">final_stage</span><span class="o">.</span><span class="n">run</span><span class="p">({</span><span class="n">k</span><span class="p">:</span> <span class="n">a</span><span class="o">.</span><span class="n">value</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">acc</span><span class="o">.</span><span class="n">items</span><span class="p">()})</span>
+</pre></div>
+</div>
+<p>With several stages inside a loop, such as the triplet stage and the per-run step of Bifrost (section 6.3), the run stage outputs the forwarded values of all of them, and each stage takes those among its own cached keys.
+<code class="docutils literal notranslate"><span class="pre">Stage.run</span></code> accepts exactly the inputs of the stage, so the driver selects the values for each stage, <code class="docutils literal notranslate"><span class="pre">{k:</span> <span class="pre">v</span> <span class="pre">for</span> <span class="pre">k,</span> <span class="pre">v</span> <span class="pre">in</span> <span class="pre">forwarded.items()</span> <span class="pre">if</span> <span class="pre">k</span> <span class="pre">in</span> <span class="pre">stage.inputs}</span></code>.</p>
+<p>Building the stages of nested loops this way has two pitfalls:</p>
+<ul class="simple">
+<li><p><strong>An output of the inner stage that depends on the outer loop only.</strong>
+A key that depends on the run but not on the bank, declared as an output of the bank stage, is cached by the stage built for inspection, so it is cached and forwarded.
+The bank stage built by <code class="docutils literal notranslate"><span class="pre">prepare_stages</span></code> does not take its own output as input; it computes the key again on every call.
+If the key depends only on forwarded values, it is in <code class="docutils literal notranslate"><span class="pre">per_call_outputs</span></code>, and the driver pushes it once per bank.
+The combined value is wrong without any error.
+Run-level accumulation keys are outputs of the run stage instead.</p></li>
+<li><p><strong>A run-level value that is not forwarded.</strong>
+If <code class="docutils literal notranslate"><span class="pre">forwarded_keys</span></code> misses a value that the bank stage reads and that depends on the run, the bank stage takes <code class="docutils literal notranslate"><span class="pre">Filename</span></code> as input as well, since every stage is cut at every key in <code class="docutils literal notranslate"><span class="pre">inputs</span></code>.
+The results cannot be wrong: a call without <code class="docutils literal notranslate"><span class="pre">Filename</span></code> fails, and a driver that supplies it computes the value once per bank instead of once per run.
+A driver can reject this when it builds the stages, by checking that <code class="docutils literal notranslate"><span class="pre">Filename</span></code> is not in <code class="docutils literal notranslate"><span class="pre">bank_stage.inputs</span></code>.
+This relies on the driver building its stages in one call, which it does anyway so that shared work is done once.
+Stages built separately are not cut at each other’s inputs, and a stage inside the run loop that caches a value depending on <code class="docutils literal notranslate"><span class="pre">Filename</span></code> uses the one run set on the pipeline.</p></li>
+</ul>
+<p>A function that derives these stages, such as <code class="docutils literal notranslate"><span class="pre">enclose</span></code>, is a likely later addition.</p>
+<section id="what-is-deliberately-not-in-sciline">
+<h3>What is deliberately not in sciline<a class="headerlink" href="#what-is-deliberately-not-in-sciline" title="Link to this heading">#</a></h3>
+<ul class="simple">
+<li><p><strong>Loops, cached values, and accumulators.</strong>
+The driver decides what is kept, for how long, and when accumulators are made and discarded, so memory is bounded by what it holds, for example one run.</p></li>
+<li><p><strong>Parallelism over members.</strong>
+A stage call is a plain function call, so the driver can map it over members with threads, processes, or dask.
+This is the one thing that computing everything in one graph provided for free.</p></li>
+<li><p><strong>Parameter changes.</strong>
+Parameters are set before the stages are built, and the stages are snapshots; a changed parameter means new stages.</p></li>
+</ul>
+</section>
+</section>
+<section id="composition">
+<h2>6. Composition<a class="headerlink" href="#composition" title="Link to this heading">#</a></h2>
+<p>Every use from section 1 is a combination of stages, connectors, and a driver.
+This section shows each.</p>
+<section id="a-package-object-esssans">
+<h3>6.1 A package object (esssans)<a class="headerlink" href="#a-package-object-esssans" title="Link to this heading">#</a></h3>
+<p>esssans users today set parameters, call <code class="docutils literal notranslate"><span class="pre">with_sample_runs</span></code> and <code class="docutils literal notranslate"><span class="pre">with_background_runs</span></code>, and compute.
+To keep this experience, esssans returns its own object instead of a pipeline.
+The validation script contains such an object, <code class="docutils literal notranslate"><span class="pre">SansReduction</span></code>, in about 50 lines.
+It is built from a pipeline with all parameters set, so setting the runs is the last step of the setup.
+To change a parameter, the user builds a new object; nearly every parameter is read per run, so this costs no more than rebuilding only the affected stages would.
+It holds one contribute stage per run type (sample and background), one finalize stage from the accumulation keys of both to the outputs, and the contributions of each run type by filename.
+<code class="docutils literal notranslate"><span class="pre">set_runs(run_type,</span> <span class="pre">runs)</span></code> records the runs and drops the contributions of runs no longer listed.
+All stages are built in one call to <code class="docutils literal notranslate"><span class="pre">prepare_stages</span></code> when the object is created.
+<code class="docutils literal notranslate"><span class="pre">compute()</span></code> contributes the runs that have no contribution yet, pushes the kept contributions into new accumulators, and finalizes.</p>
+<p>The background stage reads <code class="docutils literal notranslate"><span class="pre">DetectorMasks</span></code>, which in esssans depends on the detector IDs of the sample run set on the pipeline.
+With several sample runs, this run is not defined.
+The background stage therefore takes <code class="docutils literal notranslate"><span class="pre">Filename[SampleRun]</span></code> as input, which the background loop cannot supply; <code class="docutils literal notranslate"><span class="pre">SansReduction</span></code> rejects this when it builds the stages.
+Forwarding the masks from the sample loop is not the fix, because the background loop is not inside the sample loop; nested in it, each background run would be computed once per sample run.
+The validation script takes the detector IDs from the empty-beam run instead, so the masks depend on no run and are computed once (section 11).</p>
+</section>
+<section id="several-loops-one-final-stage">
+<h3>6.2 Several loops, one final stage<a class="headerlink" href="#several-loops-one-final-stage" title="Link to this heading">#</a></h3>
+<p>Sample runs and background runs are two loops on the same pipeline, and a final stage outside both loops takes the accumulation keys of both as inputs.
+All stages are built in one call to <code class="docutils literal notranslate"><span class="pre">prepare_stages</span></code>, so work they share, such as reading a mask file, is done once.</p>
+</section>
+<section id="runs-times-banks">
+<h3>6.3 Runs times banks<a class="headerlink" href="#runs-times-banks" title="Link to this heading">#</a></h3>
+<p>Mapping over detector banks and runs at once needs two levels.
+esssans tests this shape with <code class="docutils literal notranslate"><span class="pre">with_banks</span></code> over <code class="docutils literal notranslate"><span class="pre">with_sample_runs</span></code>; LoKI and Bifrost with several runs need it too.
+A flat loop over (run, bank) pairs computes run-level work, such as loading monitors, once per bank, and pushes a run-level accumulation key once per bank; a loop per bank over the runs loads every run once per bank.
+With one stage per loop, the run stage computes the per-run values once per iteration of the run loop, and the bank stage takes them as inputs (section 5).</p>
+<p>Bifrost merges the triplets of one run into one detector and concatenates the runs.
+The per-run step after merging is a second stage inside the run loop, from the accumulation keys of the triplet loop:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">triplet</span> <span class="o">=</span> <span class="n">Stage</span><span class="p">(</span><span class="n">pipeline</span><span class="p">,</span> <span class="n">inputs</span><span class="o">=</span><span class="p">(</span><span class="n">NeXusDetectorName</span><span class="p">,),</span> <span class="n">outputs</span><span class="o">=</span><span class="p">(</span><span class="n">EmptyDetector</span><span class="p">,</span> <span class="n">NeXusData</span><span class="p">))</span>
+<span class="n">run_final</span> <span class="o">=</span> <span class="n">Stage</span><span class="p">(</span><span class="n">pipeline</span><span class="p">,</span> <span class="n">inputs</span><span class="o">=</span><span class="p">(</span><span class="n">EmptyDetector</span><span class="p">,</span> <span class="n">NeXusData</span><span class="p">),</span> <span class="n">outputs</span><span class="o">=</span><span class="p">(</span><span class="n">NormalizedDetector</span><span class="p">,))</span>
+<span class="n">final</span> <span class="o">=</span> <span class="n">Stage</span><span class="p">(</span><span class="n">pipeline</span><span class="p">,</span> <span class="n">inputs</span><span class="o">=</span><span class="p">(</span><span class="n">NormalizedDetector</span><span class="p">,),</span> <span class="n">outputs</span><span class="o">=</span><span class="p">(</span><span class="n">EnergyQDetector</span><span class="p">,))</span>
+</pre></div>
+</div>
+<p>The run stage computes what either stage reads from the run: <code class="docutils literal notranslate"><span class="pre">NeXusFile</span></code> and <code class="docutils literal notranslate"><span class="pre">PrimaryGraph</span></code> for the triplets, and the angles, monitor, and proton charge for <code class="docutils literal notranslate"><span class="pre">run_final</span></code>.
+Each file is therefore opened once per run.
+Work that depends on the bank alone, such as LoKI’s per-bank lookup table, is computed once per run and bank, unless the driver holds it across runs.
+Groups within a run, such as angle groups in Bifrost, are a further level, and nothing is nested inside a graph.</p>
+</section>
+<section id="a-reduce-inside-per-member-work-esssans-pixel-masks">
+<h3>6.4 A reduce inside per-member work (esssans pixel masks)<a class="headerlink" href="#a-reduce-inside-per-member-work-esssans-pixel-masks" title="Link to this heading">#</a></h3>
+<p>In esssans, <code class="docutils literal notranslate"><span class="pre">DetectorMasks</span></code> reads the detector IDs of the sample run, so with map/reduce the graph computes the mask fold once per sample run.
+This is not a loop with an accumulator, because the combined value is needed inside the work for each member.
+Outside the graph it becomes a list parameter, <code class="docutils literal notranslate"><span class="pre">PixelMaskFilenames</span></code>, and two providers: one reads all mask files (computed once and shared by all runs), and one builds the masks from the detector IDs.
+With detector IDs that do not depend on the run (section 6.1), the masks are computed once as well.
+Loops over members are meant for members that are expensive to compute or whose individual results users want to see; a handful of small files combined by union is neither.</p>
+</section>
+<section id="passing-a-result-from-one-driver-to-another">
+<h3>6.5 Passing a result from one driver to another<a class="headerlink" href="#passing-a-result-from-one-driver-to-another" title="Link to this heading">#</a></h3>
+<p>A result enters another driver as an ordinary parameter of the flat pipeline; the bifrost bank fold in esslivedata becomes:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">banks</span> <span class="o">=</span> <span class="n">Stage</span><span class="p">(</span><span class="n">pipeline</span><span class="p">,</span> <span class="n">outputs</span><span class="o">=</span><span class="p">(</span><span class="n">EmptyDetector</span><span class="p">,),</span> <span class="n">inputs</span><span class="o">=</span><span class="p">(</span><span class="n">NeXusDetectorName</span><span class="p">,))</span>
+<span class="n">acc</span> <span class="o">=</span> <span class="n">Buffered</span><span class="p">(</span><span class="n">combine_banks</span><span class="p">)</span>
+<span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">bank_names</span><span class="p">:</span>
+    <span class="n">acc</span><span class="o">.</span><span class="n">push</span><span class="p">(</span><span class="n">banks</span><span class="o">.</span><span class="n">run</span><span class="p">({</span><span class="n">NeXusDetectorName</span><span class="p">:</span> <span class="n">name</span><span class="p">})[</span><span class="n">EmptyDetector</span><span class="p">])</span>
+<span class="n">pipeline</span><span class="p">[</span><span class="n">EmptyDetector</span><span class="p">]</span> <span class="o">=</span> <span class="n">acc</span><span class="o">.</span><span class="n">value</span>
+<span class="n">processor</span> <span class="o">=</span> <span class="n">StreamProcessor</span><span class="p">(</span><span class="n">pipeline</span><span class="p">,</span> <span class="o">...</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="streamprocessor">
+<h3>6.6 <code class="docutils literal notranslate"><span class="pre">StreamProcessor</span></code><a class="headerlink" href="#streamprocessor" title="Link to this heading">#</a></h3>
+<p>A stream differs from a loop over runs in three ways.
+Chunks of a stream cannot be recomputed.
+The accumulators are reused between finalizations and need not be associative (rolling windows).
+A change of context, such as a new detector position, must not discard what was accumulated.
+<code class="docutils literal notranslate"><span class="pre">StreamProcessor</span></code> is a loop over contexts, with one chunk stage per group of dynamic keys and one finalize stage inside it:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">chunk_stages</span> <span class="o">=</span> <span class="p">[</span><span class="n">Stage</span><span class="p">(</span><span class="n">pipeline</span><span class="p">,</span> <span class="n">inputs</span><span class="o">=</span><span class="n">keys</span><span class="p">,</span> <span class="n">outputs</span><span class="o">=</span><span class="n">acc_keys</span><span class="p">)</span>
+                <span class="k">for</span> <span class="n">keys</span><span class="p">,</span> <span class="n">acc_keys</span> <span class="ow">in</span> <span class="n">groups</span><span class="p">]</span>    <span class="c1"># accumulators by the dynamic keys they read</span>
+<span class="n">finalize_stage</span> <span class="o">=</span> <span class="n">Stage</span><span class="p">(</span><span class="n">pipeline</span><span class="p">,</span> <span class="n">inputs</span><span class="o">=</span><span class="p">(</span><span class="o">*</span><span class="n">all_acc_keys</span><span class="p">,</span> <span class="o">*</span><span class="n">bypass_keys</span><span class="p">),</span>
+                       <span class="n">outputs</span><span class="o">=</span><span class="n">accumulated_targets</span><span class="p">)</span>
+<span class="c1"># Rebuilt as in section 5: context stages compute, from context_keys,</span>
+<span class="c1"># context_only_targets and what these stages cache that depends on the context,</span>
+<span class="c1"># one stage per group of values that depend on the same context keys.</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">set_context</span></code> calls the context stages that read an updated key or a value recomputed by an earlier context stage, and holds their results.
+<code class="docutils literal notranslate"><span class="pre">accumulate</span></code> calls each chunk stage whose inputs the chunk supplies and pushes into the accumulators.
+<code class="docutils literal notranslate"><span class="pre">finalize</span></code> calls the finalize stage.
+What the chunk and finalize stages read from the context, previously found by <code class="docutils literal notranslate"><span class="pre">_find_descendants</span></code> and <code class="docutils literal notranslate"><span class="pre">_find_parents</span></code>, is derived from their cached keys.
+A target that depends on the context alone is an output of a context stage, and <code class="docutils literal notranslate"><span class="pre">allow_bypass</span></code> becomes an explicit input of the finalize stage.
+A target that depends on no input belongs to no loop; a plain <code class="docutils literal notranslate"><span class="pre">Stage</span></code> without inputs computes it.
+The accumulator classes, the grouping of accumulators by dynamic keys, the validation of key sets, <code class="docutils literal notranslate"><span class="pre">on_finalize</span></code>, <code class="docutils literal notranslate"><span class="pre">clear</span></code>, and <code class="docutils literal notranslate"><span class="pre">visualize</span></code> stay.
+The module shrinks to its policy, which values are transient and which are held, as scipp/ess#732 proposed.</p>
+<p>A single context stage would recompute all context-derived values on an update of any context key.
+In esslivedata this changes no results: the only reset tied to the context, the reset-on-move of <code class="docutils literal notranslate"><span class="pre">NoCopyAccumulator</span></code>, compares coordinate values on each push, values recomputed from unchanged inputs are identical, and nothing inspects which values were recomputed.
+But it costs compute on every update of a frequent key.
+On the LOKI rear detector in wavelength mode, with live transforms of the sample motors, each sample motor message rebuilt the detector projection, which does not depend on the sample: about 80 ms per batch instead of 12 ms.</p>
+<p>So there is one context stage per group of context-derived values that depend on the same context keys, and an update recomputes only what depends on the updated keys.
+A group that reads a value of another group depends on a strict superset of that group’s context keys, so ordering the stages by the number of context keys runs each after those it reads.
+It takes that value as input instead of recomputing it: on the same detector, an ROI edit costs 1.6 ms, where the implementation before stages rebuilt the projection (77 ms).
+The calls inside <code class="docutils literal notranslate"><span class="pre">StreamProcessor</span></code> must also honour esslivedata’s choice of scheduler (section 8.7).</p>
+<p><code class="docutils literal notranslate"><span class="pre">test_stream_of_chunks_with_context_kept_between_changes</span></code> in <code class="docutils literal notranslate"><span class="pre">tests/stage_test.py</span></code> runs this shape with stages built by hand, including a context update that keeps the accumulator.</p>
+</section>
+<section id="essapps">
+<h3>6.7 essapps<a class="headerlink" href="#essapps" title="Link to this heading">#</a></h3>
+<p>essapps is the planned service for automatic, batch, and interactive data reduction.
+Its design is on the <code class="docutils literal notranslate"><span class="pre">architecture-sketch</span></code> branch (<code class="docutils literal notranslate"><span class="pre">docs/developer/architecture.md</span></code>), and <code class="docutils literal notranslate"><span class="pre">docs/developer/stages.md</span></code> and <code class="docutils literal notranslate"><span class="pre">docs/developer/aggregation.md</span></code> there relate it to this proposal.
+In that design a workflow is described by a <em>spec</em> that declares its parameters and outputs, every run produces a stored <em>record</em>, and a <em>binding</em> connects a spec to the sciline workflow.
+A record holds only what was computed: the spec, every parameter value, and the outputs.
+Stages and accumulators are how it is computed; a session holds them as caches, and they never appear in a record.
+Only the binding knows the graph, so a spec does not say which parameters each part of the workflow reads.
+The essapps interface follows what sciline and the package objects provide, so that no problem is solved twice.
+It uses them in four places:</p>
+<ul>
+<li><p><strong>Tuning.</strong>
+The caller names the stage as a <em>template</em>, whose blanks are the parameters that will move, and the session holds <code class="docutils literal notranslate"><span class="pre">Stage(pipeline,</span> <span class="pre">inputs=blanks,</span> <span class="pre">outputs=targets)</span></code> for it.
+A rerun after changing a blank reuses everything upstream; a blank that the targets do not need is dropped by the binding, because <code class="docutils literal notranslate"><span class="pre">Stage</span></code> refuses it.
+A change to any other parameter needs a new stage only if the parameter is in <code class="docutils literal notranslate"><span class="pre">stage.keys</span></code>.</p></li>
+<li><p><strong>A sum over runs.</strong>
+A sum is one request whose run parameter is a list.
+The binding wraps the package object (section 6.1) and computes the sum in one process.
+Values that differ per run are further inputs of the contribute stage; nested levels stay in the package’s driver (section 6.3).
+In a session, the contribute stage and the contributions by run are kept, so a call whose list extends the previous one contributes only the new runs.
+A long-lived runner that holds this state for one series under a rule is called a <em>fold</em> in essapps.</p></li>
+<li><p><strong>A sum spread over nodes.</strong>
+The workflow author splits the sum into two specs, and the binding builds both from two stages of one pipeline:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">contribute_stage</span> <span class="o">=</span> <span class="n">Stage</span><span class="p">(</span><span class="n">pipeline</span><span class="p">,</span> <span class="n">inputs</span><span class="o">=</span><span class="p">(</span><span class="n">Filename</span><span class="p">[</span><span class="n">SampleRun</span><span class="p">],),</span> <span class="n">outputs</span><span class="o">=</span><span class="n">ACC_KEYS</span><span class="p">)</span>
+<span class="n">final_stage</span> <span class="o">=</span> <span class="n">Stage</span><span class="p">(</span><span class="n">pipeline</span><span class="p">,</span> <span class="n">inputs</span><span class="o">=</span><span class="n">ACC_KEYS</span><span class="p">,</span> <span class="n">outputs</span><span class="o">=</span><span class="p">(</span><span class="n">IofQ</span><span class="p">,))</span>
+<span class="k">assert</span> <span class="nb">set</span><span class="p">(</span><span class="n">contribute_stage</span><span class="o">.</span><span class="n">per_call_outputs</span><span class="p">)</span> <span class="o">==</span> <span class="nb">set</span><span class="p">(</span><span class="n">ACC_KEYS</span><span class="p">)</span>  <span class="c1"># each varies per run</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">contribute</span><span class="p">(</span><span class="n">filename</span><span class="p">):</span>   <span class="c1"># CONTRIBUTE: one run -&gt; accumulation keys, exposed as outputs</span>
+    <span class="k">return</span> <span class="n">contribute_stage</span><span class="o">.</span><span class="n">run</span><span class="p">({</span><span class="n">Filename</span><span class="p">[</span><span class="n">SampleRun</span><span class="p">]:</span> <span class="n">filename</span><span class="p">})</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">combine</span><span class="p">(</span><span class="n">contributions</span><span class="p">):</span> <span class="c1"># COMBINE: references to the outputs of CONTRIBUTE -&gt; result</span>
+    <span class="n">acc</span> <span class="o">=</span> <span class="p">{</span><span class="n">k</span><span class="p">:</span> <span class="n">make</span><span class="p">()</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">make</span> <span class="ow">in</span> <span class="n">ACCUMULATORS</span><span class="o">.</span><span class="n">items</span><span class="p">()}</span>
+    <span class="k">for</span> <span class="n">contribution</span> <span class="ow">in</span> <span class="n">contributions</span><span class="p">:</span>
+        <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">acc</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="n">a</span><span class="o">.</span><span class="n">push</span><span class="p">(</span><span class="n">contribution</span><span class="p">[</span><span class="n">k</span><span class="p">])</span>
+    <span class="k">return</span> <span class="n">final_stage</span><span class="o">.</span><span class="n">run</span><span class="p">({</span><span class="n">k</span><span class="p">:</span> <span class="n">a</span><span class="o">.</span><span class="n">value</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">acc</span><span class="o">.</span><span class="n">items</span><span class="p">()})</span>
+</pre></div>
+</div>
+<p>Each record describes only its own computation, so no check that the contributions agree is needed.</p>
+</li>
+<li><p><strong>Interactive applications (phase 3).</strong>
+essapps compares three models: a session that holds state, an application that holds state itself, and a stateless service that splits a workflow into two specs with the intermediate value stored as a record.
+In all three the objects are the same, a stage and a connector after it, so choosing a model is a question of placement, not of a new mechanism.</p></li>
+</ul>
+</section>
+</section>
+<section id="changes-to-pipeline">
+<h2>7. Changes to <code class="docutils literal notranslate"><span class="pre">Pipeline</span></code><a class="headerlink" href="#changes-to-pipeline" title="Link to this heading">#</a></h2>
+<p>The breaking release combines this change with the PEP 695 generics prototype from the <code class="docutils literal notranslate"><span class="pre">235-pep695-single-model-prototype</span></code> branch (scipp/sciline#237).
+This document supersedes that branch’s design document where map/reduce is concerned: its open questions that came from map/reduce disappear.</p>
+<p><strong>Removed:</strong> <code class="docutils literal notranslate"><span class="pre">map</span></code>, <code class="docutils literal notranslate"><span class="pre">reduce</span></code>, <code class="docutils literal notranslate"><span class="pre">index_names</span></code>, <code class="docutils literal notranslate"><span class="pre">indices</span></code>, <code class="docutils literal notranslate"><span class="pre">get_mapped_node_names</span></code>, <code class="docutils literal notranslate"><span class="pre">compute_mapped</span></code>, computing a <code class="docutils literal notranslate"><span class="pre">pandas.Series</span></code> of keys, <code class="docutils literal notranslate"><span class="pre">visualize(compact=)</span></code>, <code class="docutils literal notranslate"><span class="pre">constraints=</span></code>, and cyclebane.
+The graph becomes a plain <code class="docutils literal notranslate"><span class="pre">networkx.DiGraph</span></code>, and grafting with <code class="docutils literal notranslate"><span class="pre">__getitem__</span></code>/<code class="docutils literal notranslate"><span class="pre">__setitem__</span></code> needs about a hundred lines of networkx.</p>
+<p><strong>Not needed:</strong> <code class="docutils literal notranslate"><span class="pre">provide(key,</span> <span class="pre">callable)</span></code>, which would register a provider for a key known only at run time, was planned so that <code class="docutils literal notranslate"><span class="pre">StreamProcessor</span></code> no longer needs to patch annotations (scipp/sciline#241).
+The rewrite on stages passes values with <code class="docutils literal notranslate"><span class="pre">Stage.run</span></code> and inserts no providers, so no use of <code class="docutils literal notranslate"><span class="pre">provide</span></code> remains.</p>
+<p><strong>Kept, with the same interface:</strong> construction from providers and <code class="docutils literal notranslate"><span class="pre">params</span></code>, <code class="docutils literal notranslate"><span class="pre">__setitem__</span></code> (values and grafted sub-pipelines), <code class="docutils literal notranslate"><span class="pre">__getitem__</span></code>, <code class="docutils literal notranslate"><span class="pre">insert</span></code>, <code class="docutils literal notranslate"><span class="pre">copy</span></code>, <code class="docutils literal notranslate"><span class="pre">get</span></code>, <code class="docutils literal notranslate"><span class="pre">compute</span></code>, <code class="docutils literal notranslate"><span class="pre">visualize</span></code>, <code class="docutils literal notranslate"><span class="pre">bind_and_call</span></code>, <code class="docutils literal notranslate"><span class="pre">output_keys</span></code>, and <code class="docutils literal notranslate"><span class="pre">underlying_graph</span></code> as a <code class="docutils literal notranslate"><span class="pre">networkx.DiGraph</span></code> with <code class="docutils literal notranslate"><span class="pre">value</span></code> and <code class="docutils literal notranslate"><span class="pre">provider</span></code> node attributes (read by <code class="docutils literal notranslate"><span class="pre">ess.reduce.workflow</span></code>).
+Scheduler, task graph, reporter, handlers, and serialization are reused unchanged.
+The generics come from the branch unchanged: rules are matched structurally, not by <code class="docutils literal notranslate"><span class="pre">TypeVar</span></code> identity, and only backward chaining is used.
+<code class="docutils literal notranslate"><span class="pre">Scope</span></code> can then be deprecated (scipp/sciline#233).</p>
+<p><strong>Required by <code class="docutils literal notranslate"><span class="pre">Stage</span></code>:</strong> building the task graph for targets when some keys have no value, which <code class="docutils literal notranslate"><span class="pre">HandleAsComputeTimeException</span></code> does today (section 3, implementation notes).
+The generics branch must keep this.</p>
+<p>With demand-driven generics, <code class="docutils literal notranslate"><span class="pre">underlying_graph</span></code> and <code class="docutils literal notranslate"><span class="pre">output_keys()</span></code> only contain what has been requested.
+<code class="docutils literal notranslate"><span class="pre">Stage</span></code> is not affected, because it builds the concrete task graph of its outputs and never looks at the sinks of the pipeline.
+Callers that ask whether a stage uses a key must therefore test against <code class="docutils literal notranslate"><span class="pre">stage.keys</span></code>, not against the pipeline’s graph.</p>
+<p><strong>Tests and docs:</strong> of the current 238 tests, 16 use map/reduce and are removed; the map-related tests of the generics branch are trimmed; the rest are ported.
+The parameter-tables guide is replaced by the guide on stages, and the generic-providers guide loses <code class="docutils literal notranslate"><span class="pre">constraints=</span></code>.</p>
+</section>
+<section id="design-choices">
+<h2>8. Design choices<a class="headerlink" href="#design-choices" title="Link to this heading">#</a></h2>
+<section id="connectors-as-separate-objects-not-tiers-inside-stage">
+<h3>8.1 Connectors as separate objects, not tiers inside <code class="docutils literal notranslate"><span class="pre">Stage</span></code><a class="headerlink" href="#connectors-as-separate-objects-not-tiers-inside-stage" title="Link to this heading">#</a></h3>
+<p>The alternative was a <code class="docutils literal notranslate"><span class="pre">Stage</span></code> with several tiers of inputs and a policy per tier for what to hold, which hides the cached values inside one class and puts policy into sciline.
+One plain stage per loop gives the same boundaries, and every cached value is an object the driver can inspect, clear, serialize, or send to another process: the explicit lifetime that scipp/sciline#241 asks for.
+<code class="docutils literal notranslate"><span class="pre">Stage</span></code> keeps its cached values itself.
+A stage without inputs followed by a forwarder would do the same.
+It is built in because every stage needs it.</p>
+</section>
+<section id="no-generic-network-object-deferred">
+<h3>8.2 No generic network object (deferred)<a class="headerlink" href="#no-generic-network-object-deferred" title="Link to this heading">#</a></h3>
+<p>A general object could hold stages and connectors and route pushes through them.
+The real uses disagree on exactly this routing: a chunk runs immediately because it cannot be kept, a context update runs immediately but must not touch the accumulators, a loop over runs can run lazily, <code class="docutils literal notranslate"><span class="pre">clear</span></code> discards accumulators but keeps the context, and rolling windows and <code class="docutils literal notranslate"><span class="pre">on_finalize</span></code> add their own rules.
+A generic object would either expose parameters for all of this or hide one choice, and it would be a graph of stages with its own scheduler, which is nested workflows one level up (section 8.8).
+Each real use is a loop of under twenty lines over plain objects, and that loop is where the policy belongs.
+If package objects turn out to repeat the same code, that repetition is the basis for a generalization of the package objects; if essapps phase 3 needs connectors on process boundaries, that is a placement layer over the same stages and connectors.</p>
+</section>
+<section id="boundaries-between-levels-are-derived">
+<h3>8.3 Boundaries between levels are derived<a class="headerlink" href="#boundaries-between-levels-are-derived" title="Link to this heading">#</a></h3>
+<p>Three callers need the same boundary: the context keys of <code class="docutils literal notranslate"><span class="pre">StreamProcessor</span></code>, runs times banks in esssans, and runs times triplets in Bifrost.
+Chosen by hand, it fails silently: a run-level key left out is recomputed per bank, which costs time but gives the right result.
+It is derived from the cached keys of the stages inside the loop instead (section 5).</p>
+<p>Stages are connected in two ways:</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>Connection</p></th>
+<th class="head"><p>From</p></th>
+<th class="head"><p>To</p></th>
+<th class="head"><p>Given by</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>forwarded value</p></td>
+<td><p>outer stage</p></td>
+<td><p>stages inside its loop</p></td>
+<td><p>derived from the cached keys</p></td>
+</tr>
+<tr class="row-odd"><td><p>accumulation key</p></td>
+<td><p>stages inside a loop</p></td>
+<td><p>a stage after the loop</p></td>
+<td><p>declared as outputs of one stage and inputs of the next</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>The accumulation keys are declared, not derived: the combine happens outside the graph, so the graph cannot tell that a key such as <code class="docutils literal notranslate"><span class="pre">NormalizedDetector</span></code> comes after combining the triplets.</p>
+</section>
+<section id="no-state-in-the-objects-sciline-provides">
+<h3>8.4 No state in the objects sciline provides<a class="headerlink" href="#no-state-in-the-objects-sciline-provides" title="Link to this heading">#</a></h3>
+<p>An earlier draft put member tables with groups, the held contributions, held per-member values, and invalidation rules in <code class="docutils literal notranslate"><span class="pre">__setitem__</span></code> into an aggregation object (section 8.5).
+It rebuilt the map/reduced pipeline in another form: to predict the cost of a parameter change, one had to know which of five held things read the key.</p>
+<p>The held per-member values were meant to avoid reloading runs when a parameter changes, but on LoKI it gave no measurable benefit: the wavelength conversion reads the parameter <code class="docutils literal notranslate"><span class="pre">WavelengthBins</span></code>, so the held keys lie upstream of the conversion.
+The package object (section 6.1) therefore does not take parameter changes: a new parameter value means a new object.</p>
+<p>A later variant held, within one computation over a flat runs-times-banks table, the work that depends on a single member key, once per distinct value.
+What it held was decided by the shape of the graph, not by the author: if the per-bank work reads a whole loaded run, every run stays in memory until the table is done.
+The driver in section 5 holds the same values for one run at a time, visibly.</p>
+</section>
+<section id="no-aggregation">
+<h3>8.5 No <code class="docutils literal notranslate"><span class="pre">Aggregation</span></code><a class="headerlink" href="#no-aggregation" title="Link to this heading">#</a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">Aggregation</span></code> packaged a contribute stage, accumulator factories, and a finalize stage, with <code class="docutils literal notranslate"><span class="pre">contribute</span></code>, <code class="docutils literal notranslate"><span class="pre">combine</span></code>, <code class="docutils literal notranslate"><span class="pre">finalize</span></code>, and <code class="docutils literal notranslate"><span class="pre">compute(table)</span></code>.
+It was prototyped and dropped:</p>
+<ul class="simple">
+<li><p>No real driver used its finalize stage or <code class="docutils literal notranslate"><span class="pre">compute</span></code>: the SANS finalize reads the accumulation keys of two run types, the per-run finalize of Bifrost also reads run-level values, and nested drivers push inside their own loops instead of calling <code class="docutils literal notranslate"><span class="pre">combine</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">compute(table)</span></code> invited the flat runs-times-banks table, which counts a run-level accumulation key once per bank without an error.</p></li>
+<li><p>Its one guarantee, that a key not depending on the members is not accumulated, is <code class="docutils literal notranslate"><span class="pre">Stage.per_call_outputs</span></code>.</p></li>
+</ul>
+<p><code class="docutils literal notranslate"><span class="pre">Buffered</span></code> and <code class="docutils literal notranslate"><span class="pre">Reduced</span></code> are accumulators, not factories; a driver creates new ones per computation (section 4).</p>
+</section>
+<section id="no-bridge-back-into-a-pipeline">
+<h3>8.6 No bridge back into a pipeline<a class="headerlink" href="#no-bridge-back-into-a-pipeline" title="Link to this heading">#</a></h3>
+<p>Another draft had <code class="docutils literal notranslate"><span class="pre">as_pipeline()</span></code>, which added providers for the accumulation keys so that the <code class="docutils literal notranslate"><span class="pre">with_*</span></code> helpers could keep returning a pipeline.
+It was the only way to compose two aggregations, so it was the actual mechanism, not a convenience.
+It fixed the members when the pipeline was built.
+It hid a loop inside a provider, with no per-member errors, progress, or visualization.
+The trap to avoid remains: a hand-written provider that runs a pipeline.</p>
+</section>
+<section id="default-scheduler">
+<h3>8.7 Default scheduler<a class="headerlink" href="#default-scheduler" title="Link to this heading">#</a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">scheduler_or_default</span></code> lives in <code class="docutils literal notranslate"><span class="pre">sciline.task_graph</span></code> and looks up <code class="docutils literal notranslate"><span class="pre">DaskScheduler</span></code> in that module on each call, for pipelines and stages alike.
+esslivedata replaces <code class="docutils literal notranslate"><span class="pre">sciline.task_graph.DaskScheduler</span></code> to select its scheduler, including for the calls inside <code class="docutils literal notranslate"><span class="pre">StreamProcessor</span></code> that it cannot pass a scheduler to; a sciline test checks that this changes the default of both.
+A public way to set the default scheduler would be cleaner.
+Until it exists, sciline keeps the replacement working for stages (section 10).</p>
+</section>
+<section id="not-nested-workflows">
+<h3>8.8 Not nested workflows<a class="headerlink" href="#not-nested-workflows" title="Link to this heading">#</a></h3>
+<p>Nested workflows, sub-workflows with their own parameters inside a node of an outer workflow, were rejected earlier for plumbing (parameters passed across boundaries) and opacity (a boundary hid what was inside).
+Here the author writes one flat graph, and stages are cut from it by the driver, from the keys the driver names.
+Every parameter is set on the flat pipeline and reaches every stage, and composition across stages is ordinary Python, so no graph contains another graph.</p>
+</section>
+<section id="names">
+<h3>8.9 Names<a class="headerlink" href="#names" title="Link to this heading">#</a></h3>
+<ul class="simple">
+<li><p><strong>Accumulator</strong>, <strong>contribution</strong>, and <em>contribute</em>/<em>combine</em>, as in Beam, Flink, and Spark, and in essapps.
+<code class="docutils literal notranslate"><span class="pre">fold</span></code> was avoided because it means reshaping in scipp (essapps uses <em>fold</em> for a long-lived runner, not for the operation).</p></li>
+<li><p><strong>Accumulation key</strong>, matching the essapps term.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">Forwarder</span></code> is the working name in ess.reduce; the final name is ess.reduce’s decision.</p></li>
+</ul>
+</section>
+</section>
+<section id="validation">
+<h2>9. Validation<a class="headerlink" href="#validation" title="Link to this heading">#</a></h2>
+<section id="unit-tests">
+<h3>Unit tests<a class="headerlink" href="#unit-tests" title="Link to this heading">#</a></h3>
+<p>The implementation is in <code class="docutils literal notranslate"><span class="pre">src/sciline/stage.py</span></code> and <code class="docutils literal notranslate"><span class="pre">src/sciline/accumulators.py</span></code>, tested in <code class="docutils literal notranslate"><span class="pre">tests/stage_test.py</span></code> and <code class="docutils literal notranslate"><span class="pre">tests/accumulators_test.py</span></code>.
+It runs on sciline <code class="docutils literal notranslate"><span class="pre">main</span></code>.
+An earlier version of the stage tests was run on the generics branch and passed.</p>
+<p>The tests cover:</p>
+<ul class="simple">
+<li><p><strong>Stage:</strong> cached values computed once and the per-call part on each call; an intermediate input cuts off its ancestors; inputs the outputs do not need are dropped, and <code class="docutils literal notranslate"><span class="pre">run</span></code> rejects a value for one; pass-through of an output that is an input; <code class="docutils literal notranslate"><span class="pre">run</span></code> rejects a missing input and a value for a key that is not an input; snapshot behaviour; <code class="docutils literal notranslate"><span class="pre">prepare_stages</span></code> cuts every stage at every input, so a stage reading a value that depends on another stage’s input takes that input itself, and allows a stage that takes as input a value that another stage holds; <code class="docutils literal notranslate"><span class="pre">prepare_stages</span></code> computes shared work once, gives each stage the inputs it needs, and rejects an output not in the pipeline; concurrent calls compute the held values only once; an expensive load before a cheap parameter (the shape of tuning in essapps); the default scheduler follows a replacement of <code class="docutils literal notranslate"><span class="pre">sciline.task_graph.DaskScheduler</span></code>; the <code class="docutils literal notranslate"><span class="pre">StreamProcessor</span></code> shape with a context update; <code class="docutils literal notranslate"><span class="pre">visualize_stages</span></code> fills what each stage computes with the color of that stage, and applies the styles of groups given by the caller.</p></li>
+<li><p><strong>Accumulators:</strong> push order, the first push as result, reading without pushes, pushing combined values gives the same result.</p></li>
+</ul>
+</section>
+<section id="nested-drivers">
+<h3>Nested drivers<a class="headerlink" href="#nested-drivers" title="Link to this heading">#</a></h3>
+<p>Prototype drivers ran on fake workflows with the dependency structure of esssans (banks times sample and background runs) and Bifrost (triplets times runs, with a per-run step after combining the triplets), and gave the results of plain loops over <code class="docutils literal notranslate"><span class="pre">Pipeline.compute</span></code>.
+Per-iteration work ran once per iteration of its loop, except work that depends on the bank alone (section 6.3).
+A prototype <code class="docutils literal notranslate"><span class="pre">StreamProcessor</span></code> gave the results of <code class="docutils literal notranslate"><span class="pre">ess.reduce.streaming.StreamProcessor</span></code> for two dynamic keys in separate chunks, a context key, a context-only target, and <code class="docutils literal notranslate"><span class="pre">allow_bypass</span></code>.
+These prototypes were built with an earlier helper, since dropped, which builds the same stages as section 5 for these shapes.
+They need esssans and ess.reduce and are not part of this repository.
+The <code class="docutils literal notranslate"><span class="pre">StreamProcessor</span></code> rewrite on stages (scipp/ess#867) passes the ess.reduce tests and the esslivedata test suite.</p>
+</section>
+<section id="loki-multi-run-reduction">
+<h3>LoKI multi-run reduction<a class="headerlink" href="#loki-multi-run-reduction" title="Link to this heading">#</a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">loki_validation.py</span></code>, next to this document, runs the esssans multi-run test workflow with one mask file, two sample runs, and two background runs.</p>
+<ul class="simple">
+<li><p><strong>Reference:</strong> <code class="docutils literal notranslate"><span class="pre">with_pixel_mask_filenames</span></code>, <code class="docutils literal notranslate"><span class="pre">with_sample_runs</span></code>, and <code class="docutils literal notranslate"><span class="pre">with_background_runs</span></code>, using map/reduce.</p></li>
+<li><p><strong>Prototype:</strong> <code class="docutils literal notranslate"><span class="pre">SansReduction</span></code> (section 6.1) with a contribute stage per run type and one finalize stage on the flat pipeline, the masks as a list parameter (section 6.4), and the detector IDs of the empty-beam run (section 6.1).</p></li>
+</ul>
+<p>Results:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">BackgroundSubtractedIofQ</span></code> and <code class="docutils literal notranslate"><span class="pre">BackgroundSubtractedIofQxy</span></code> are identical to the reference (<code class="docutils literal notranslate"><span class="pre">assert_identical</span></code>).</p></li>
+<li><p>Per-run <code class="docutils literal notranslate"><span class="pre">NormalizedQ</span></code> equals both a single-run computation and <code class="docutils literal notranslate"><span class="pre">compute_mapped</span></code>.</p></li>
+<li><p>Contributing, combining, and finalizing as separate calls, with the sample runs combined as a chain, gives the same result as <code class="docutils literal notranslate"><span class="pre">SansReduction.compute</span></code>.</p></li>
+<li><p>Provider call counts equal the reference, including a single read of the mask file, which requires building all three stages in one call to <code class="docutils literal notranslate"><span class="pre">prepare_stages</span></code>.
+The exception is <code class="docutils literal notranslate"><span class="pre">to_detector_mask</span></code>, called once instead of three times, because the masks depend on no run.</p></li>
+<li><p>Wall time with the naive scheduler: 6.9 s for the prototype and 7.1 to 7.2 s for the reference, in two runs.
+With sciline’s default dask scheduler the reference is about 1.7 s faster, because the single graph computes the two sample runs in parallel threads; over stages this parallelism is up to the driver.</p></li>
+<li><p>Adding a second sample run after computing with one costs one contribution: one more <code class="docutils literal notranslate"><span class="pre">apply_pixel_masks</span></code> call and no second read of the mask file.</p></li>
+<li><p>Changing <code class="docutils literal notranslate"><span class="pre">QBins</span></code> means a new <code class="docutils literal notranslate"><span class="pre">SansReduction</span></code>, which makes the same provider calls as the first one.</p></li>
+</ul>
+</section>
+</section>
+<section id="migration">
+<h2>10. Migration<a class="headerlink" href="#migration" title="Link to this heading">#</a></h2>
+<section id="what-changes-for-each-project">
+<h3>What changes for each project<a class="headerlink" href="#what-changes-for-each-project" title="Link to this heading">#</a></h3>
+<ul class="simple">
+<li><p><strong>sciline:</strong> adds <code class="docutils literal notranslate"><span class="pre">Stage</span></code>, <code class="docutils literal notranslate"><span class="pre">prepare_stages</span></code>, and the <code class="docutils literal notranslate"><span class="pre">accumulators</span></code> module with <code class="docutils literal notranslate"><span class="pre">Accumulator</span></code>, <code class="docutils literal notranslate"><span class="pre">Buffered</span></code>, <code class="docutils literal notranslate"><span class="pre">Reduced</span></code>, and later removes what section 7 lists.
+Users outside ESS need a documented replacement for <code class="docutils literal notranslate"><span class="pre">map(...).reduce(...)</span></code>: a loop over a stage with accumulators.
+No “experimental” label; the staged rollout below is the trial period.
+<code class="docutils literal notranslate"><span class="pre">Stage</span></code> also needs a <code class="docutils literal notranslate"><span class="pre">reporter</span></code> argument, so that progress reaches the ESS widgets.</p></li>
+<li><p><strong>ess.reduce:</strong> the accumulators satisfy <code class="docutils literal notranslate"><span class="pre">sciline.accumulators.Accumulator</span></code> once <code class="docutils literal notranslate"><span class="pre">maybe_hist</span></code> moves out of their base class. The <code class="docutils literal notranslate"><span class="pre">StreamProcessor</span></code> rewrite holds the context and the values derived from it in a plain mapping, so it needs no <code class="docutils literal notranslate"><span class="pre">Forwarder</span></code>.
+<code class="docutils literal notranslate"><span class="pre">StreamProcessor</span></code> is rewritten on stages against its existing tests (section 6.6).
+<code class="docutils literal notranslate"><span class="pre">parameter_mappers</span></code>, which maps a list-valued parameter to a <code class="docutils literal notranslate"><span class="pre">with_*</span></code> helper that returns a pipeline, is replaced by a common interface of the package objects (section 11).
+<code class="docutils literal notranslate"><span class="pre">get_parameters</span></code> is unaffected, because it works on the flat pipeline.</p></li>
+<li><p><strong>Reduction packages</strong> (esssans, essreflectometry, essspectroscopy, essdiffraction, essnmx): the <code class="docutils literal notranslate"><span class="pre">with_*</span></code> helpers that fold are replaced by package objects, built from a configured pipeline, on which users set members and compute (section 6.1).
+Notebooks and tests change accordingly, and <code class="docutils literal notranslate"><span class="pre">visualize(compact=)</span></code> is dropped from notebooks.
+Specific points:</p>
+<ul>
+<li><p>The pixel-mask folds in esssans and essdiffraction become a list parameter with providers (section 6.4).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">with_banks</span></code> in esssans, which maps without reducing, becomes a loop over a stage.</p></li>
+<li><p>essreflectometry drops the <code class="docutils literal notranslate"><span class="pre">try/except</span></code> around each reduce: <code class="docutils literal notranslate"><span class="pre">Stage.per_call_outputs</span></code> lists the keys that vary per run, and the driver pushes only those. Its <code class="docutils literal notranslate"><span class="pre">BatchProcessor</span></code> loses the fallback for mapped pipelines.</p></li>
+<li><p>In bifrost, <code class="docutils literal notranslate"><span class="pre">NeXusData</span></code> depends on the run, so a bank fold inside a multi-run reduction sits inside per-run work.
+The package object uses the stages of section 6.3, with the triplets combined per run and the runs combined after.
+A list parameter with a provider that loops over the triplets would hide the loop inside a provider (section 8.6).</p></li>
+</ul>
+</li>
+<li><p><strong>esslivedata:</strong> the bifrost bank fold becomes a loop over a stage with an accumulator, computed before the <code class="docutils literal notranslate"><span class="pre">StreamProcessor</span></code> is built (section 6.5).</p></li>
+<li><p><strong>essapps:</strong> the binding wraps the package objects and their stages instead of building its own (section 6.7).</p></li>
+</ul>
+</section>
+<section id="findings-of-the-survey-that-affect-the-migration">
+<h3>Findings of the survey that affect the migration<a class="headerlink" href="#findings-of-the-survey-that-affect-the-migration" title="Link to this heading">#</a></h3>
+<ul class="simple">
+<li><p>essreduce is the only package in the scipp/ess monorepo that depends on sciline directly (<code class="docutils literal notranslate"><span class="pre">sciline&gt;=25.11.0</span></code>).
+The breaking release is adopted by raising that minimum.</p></li>
+<li><p>In ess.reduce, <code class="docutils literal notranslate"><span class="pre">assign_parameter_values</span></code> goes together with <code class="docutils literal notranslate"><span class="pre">parameter_mappers</span></code>; both are used only by <code class="docutils literal notranslate"><span class="pre">WorkflowWidget</span></code>.
+The polarization notebook <code class="docutils literal notranslate"><span class="pre">zoom.ipynb</span></code> in ess.reduce uses <code class="docutils literal notranslate"><span class="pre">get_mapped_node_names</span></code> and <code class="docutils literal notranslate"><span class="pre">with_sample_runs</span></code> and migrates with esssans.</p></li>
+<li><p>essdiffraction’s <code class="docutils literal notranslate"><span class="pre">with_pixel_mask_filenames</span></code> has no test coverage: all 22 call sites in tests pass an empty list.
+Its migration should add a test with a mask file, and the workaround for empty lists in cyclebane goes.</p></li>
+<li><p>essreflectometry (offspec, amor) uses <code class="docutils literal notranslate"><span class="pre">constraints=</span></code>, which stays until the breaking release.</p></li>
+<li><p>essnmx notebooks import <code class="docutils literal notranslate"><span class="pre">cyclebane.graph.NodeName</span></code> and <code class="docutils literal notranslate"><span class="pre">IndexValues</span></code> directly to name mapped nodes.</p></li>
+<li><p>essimaging uses map/reduce only through <code class="docutils literal notranslate"><span class="pre">visualize(compact=)</span></code> in two notebooks.</p></li>
+<li><p>esslivedata pins <code class="docutils literal notranslate"><span class="pre">cyclebane&gt;=26.9.0</span></code> directly, for a leak with self-referential graphs; the pin goes when sciline drops cyclebane.</p></li>
+<li><p>esslivedata replaces <code class="docutils literal notranslate"><span class="pre">sciline.task_graph.DaskScheduler</span></code> to select its scheduler and checks at service startup that the replacement takes effect (section 8.7).</p></li>
+<li><p>Tracking: one issue in scipp/sciline for the sciline releases, one in scipp/ess for ess.reduce and the reduction packages.</p></li>
+</ul>
+</section>
+<section id="order">
+<h3>Order<a class="headerlink" href="#order" title="Link to this heading">#</a></h3>
+<ol class="arabic simple">
+<li><p>sciline releases the additive part in a minor version, with the user guide on stages.</p></li>
+<li><p>The packages migrate one at a time, each in its own pull request, while map/reduce still exists.
+esssans goes first, because it is the validated case and sets the pattern for package objects and for the interface that replaces <code class="docutils literal notranslate"><span class="pre">parameter_mappers</span></code>.
+The other packages depend only on the additive release and can then migrate in parallel.
+The <code class="docutils literal notranslate"><span class="pre">StreamProcessor</span></code> rewrite follows independently and needs only the additive release (scipp/ess#867).
+It must keep honouring esslivedata’s replacement of <code class="docutils literal notranslate"><span class="pre">sciline.task_graph.DaskScheduler</span></code>, or sciline first offers a public way to set the default scheduler and esslivedata switches to it.
+esslivedata follows the <code class="docutils literal notranslate"><span class="pre">StreamProcessor</span></code> rewrite through the essreduce version bump.</p></li>
+<li><p>The last minor release of sciline deprecates <code class="docutils literal notranslate"><span class="pre">map</span></code>, <code class="docutils literal notranslate"><span class="pre">reduce</span></code>, <code class="docutils literal notranslate"><span class="pre">compute_mapped</span></code>, <code class="docutils literal notranslate"><span class="pre">get_mapped_node_names</span></code>, <code class="docutils literal notranslate"><span class="pre">constraints=</span></code>, and <code class="docutils literal notranslate"><span class="pre">visualize(compact=)</span></code>, once esslivedata has migrated.</p></li>
+<li><p>Once no ESS package or esslivedata uses map/reduce, a major release of sciline removes it together with cyclebane, and the PEP 695 generics land.</p></li>
+</ol>
+</section>
+</section>
+<section id="open-questions">
+<h2>11. Open questions<a class="headerlink" href="#open-questions" title="Link to this heading">#</a></h2>
+<ul class="simple">
+<li><p><strong>One package object per package, or one generic object?</strong>
+The widgets need a common interface (set a parameter, set the members, compute).
+Either each package object implements it, or one generic object is built from a registry that maps member keys to accumulation keys; this is decided when the second package migrates.</p></li>
+<li><p><strong>Which run’s detector IDs do the esssans background masks use?</strong>
+<code class="docutils literal notranslate"><span class="pre">DetectorMasks</span></code> reads the detector IDs of the sample run set on the pipeline, and the background runs read it too (section 6.1).
+With several sample runs this is not defined, and the background stage takes <code class="docutils literal notranslate"><span class="pre">Filename[SampleRun]</span></code> as input, which the background loop cannot supply (section 6.1).
+The validation script uses the empty-beam run, which gives identical results on the test data, where all runs have the same detector IDs.
+esssans decides when it migrates, for example detector IDs from the geometry or from a run chosen by a parameter.</p></li>
+<li><p><strong>Work computed once across processes.</strong>
+Stages in one process share their work computed once when built together by <code class="docutils literal notranslate"><span class="pre">prepare_stages</span></code>; a contribute call in a short-lived process recomputes it.
+This is the cost that essapps estimates for its stateless model of interactive work, not a new cost.</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">sciline.v2</span></code> or a major release?</strong>
+A <code class="docutils literal notranslate"><span class="pre">v2</span></code> namespace would let esslivedata and external users keep the old <code class="docutils literal notranslate"><span class="pre">Pipeline</span></code> next to the new one.
+But it bundles two independent changes (generics and map/reduce) under one name, invites mixing old and new pipelines in one process with obscure failures, and guarantees a second rename later.
+Recommendation: one major release, preceded by the additive minor release and the package migrations, in the order of section 10.</p></li>
+</ul>
+</section>
+</section>
+
+
+                </article>
+              
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+    <a class="left-prev"
+       href="rewrite.html"
+       title="previous page">
+      <i class="fa-solid fa-angle-left"></i>
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">previous</p>
+        <p class="prev-next-title">Rewrite of Sciline’s Pipeline as a Data Graph</p>
+      </div>
+    </a>
+    <a class="right-next"
+       href="../architecture-decision-records.html"
+       title="next page">
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">next</p>
+        <p class="prev-next-title">Architecture Decision Records</p>
+      </div>
+      <i class="fa-solid fa-angle-right"></i>
+    </a>
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+          </footer>
+        
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script defer src="../../_static/scripts/bootstrap.js?digest=55c26ed414f5f8a31ebb"></script>
+<script defer src="../../_static/scripts/pydata-sphinx-theme.js?digest=55c26ed414f5f8a31ebb"></script>
+
+  <footer class="bd-footer">
+<div class="bd-footer__inner bd-page-width">
+  
+    <div class="footer-items__start">
+      
+        <div class="footer-item">
+
+  <p class="copyright">
+    
+      © Copyright 2026 Scipp contributors.
+      <br/>
+    
+  </p>
+</div>
+      
+        <div class="footer-item">
+
+  <p class="sphinx-version">
+    Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 8.2.3.
+    <br/>
+  </p>
+</div>
+      
+    </div>
+  
+  
+  
+    <div class="footer-items__end">
+      
+        <div class="footer-item"><!-- This will display the version of the docs -->
+Current Sciline version: 26.11.0 (<a href="https://github.com/scipp/sciline/releases">older versions</a>).</div>
+      
+        <div class="footer-item">
+<p class="theme-version">
+  <!-- # L10n: Setting the PST URL as an argument as this does not need to be localized -->
+  Built with the <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a> 0.17.1.
+</p></div>
+      
+    </div>
+  
+</div>
+
+  </footer>
+  </body>
+</html>

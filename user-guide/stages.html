@@ -1,0 +1,1089 @@
+
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="../" >
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Stages &#8212; Sciline</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "";
+  </script>
+  <!--
+    this give us a css class that will be invisible only if js is disabled
+  -->
+  <noscript>
+    <style>
+      .pst-js-only { display: none !important; }
+
+    </style>
+  </noscript>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="../_static/styles/theme.css?digest=55c26ed414f5f8a31ebb" rel="stylesheet" />
+<link href="../_static/styles/pydata-sphinx-theme.css?digest=55c26ed414f5f8a31ebb" rel="stylesheet" />
+
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=03e43079" />
+    <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../_static/autodoc_pydantic.css" />
+    <link rel="stylesheet" type="text/css" href="../_static/sphinx-design.min.css?v=95c83b7e" />
+    <link rel="stylesheet" type="text/css" href="../_static/nbsphinx-code-cells.css?v=2aa19091" />
+  
+  <!-- So that users can add custom icons -->
+  <script defer src="../_static/scripts/fontawesome.js?digest=55c26ed414f5f8a31ebb"></script>
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=55c26ed414f5f8a31ebb" />
+<link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=55c26ed414f5f8a31ebb" />
+
+    <script src="../_static/documentation_options.js?v=1b289170"></script>
+    <script src="../_static/doctools.js?v=9bcbadda"></script>
+    <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../_static/copybutton.js?v=f281be69"></script>
+    <script src="../_static/design-tabs.js?v=f930bc37"></script>
+    <script crossorigin="anonymous" integrity="sha256-Ae2Vz/4ePdIu6ZyI/5ZGsYnb+m0JlOmKPjt6XZ9JJkA=" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js"></script>
+    <script>window.MathJax = {"tex": {"inlineMath": [["$", "$"], ["\\(", "\\)"]], "processEscapes": true}, "options": {"ignoreHtmlClass": "tex2jax_ignore|mathjax_ignore|document", "processHtmlClass": "tex2jax_process|mathjax_process|math|output_area"}}</script>
+    <script defer="defer" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'user-guide/stages';</script>
+    <script>DOCUMENTATION_OPTIONS.search_as_you_type = false;</script>
+    <script defer="defer" src="../_static/anaconda-icon.js?v=461bdc62"></script>
+    <link rel="icon" href="../_static/favicon.ico"/>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Generic Providers" href="generic-providers.html" />
+    <link rel="prev" title="Parameter Tables" href="parameter-tables.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="docsearch:language" content="en"/>
+  <meta name="docsearch:version" content="26.11.0" />
+  
+    
+    <script src="../_static/searchtools.js"></script>
+    <script src="../_static/language_data.js"></script>
+    <script src="../searchindex.js"></script>
+  
+  </head>
+  <body data-default-mode="">
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+  
+  
+  
+  
+  <dialog id="pst-search-dialog">
+    
+<form class="bd-search d-flex align-items-center"
+      action="../search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         placeholder="Search the docs ..."
+         aria-label="Search the docs ..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form>
+  </dialog>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header id="pst-header" class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+<div class="bd-header__inner bd-page-width">
+  <button class="pst-navbar-icon sidebar-toggle primary-toggle" aria-label="Site navigation">
+    <span class="fa-solid fa-bars"></span>
+  </button>
+  
+  
+  <div class="col-lg-3 navbar-header-items__start">
+    
+      <div class="navbar-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="../index.html">
+  
+  
+  
+  
+  
+    
+    
+      
+    
+    
+    <img src="../_static/logo.svg" class="logo__image only-light" alt="Sciline - Home"/>
+    <img src="../_static/logo-dark.svg" class="logo__image only-dark pst-js-only" alt="Sciline - Home"/>
+  
+  
+</a></div>
+    
+  </div>
+  
+  <div class="col-lg-9 navbar-header-items">
+    
+    <div class="me-auto navbar-header-items__center">
+      
+        <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item current active">
+  <a class="nav-link nav-internal" href="index.html">
+    User Guide
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../recipes/index.html">
+    Recipes
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../api-reference/index.html">
+    API Reference
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../developer/index.html">
+    Development
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../about/index.html">
+    About
+  </a>
+</li>
+
+            <li class="nav-item dropdown">
+                <button class="btn dropdown-toggle nav-item" type="button"
+                data-bs-toggle="dropdown" aria-expanded="false"
+                aria-controls="pst-nav-more-links">
+                    More
+                </button>
+                <ul id="pst-nav-more-links" class="dropdown-menu">
+                    
+<li class=" ">
+  <a class="nav-link dropdown-item nav-external" href="https://scipp.github.io/cyclebane">
+    Cyclebane
+  </a>
+</li>
+
+
+<li class=" ">
+  <a class="nav-link dropdown-item nav-external" href="https://scipp.github.io">
+    Scipp
+  </a>
+</li>
+
+                </ul>
+            </li>
+            
+  </ul>
+</nav></div>
+      
+    </div>
+    
+    
+    <div class="navbar-header-items__end">
+      
+        <div class="navbar-item navbar-persistent--container">
+          
+
+<button class="btn btn-sm pst-navbar-icon search-button search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="fa-solid fa-magnifying-glass fa-lg"></i>
+</button>
+        </div>
+      
+      
+        <div class="navbar-item">
+
+<button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button pst-js-only" aria-label="Color mode" data-bs-title="Color mode"  data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <i class="theme-switch fa-solid fa-sun                fa-lg" data-mode="light" title="Light"></i>
+  <i class="theme-switch fa-solid fa-moon               fa-lg" data-mode="dark"  title="Dark"></i>
+  <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"  title="System Settings"></i>
+</button></div>
+      
+        <div class="navbar-item"><ul class="navbar-icon-links"
+    aria-label="Icon Links">
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://github.com/scipp/sciline" title="GitHub" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fa-brands fa-github fa-lg" aria-hidden="true"></i>
+            <span class="sr-only">GitHub</span></a>
+        </li>
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://pypi.org/project/sciline/" title="PyPI" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fa-brands fa-python fa-lg" aria-hidden="true"></i>
+            <span class="sr-only">PyPI</span></a>
+        </li>
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://anaconda.org/conda-forge/sciline" title="Conda" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fa-custom fa-anaconda fa-lg" aria-hidden="true"></i>
+            <span class="sr-only">Conda</span></a>
+        </li>
+</ul></div>
+      
+    </div>
+    
+  </div>
+  
+  
+    <div class="navbar-persistent--mobile">
+
+<button class="btn btn-sm pst-navbar-icon search-button search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="fa-solid fa-magnifying-glass fa-lg"></i>
+</button>
+    </div>
+  
+
+  
+</div>
+
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+      <dialog id="pst-primary-sidebar-modal"></dialog>
+      <div id="pst-primary-sidebar" class="bd-sidebar-primary bd-sidebar">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+      <div class="sidebar-header-items__center">
+        
+          
+          
+            <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item current active">
+  <a class="nav-link nav-internal" href="index.html">
+    User Guide
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../recipes/index.html">
+    Recipes
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../api-reference/index.html">
+    API Reference
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../developer/index.html">
+    Development
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../about/index.html">
+    About
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-external" href="https://scipp.github.io/cyclebane">
+    Cyclebane
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-external" href="https://scipp.github.io">
+    Scipp
+  </a>
+</li>
+
+  </ul>
+</nav></div>
+          
+        
+      </div>
+    
+    
+    
+      <div class="sidebar-header-items__end">
+        
+          <div class="navbar-item">
+
+<button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button pst-js-only" aria-label="Color mode" data-bs-title="Color mode"  data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <i class="theme-switch fa-solid fa-sun                fa-lg" data-mode="light" title="Light"></i>
+  <i class="theme-switch fa-solid fa-moon               fa-lg" data-mode="dark"  title="Dark"></i>
+  <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"  title="System Settings"></i>
+</button></div>
+        
+          <div class="navbar-item"><ul class="navbar-icon-links"
+    aria-label="Icon Links">
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://github.com/scipp/sciline" title="GitHub" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fa-brands fa-github fa-lg" aria-hidden="true"></i>
+            <span class="sr-only">GitHub</span></a>
+        </li>
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://pypi.org/project/sciline/" title="PyPI" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fa-brands fa-python fa-lg" aria-hidden="true"></i>
+            <span class="sr-only">PyPI</span></a>
+        </li>
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://anaconda.org/conda-forge/sciline" title="Conda" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fa-custom fa-anaconda fa-lg" aria-hidden="true"></i>
+            <span class="sr-only">Conda</span></a>
+        </li>
+</ul></div>
+        
+      </div>
+    
+  </div>
+  
+    <div class="sidebar-primary-items__start sidebar-primary__section">
+        <div class="sidebar-primary-item">
+
+<nav class="bd-docs-nav bd-links"
+     aria-label="Section Navigation">
+  <p class="bd-links__title" role="heading" aria-level="1">Section Navigation</p>
+  <div class="bd-toc-item navbar-nav"><ul class="current nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="getting-started.html">Getting Started</a></li>
+<li class="toctree-l1"><a class="reference internal" href="parameter-tables.html">Parameter Tables</a></li>
+<li class="toctree-l1 current active"><a class="current reference internal" href="#">Stages</a></li>
+<li class="toctree-l1"><a class="reference internal" href="generic-providers.html">Generic Providers</a></li>
+<li class="toctree-l1"><a class="reference internal" href="provenance.html">Provenance</a></li>
+</ul>
+</div>
+</nav></div>
+        <div class="sidebar-primary-item">
+<div
+    id="pst-page-navigation-heading-2"
+    class="page-toc tocsection onthispage">
+    <i class="fa-solid fa-list"></i> On this page
+  </div>
+  <nav id="pst-page-toc-nav" class="page-toc" aria-labelledby="pst-page-navigation-heading-2">
+    <ul class="pst-show_toc_level nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#Overview">Overview</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#A-stage">A stage</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#Building-several-stages-together">Building several stages together</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#Combining-over-files">Combining over files</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#Push-only-what-depends-on-the-files">Push only what depends on the files</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#Files-in-parallel">Files in parallel</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#Results-per-file-without-combining">Results per file without combining</a></li>
+</ul>
+  </nav></div>
+    </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+      <div class="sidebar-primary-item">
+
+  <div class="tocsection sourcelink">
+    <a href="../_sources/user-guide/stages.ipynb">
+      <i class="fa-solid fa-file-lines"></i> Show Source
+    </a>
+  </div>
+</div>
+  </div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item">
+
+<nav aria-label="Breadcrumb" class="d-print-none">
+  <ul class="bd-breadcrumbs">
+    
+    <li class="breadcrumb-item breadcrumb-home">
+      <a href="../index.html" class="nav-link" aria-label="Home">
+        <i class="fa-solid fa-home"></i>
+      </a>
+    </li>
+    
+    <li class="breadcrumb-item"><a href="index.html" class="nav-link">User Guide</a></li>
+    
+    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">Stages</span></li>
+  </ul>
+</nav>
+</div>
+      
+    </div>
+  
+  
+</div>
+</div>
+              
+              
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <section id="Stages">
+<h1>Stages<a class="headerlink" href="#Stages" title="Link to this heading">#</a></h1>
+<section id="Overview">
+<h2>Overview<a class="headerlink" href="#Overview" title="Link to this heading">#</a></h2>
+<p>This page covers repeating part of a computation over many values, such as a list of files.</p>
+<p>A workflow often has a part that runs once, such as loading a calibration or building a mask, and a part that runs many times: per file, per channel of a file, or per chunk of a stream. The results of the repeated part are then combined, and the rest of the workflow runs once on the combined value.</p>
+<p>Sciline expresses this with <a class="reference internal" href="../generated/classes/sciline.Stage.html"><span class="doc">Stage</span></a>, which cuts a flat pipeline into the part that runs once and the part that runs many times. Accumulators combine the results of the repeated part.</p>
+</section>
+<section id="A-stage">
+<h2>A stage<a class="headerlink" href="#A-stage" title="Link to this heading">#</a></h2>
+<p>We start with a pipeline similar to the one in <a class="reference internal" href="getting-started.html"><span class="doc">Getting Started</span></a>. Loading the calibration stands in for an expensive step that does not depend on the data file. The provider appends to a list so we can count how often it runs:</p>
+<div class="nbinput docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[1]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">math</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">operator</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">NewType</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">sciline</span>
+
+<span class="n">_fake_filesystem</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s1">&#39;file102.txt&#39;</span><span class="p">:</span> <span class="p">[</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">,</span> <span class="nb">float</span><span class="p">(</span><span class="s1">&#39;nan&#39;</span><span class="p">),</span> <span class="mf">3.0</span><span class="p">],</span>
+    <span class="s1">&#39;file103.txt&#39;</span><span class="p">:</span> <span class="p">[</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">,</span> <span class="mf">4.0</span><span class="p">],</span>
+    <span class="s1">&#39;file104.txt&#39;</span><span class="p">:</span> <span class="p">[</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">,</span> <span class="mf">4.0</span><span class="p">,</span> <span class="mf">5.0</span><span class="p">],</span>
+    <span class="s1">&#39;file105.txt&#39;</span><span class="p">:</span> <span class="p">[</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">],</span>
+    <span class="s1">&#39;calib_2025.txt&#39;</span><span class="p">:</span> <span class="p">[</span><span class="mf">0.5</span><span class="p">],</span>
+    <span class="s1">&#39;calib_2026.txt&#39;</span><span class="p">:</span> <span class="p">[</span><span class="mf">0.25</span><span class="p">],</span>
+<span class="p">}</span>
+
+<span class="c1"># 1. Define domain types</span>
+
+<span class="n">Filename</span> <span class="o">=</span> <span class="n">NewType</span><span class="p">(</span><span class="s1">&#39;Filename&#39;</span><span class="p">,</span> <span class="nb">str</span><span class="p">)</span>
+<span class="n">RawData</span> <span class="o">=</span> <span class="n">NewType</span><span class="p">(</span><span class="s1">&#39;RawData&#39;</span><span class="p">,</span> <span class="nb">list</span><span class="p">)</span>
+<span class="n">CalibrationFilename</span> <span class="o">=</span> <span class="n">NewType</span><span class="p">(</span><span class="s1">&#39;CalibrationFilename&#39;</span><span class="p">,</span> <span class="nb">str</span><span class="p">)</span>
+<span class="n">Calibration</span> <span class="o">=</span> <span class="n">NewType</span><span class="p">(</span><span class="s1">&#39;Calibration&#39;</span><span class="p">,</span> <span class="nb">float</span><span class="p">)</span>
+<span class="n">Calibrated</span> <span class="o">=</span> <span class="n">NewType</span><span class="p">(</span><span class="s1">&#39;Calibrated&#39;</span><span class="p">,</span> <span class="nb">list</span><span class="p">)</span>
+<span class="n">Total</span> <span class="o">=</span> <span class="n">NewType</span><span class="p">(</span><span class="s1">&#39;Total&#39;</span><span class="p">,</span> <span class="nb">float</span><span class="p">)</span>
+<span class="n">ScaleFactor</span> <span class="o">=</span> <span class="n">NewType</span><span class="p">(</span><span class="s1">&#39;ScaleFactor&#39;</span><span class="p">,</span> <span class="nb">float</span><span class="p">)</span>
+<span class="n">Result</span> <span class="o">=</span> <span class="n">NewType</span><span class="p">(</span><span class="s1">&#39;Result&#39;</span><span class="p">,</span> <span class="nb">float</span><span class="p">)</span>
+
+<span class="c1"># 2. Define providers</span>
+
+<span class="n">calibration_loads</span> <span class="o">=</span> <span class="p">[]</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">load</span><span class="p">(</span><span class="n">filename</span><span class="p">:</span> <span class="n">Filename</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">RawData</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Load the data from a file.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">RawData</span><span class="p">(</span><span class="n">_fake_filesystem</span><span class="p">[</span><span class="n">filename</span><span class="p">])</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">load_calibration</span><span class="p">(</span><span class="n">filename</span><span class="p">:</span> <span class="n">CalibrationFilename</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Calibration</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Load the calibration factor.&quot;&quot;&quot;</span>
+    <span class="n">calibration_loads</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">filename</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">Calibration</span><span class="p">(</span><span class="n">_fake_filesystem</span><span class="p">[</span><span class="n">filename</span><span class="p">][</span><span class="mi">0</span><span class="p">])</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">calibrate</span><span class="p">(</span><span class="n">raw</span><span class="p">:</span> <span class="n">RawData</span><span class="p">,</span> <span class="n">calibration</span><span class="p">:</span> <span class="n">Calibration</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Calibrated</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Drop NaNs and apply the calibration.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">Calibrated</span><span class="p">([</span><span class="n">x</span> <span class="o">*</span> <span class="n">calibration</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">raw</span> <span class="k">if</span> <span class="ow">not</span> <span class="n">math</span><span class="o">.</span><span class="n">isnan</span><span class="p">(</span><span class="n">x</span><span class="p">)])</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">total</span><span class="p">(</span><span class="n">data</span><span class="p">:</span> <span class="n">Calibrated</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Total</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Sum the calibrated data.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">Total</span><span class="p">(</span><span class="nb">sum</span><span class="p">(</span><span class="n">data</span><span class="p">))</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">scale</span><span class="p">(</span><span class="n">total</span><span class="p">:</span> <span class="n">Total</span><span class="p">,</span> <span class="n">factor</span><span class="p">:</span> <span class="n">ScaleFactor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Result</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Scale the total.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">Result</span><span class="p">(</span><span class="n">total</span> <span class="o">*</span> <span class="n">factor</span><span class="p">)</span>
+
+
+<span class="c1"># 3. Create pipeline</span>
+
+<span class="n">providers</span> <span class="o">=</span> <span class="p">[</span><span class="n">load</span><span class="p">,</span> <span class="n">load_calibration</span><span class="p">,</span> <span class="n">calibrate</span><span class="p">,</span> <span class="n">total</span><span class="p">,</span> <span class="n">scale</span><span class="p">]</span>
+<span class="n">params</span> <span class="o">=</span> <span class="p">{</span><span class="n">CalibrationFilename</span><span class="p">:</span> <span class="s1">&#39;calib_2025.txt&#39;</span><span class="p">,</span> <span class="n">ScaleFactor</span><span class="p">:</span> <span class="mf">2.0</span><span class="p">}</span>
+<span class="n">pipeline</span> <span class="o">=</span> <span class="n">sciline</span><span class="o">.</span><span class="n">Pipeline</span><span class="p">(</span><span class="n">providers</span><span class="p">,</span> <span class="n">params</span><span class="o">=</span><span class="n">params</span><span class="p">)</span>
+<span class="n">pipeline</span><span class="o">.</span><span class="n">visualize</span><span class="p">(</span><span class="n">Result</span><span class="p">,</span> <span class="n">graph_attr</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;rankdir&#39;</span><span class="p">:</span> <span class="s1">&#39;LR&#39;</span><span class="p">})</span>
+</pre></div>
+</div>
+</div>
+<div class="nboutput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[1]:
+</pre></div>
+</div>
+<div class="output_area docutils container">
+<img alt="../_images/user-guide_stages_2_0.svg" src="../_images/user-guide_stages_2_0.svg" />
+</div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">Filename</span></code> has no value, since we want <code class="docutils literal notranslate"><span class="pre">Result</span></code> for several files and supply one file name at a time. A <a class="reference internal" href="../generated/classes/sciline.Stage.html"><span class="doc">Stage</span></a> cuts the pipeline at a set of <em>inputs</em>, keys whose values are supplied on each call, and computes the values of a set of <em>outputs</em> from them. Everything the outputs need that does not depend on the inputs is computed once, on first use. Of this part, the stage keeps the values that the per-call part reads, its <em>cached values</em>:</p>
+<div class="nbinput docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[2]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">stage</span> <span class="o">=</span> <span class="n">sciline</span><span class="o">.</span><span class="n">Stage</span><span class="p">(</span><span class="n">pipeline</span><span class="p">,</span> <span class="n">outputs</span><span class="o">=</span><span class="p">(</span><span class="n">Result</span><span class="p">,),</span> <span class="n">inputs</span><span class="o">=</span><span class="p">(</span><span class="n">Filename</span><span class="p">,))</span>
+<span class="p">{</span>
+    <span class="n">f</span><span class="p">:</span> <span class="n">stage</span><span class="o">.</span><span class="n">run</span><span class="p">({</span><span class="n">Filename</span><span class="p">:</span> <span class="n">f</span><span class="p">})[</span><span class="n">Result</span><span class="p">]</span>
+    <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="p">[</span><span class="s1">&#39;file102.txt&#39;</span><span class="p">,</span> <span class="s1">&#39;file103.txt&#39;</span><span class="p">,</span> <span class="s1">&#39;file104.txt&#39;</span><span class="p">]</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</div>
+<div class="nboutput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[2]:
+</pre></div>
+</div>
+<div class="output_area docutils container">
+<div class="highlight"><pre>
+{&#39;file102.txt&#39;: 6.0, &#39;file103.txt&#39;: 10.0, &#39;file104.txt&#39;: 15.0}
+</pre></div></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">run</span></code> was called three times, but the calibration was loaded once:</p>
+<div class="nbinput docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[3]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">calibration_loads</span>
+</pre></div>
+</div>
+</div>
+<div class="nboutput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[3]:
+</pre></div>
+</div>
+<div class="output_area docutils container">
+<div class="highlight"><pre>
+[&#39;calib_2025.txt&#39;]
+</pre></div></div>
+</div>
+<p>The stage tells us where it cut the pipeline. <code class="docutils literal notranslate"><span class="pre">visualize</span></code> draws the part of the pipeline the stage uses, with the inputs, the part computed once, the cached values, and the per-call part marked:</p>
+<div class="nbinput docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[4]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">stage</span><span class="o">.</span><span class="n">visualize</span><span class="p">(</span><span class="n">graph_attr</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;rankdir&#39;</span><span class="p">:</span> <span class="s1">&#39;TD&#39;</span><span class="p">})</span>
+</pre></div>
+</div>
+</div>
+<div class="nboutput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[4]:
+</pre></div>
+</div>
+<div class="output_area docutils container">
+<img alt="../_images/user-guide_stages_8_0.svg" src="../_images/user-guide_stages_8_0.svg" />
+</div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">cached</span></code> and <code class="docutils literal notranslate"><span class="pre">per_call</span></code> are tuples of keys and <code class="docutils literal notranslate"><span class="pre">keys</span></code> is a frozenset. <code class="docutils literal notranslate"><span class="pre">cached</span></code> lists the cached keys, and <code class="docutils literal notranslate"><span class="pre">cached_values()</span></code> returns their values, computing them first if needed. <code class="docutils literal notranslate"><span class="pre">per_call</span></code> lists the keys whose values depend on the inputs and are computed on each call. <code class="docutils literal notranslate"><span class="pre">keys</span></code> contains every key the stage uses, computed once or per call:</p>
+<div class="nbinput docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[5]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">stage</span><span class="o">.</span><span class="n">cached</span>
+</pre></div>
+</div>
+</div>
+<div class="nboutput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[5]:
+</pre></div>
+</div>
+<div class="output_area docutils container">
+<div class="highlight"><pre>
+(__main__.Calibration, __main__.ScaleFactor)
+</pre></div></div>
+</div>
+<div class="nbinput docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[6]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">stage</span><span class="o">.</span><span class="n">per_call</span>
+</pre></div>
+</div>
+</div>
+<div class="nboutput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[6]:
+</pre></div>
+</div>
+<div class="output_area docutils container">
+<div class="highlight"><pre>
+(__main__.RawData,
+ __main__.Filename,
+ __main__.Calibrated,
+ __main__.Total,
+ __main__.Result)
+</pre></div></div>
+</div>
+<div class="nbinput docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[7]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">stage</span><span class="o">.</span><span class="n">keys</span>
+</pre></div>
+</div>
+</div>
+<div class="nboutput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[7]:
+</pre></div>
+</div>
+<div class="output_area docutils container">
+<div class="highlight"><pre>
+frozenset({__main__.Calibrated,
+           __main__.Calibration,
+           __main__.CalibrationFilename,
+           __main__.Filename,
+           __main__.RawData,
+           __main__.Result,
+           __main__.ScaleFactor,
+           __main__.Total})
+</pre></div></div>
+</div>
+<p>An input does not have to be a parameter. If it is an intermediate result, its provider and everything upstream of it are cut off, and the stage computes only what lies downstream. Here <code class="docutils literal notranslate"><span class="pre">Total</span></code> is supplied, so nothing is loaded and only <code class="docutils literal notranslate"><span class="pre">ScaleFactor</span></code> is cached; the cut-off keys are not in <code class="docutils literal notranslate"><span class="pre">keys</span></code> either:</p>
+<div class="nbinput docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[8]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">from_total</span> <span class="o">=</span> <span class="n">sciline</span><span class="o">.</span><span class="n">Stage</span><span class="p">(</span><span class="n">pipeline</span><span class="p">,</span> <span class="n">outputs</span><span class="o">=</span><span class="p">(</span><span class="n">Result</span><span class="p">,),</span> <span class="n">inputs</span><span class="o">=</span><span class="p">(</span><span class="n">Total</span><span class="p">,))</span>
+<span class="n">from_total</span><span class="o">.</span><span class="n">cached</span><span class="p">,</span> <span class="n">from_total</span><span class="o">.</span><span class="n">per_call</span><span class="p">,</span> <span class="n">from_total</span><span class="o">.</span><span class="n">keys</span>
+</pre></div>
+</div>
+</div>
+<div class="nboutput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[8]:
+</pre></div>
+</div>
+<div class="output_area docutils container">
+<div class="highlight"><pre>
+((__main__.ScaleFactor,),
+ (__main__.Total, __main__.Result),
+ frozenset({__main__.Result, __main__.ScaleFactor, __main__.Total}))
+</pre></div></div>
+</div>
+<div class="nbinput docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[9]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">from_total</span><span class="o">.</span><span class="n">run</span><span class="p">({</span><span class="n">Total</span><span class="p">:</span> <span class="mf">10.0</span><span class="p">})</span>
+</pre></div>
+</div>
+</div>
+<div class="nboutput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[9]:
+</pre></div>
+</div>
+<div class="output_area docutils container">
+<div class="highlight"><pre>
+{__main__.Result: 20.0}
+</pre></div></div>
+</div>
+<p>A stage is a snapshot of the pipeline at the time it is built. Set all parameters, except the inputs, before building it; changing the pipeline afterwards does not affect the stage.</p>
+</section>
+<section id="Building-several-stages-together">
+<h2>Building several stages together<a class="headerlink" href="#Building-several-stages-together" title="Link to this heading">#</a></h2>
+<p>Two stages built from the same pipeline may share work that each computes once. Each stage computes its cached values on first use, so two stages used independently both load the calibration. <a class="reference internal" href="../generated/functions/sciline.prepare_stages.html"><span class="doc">prepare_stages</span></a> builds several stages from one pipeline, one for each tuple of outputs, and computes the cached values of all of them right away, in one run, so shared work is done once. <code class="docutils literal notranslate"><span class="pre">inputs</span></code> is shared: every stage is cut at each of these keys and
+takes those that its outputs need. It returns the stages in the order of the outputs:</p>
+<div class="nbinput docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[10]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">calibration_loads</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span>
+<span class="n">calibrated</span><span class="p">,</span> <span class="n">totals</span> <span class="o">=</span> <span class="n">sciline</span><span class="o">.</span><span class="n">prepare_stages</span><span class="p">(</span>
+    <span class="n">pipeline</span><span class="p">,</span> <span class="n">inputs</span><span class="o">=</span><span class="p">(</span><span class="n">Filename</span><span class="p">,),</span> <span class="n">outputs</span><span class="o">=</span><span class="p">[(</span><span class="n">Calibrated</span><span class="p">,),</span> <span class="p">(</span><span class="n">Total</span><span class="p">,)]</span>
+<span class="p">)</span>
+<span class="n">calibration_loads</span>
+</pre></div>
+</div>
+</div>
+<div class="nboutput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[10]:
+</pre></div>
+</div>
+<div class="output_area docutils container">
+<div class="highlight"><pre>
+[&#39;calib_2025.txt&#39;]
+</pre></div></div>
+</div>
+<p>Each stage keeps only its own cached values, available from <code class="docutils literal notranslate"><span class="pre">cached_values()</span></code>:</p>
+<div class="nbinput docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[11]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">calibrated</span><span class="o">.</span><span class="n">cached_values</span><span class="p">(),</span> <span class="n">totals</span><span class="o">.</span><span class="n">cached_values</span><span class="p">()</span>
+</pre></div>
+</div>
+</div>
+<div class="nboutput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[11]:
+</pre></div>
+</div>
+<div class="output_area docutils container">
+<div class="highlight"><pre>
+({__main__.Calibration: 0.5}, {__main__.Calibration: 0.5})
+</pre></div></div>
+</div>
+</section>
+<section id="Combining-over-files">
+<h2>Combining over files<a class="headerlink" href="#Combining-over-files" title="Link to this heading">#</a></h2>
+<p>To combine over files, we need two stages: one from <code class="docutils literal notranslate"><span class="pre">Filename</span></code> to the key at which we combine, the <em>accumulation key</em>, and one from that key to the result. Between them, an accumulator combines the values computed per file. An accumulator is any object with a <code class="docutils literal notranslate"><span class="pre">push</span></code> method and a <code class="docutils literal notranslate"><span class="pre">value</span></code> property, see <a class="reference internal" href="../generated/classes/sciline.accumulators.Accumulator.html"><span class="doc">Accumulator</span></a>.</p>
+<p>Here we combine <code class="docutils literal notranslate"><span class="pre">Calibrated</span></code> by concatenation. <a class="reference internal" href="../generated/classes/sciline.accumulators.Buffered.html"><span class="doc">Buffered</span></a> is an accumulator that keeps every pushed value and applies a function to all of them when the combined value is read:</p>
+<div class="nbinput docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[12]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">sciline.accumulators</span><span class="w"> </span><span class="kn">import</span> <span class="n">Buffered</span><span class="p">,</span> <span class="n">Reduced</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">concat</span><span class="p">(</span><span class="o">*</span><span class="n">lists</span><span class="p">:</span> <span class="nb">list</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">:</span>
+    <span class="k">return</span> <span class="p">[</span><span class="n">x</span> <span class="k">for</span> <span class="n">values</span> <span class="ow">in</span> <span class="n">lists</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">values</span><span class="p">]</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">combine_files</span><span class="p">(</span><span class="n">contribute</span><span class="p">,</span> <span class="n">finalize</span><span class="p">,</span> <span class="n">accumulators</span><span class="p">,</span> <span class="n">filenames</span><span class="p">):</span>
+    <span class="k">for</span> <span class="n">filename</span> <span class="ow">in</span> <span class="n">filenames</span><span class="p">:</span>
+        <span class="n">values</span> <span class="o">=</span> <span class="n">contribute</span><span class="o">.</span><span class="n">run</span><span class="p">({</span><span class="n">Filename</span><span class="p">:</span> <span class="n">filename</span><span class="p">})</span>
+        <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">contribute</span><span class="o">.</span><span class="n">per_call_outputs</span><span class="p">:</span>
+            <span class="n">accumulators</span><span class="p">[</span><span class="n">key</span><span class="p">]</span><span class="o">.</span><span class="n">push</span><span class="p">(</span><span class="n">values</span><span class="p">[</span><span class="n">key</span><span class="p">])</span>
+    <span class="k">return</span> <span class="n">finalize</span><span class="o">.</span><span class="n">run</span><span class="p">({</span><span class="n">key</span><span class="p">:</span> <span class="n">acc</span><span class="o">.</span><span class="n">value</span> <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">acc</span> <span class="ow">in</span> <span class="n">accumulators</span><span class="o">.</span><span class="n">items</span><span class="p">()})</span>
+
+
+<span class="n">files</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;file102.txt&#39;</span><span class="p">,</span> <span class="s1">&#39;file103.txt&#39;</span><span class="p">,</span> <span class="s1">&#39;file104.txt&#39;</span><span class="p">,</span> <span class="s1">&#39;file105.txt&#39;</span><span class="p">]</span>
+<span class="n">contribute</span> <span class="o">=</span> <span class="n">sciline</span><span class="o">.</span><span class="n">Stage</span><span class="p">(</span><span class="n">pipeline</span><span class="p">,</span> <span class="n">outputs</span><span class="o">=</span><span class="p">(</span><span class="n">Calibrated</span><span class="p">,),</span> <span class="n">inputs</span><span class="o">=</span><span class="p">(</span><span class="n">Filename</span><span class="p">,))</span>
+<span class="n">finalize</span> <span class="o">=</span> <span class="n">sciline</span><span class="o">.</span><span class="n">Stage</span><span class="p">(</span><span class="n">pipeline</span><span class="p">,</span> <span class="n">outputs</span><span class="o">=</span><span class="p">(</span><span class="n">Result</span><span class="p">,),</span> <span class="n">inputs</span><span class="o">=</span><span class="p">(</span><span class="n">Calibrated</span><span class="p">,))</span>
+<span class="n">combine_files</span><span class="p">(</span><span class="n">contribute</span><span class="p">,</span> <span class="n">finalize</span><span class="p">,</span> <span class="p">{</span><span class="n">Calibrated</span><span class="p">:</span> <span class="n">Buffered</span><span class="p">(</span><span class="n">concat</span><span class="p">)},</span> <span class="n">files</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="nboutput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[12]:
+</pre></div>
+</div>
+<div class="output_area docutils container">
+<div class="highlight"><pre>
+{__main__.Result: 37.0}
+</pre></div></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">Calibrated</span></code> was computed per file, the four lists were concatenated, and <code class="docutils literal notranslate"><span class="pre">Total</span></code> and <code class="docutils literal notranslate"><span class="pre">Result</span></code> were computed once from the concatenated list. <code class="docutils literal notranslate"><span class="pre">combine_files</span></code> is the <em>driver</em>: the code that calls the stages, here in a loop over files, and pushes their values into accumulators. It pushes <code class="docutils literal notranslate"><span class="pre">per_call_outputs</span></code>, the outputs that depend on the inputs. The section “Push only what depends on the files” below explains why. An accumulator keeps what was pushed into it, so each call of
+<code class="docutils literal notranslate"><span class="pre">combine_files</span></code> takes new accumulators.</p>
+<p><a class="reference internal" href="../generated/functions/sciline.visualize_stages.html"><span class="doc">visualize_stages</span></a> draws several stages together, with what each stage computes per call in its own color. <code class="docutils literal notranslate"><span class="pre">Calibrated</span></code> is an output of <code class="docutils literal notranslate"><span class="pre">contribute</span></code> and an input of <code class="docutils literal notranslate"><span class="pre">finalize</span></code>. The driver accumulates it between the two stages:</p>
+<div class="nbinput docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[13]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">sciline</span><span class="o">.</span><span class="n">visualize_stages</span><span class="p">(</span><span class="n">contribute</span><span class="p">,</span> <span class="n">finalize</span><span class="p">,</span> <span class="n">graph_attr</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;rankdir&#39;</span><span class="p">:</span> <span class="s1">&#39;TD&#39;</span><span class="p">})</span>
+</pre></div>
+</div>
+</div>
+<div class="nboutput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[13]:
+</pre></div>
+</div>
+<div class="output_area docutils container">
+<img alt="../_images/user-guide_stages_25_0.svg" src="../_images/user-guide_stages_25_0.svg" />
+</div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">Buffered</span></code> keeps every pushed value. For a sum of large arrays over many files, a running total is much cheaper. <a class="reference internal" href="../generated/classes/sciline.accumulators.Reduced.html"><span class="doc">Reduced</span></a> applies a binary function to the result so far and each pushed value, and keeps only the result. The function must be associative, so that values can be combined in groups and the group results combined again. It must not modify its arguments. Here we combine at <code class="docutils literal notranslate"><span class="pre">Total</span></code> instead, and sum as we go:</p>
+<div class="nbinput docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[14]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">contribute</span> <span class="o">=</span> <span class="n">sciline</span><span class="o">.</span><span class="n">Stage</span><span class="p">(</span><span class="n">pipeline</span><span class="p">,</span> <span class="n">outputs</span><span class="o">=</span><span class="p">(</span><span class="n">Total</span><span class="p">,),</span> <span class="n">inputs</span><span class="o">=</span><span class="p">(</span><span class="n">Filename</span><span class="p">,))</span>
+<span class="n">finalize</span> <span class="o">=</span> <span class="n">sciline</span><span class="o">.</span><span class="n">Stage</span><span class="p">(</span><span class="n">pipeline</span><span class="p">,</span> <span class="n">outputs</span><span class="o">=</span><span class="p">(</span><span class="n">Result</span><span class="p">,),</span> <span class="n">inputs</span><span class="o">=</span><span class="p">(</span><span class="n">Total</span><span class="p">,))</span>
+<span class="n">combine_files</span><span class="p">(</span><span class="n">contribute</span><span class="p">,</span> <span class="n">finalize</span><span class="p">,</span> <span class="p">{</span><span class="n">Total</span><span class="p">:</span> <span class="n">Reduced</span><span class="p">(</span><span class="n">operator</span><span class="o">.</span><span class="n">add</span><span class="p">)},</span> <span class="n">files</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="nboutput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[14]:
+</pre></div>
+</div>
+<div class="output_area docutils container">
+<div class="highlight"><pre>
+{__main__.Result: 37.0}
+</pre></div></div>
+</div>
+<p>The result is the same, but only one number per file is pushed, and the accumulator keeps only the running total.</p>
+<section id="Push-only-what-depends-on-the-files">
+<h3>Push only what depends on the files<a class="headerlink" href="#Push-only-what-depends-on-the-files" title="Link to this heading">#</a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">combine_files</span></code> pushes <code class="docutils literal notranslate"><span class="pre">per_call_outputs</span></code>, not all outputs of the stage. An output that does not depend on the inputs, such as <code class="docutils literal notranslate"><span class="pre">Calibration</span></code>, is computed once and returned by every call. Pushed into a sum, it would be counted once per file:</p>
+<div class="nbinput docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[15]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">with_calibration</span> <span class="o">=</span> <span class="n">sciline</span><span class="o">.</span><span class="n">Stage</span><span class="p">(</span>
+    <span class="n">pipeline</span><span class="p">,</span> <span class="n">outputs</span><span class="o">=</span><span class="p">(</span><span class="n">Total</span><span class="p">,</span> <span class="n">Calibration</span><span class="p">),</span> <span class="n">inputs</span><span class="o">=</span><span class="p">(</span><span class="n">Filename</span><span class="p">,)</span>
+<span class="p">)</span>
+<span class="n">with_calibration</span><span class="o">.</span><span class="n">outputs</span><span class="p">,</span> <span class="n">with_calibration</span><span class="o">.</span><span class="n">per_call_outputs</span>
+</pre></div>
+</div>
+</div>
+<div class="nboutput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[15]:
+</pre></div>
+</div>
+<div class="output_area docutils container">
+<div class="highlight"><pre>
+((__main__.Total, __main__.Calibration), (__main__.Total,))
+</pre></div></div>
+</div>
+<p>The final stage takes only the per-call outputs as inputs. It caches <code class="docutils literal notranslate"><span class="pre">Calibration</span></code>, computed once:</p>
+<div class="nbinput docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[16]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">finalize_with_calibration</span> <span class="o">=</span> <span class="n">sciline</span><span class="o">.</span><span class="n">Stage</span><span class="p">(</span>
+    <span class="n">pipeline</span><span class="p">,</span>
+    <span class="n">outputs</span><span class="o">=</span><span class="p">(</span><span class="n">Result</span><span class="p">,</span> <span class="n">Calibration</span><span class="p">),</span>
+    <span class="n">inputs</span><span class="o">=</span><span class="n">with_calibration</span><span class="o">.</span><span class="n">per_call_outputs</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="n">combine_files</span><span class="p">(</span>
+    <span class="n">with_calibration</span><span class="p">,</span>
+    <span class="n">finalize_with_calibration</span><span class="p">,</span>
+    <span class="p">{</span><span class="n">Total</span><span class="p">:</span> <span class="n">Reduced</span><span class="p">(</span><span class="n">operator</span><span class="o">.</span><span class="n">add</span><span class="p">)},</span>
+    <span class="n">files</span><span class="p">,</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="nboutput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[16]:
+</pre></div>
+</div>
+<div class="output_area docutils container">
+<div class="highlight"><pre>
+{__main__.Result: 37.0, __main__.Calibration: 0.5}
+</pre></div></div>
+</div>
+</section>
+</section>
+<section id="Files-in-parallel">
+<h2>Files in parallel<a class="headerlink" href="#Files-in-parallel" title="Link to this heading">#</a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">contribute.run</span></code> is a plain function of the values of the inputs, so any executor can call it. Sciline does not run anything in parallel itself; the driver decides how to iterate over the files. A stage can be called from several threads at once, and the cached values are still computed only once:</p>
+<div class="nbinput docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[17]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">concurrent.futures</span><span class="w"> </span><span class="kn">import</span> <span class="n">ThreadPoolExecutor</span>
+
+<span class="n">total</span> <span class="o">=</span> <span class="n">Reduced</span><span class="p">(</span><span class="n">operator</span><span class="o">.</span><span class="n">add</span><span class="p">)</span>
+<span class="k">with</span> <span class="n">ThreadPoolExecutor</span><span class="p">()</span> <span class="k">as</span> <span class="n">executor</span><span class="p">:</span>
+    <span class="k">for</span> <span class="n">values</span> <span class="ow">in</span> <span class="n">executor</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="k">lambda</span> <span class="n">f</span><span class="p">:</span> <span class="n">contribute</span><span class="o">.</span><span class="n">run</span><span class="p">({</span><span class="n">Filename</span><span class="p">:</span> <span class="n">f</span><span class="p">}),</span> <span class="n">files</span><span class="p">):</span>
+        <span class="n">total</span><span class="o">.</span><span class="n">push</span><span class="p">(</span><span class="n">values</span><span class="p">[</span><span class="n">Total</span><span class="p">])</span>
+<span class="n">finalize</span><span class="o">.</span><span class="n">run</span><span class="p">({</span><span class="n">Total</span><span class="p">:</span> <span class="n">total</span><span class="o">.</span><span class="n">value</span><span class="p">})</span>
+</pre></div>
+</div>
+</div>
+<div class="nboutput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[17]:
+</pre></div>
+</div>
+<div class="output_area docutils container">
+<div class="highlight"><pre>
+{__main__.Result: 37.0}
+</pre></div></div>
+</div>
+</section>
+<section id="Results-per-file-without-combining">
+<h2>Results per file without combining<a class="headerlink" href="#Results-per-file-without-combining" title="Link to this heading">#</a></h2>
+<p>To compute the value of a key for each file without combining, call a stage in a loop. The <code class="docutils literal notranslate"><span class="pre">calibrated</span></code> stage from above caches the calibration and computes <code class="docutils literal notranslate"><span class="pre">Calibrated</span></code> per file:</p>
+<div class="nbinput docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[18]:
+</pre></div>
+</div>
+<div class="input_area highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="p">{</span><span class="n">f</span><span class="p">:</span> <span class="n">calibrated</span><span class="o">.</span><span class="n">run</span><span class="p">({</span><span class="n">Filename</span><span class="p">:</span> <span class="n">f</span><span class="p">})[</span><span class="n">Calibrated</span><span class="p">]</span> <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">files</span><span class="p">}</span>
+</pre></div>
+</div>
+</div>
+<div class="nboutput nblast docutils container">
+<div class="prompt highlight-none notranslate"><div class="highlight"><pre><span></span>[18]:
+</pre></div>
+</div>
+<div class="output_area docutils container">
+<div class="highlight"><pre>
+{&#39;file102.txt&#39;: [0.5, 1.0, 1.5],
+ &#39;file103.txt&#39;: [0.5, 1.0, 1.5, 2.0],
+ &#39;file104.txt&#39;: [0.5, 1.0, 1.5, 2.0, 2.5],
+ &#39;file105.txt&#39;: [0.5, 1.0, 1.5]}
+</pre></div></div>
+</div>
+</section>
+</section>
+
+
+                </article>
+              
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+    <a class="left-prev"
+       href="parameter-tables.html"
+       title="previous page">
+      <i class="fa-solid fa-angle-left"></i>
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">previous</p>
+        <p class="prev-next-title">Parameter Tables</p>
+      </div>
+    </a>
+    <a class="right-next"
+       href="generic-providers.html"
+       title="next page">
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">next</p>
+        <p class="prev-next-title">Generic Providers</p>
+      </div>
+      <i class="fa-solid fa-angle-right"></i>
+    </a>
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+          </footer>
+        
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script defer src="../_static/scripts/bootstrap.js?digest=55c26ed414f5f8a31ebb"></script>
+<script defer src="../_static/scripts/pydata-sphinx-theme.js?digest=55c26ed414f5f8a31ebb"></script>
+
+  <footer class="bd-footer">
+<div class="bd-footer__inner bd-page-width">
+  
+    <div class="footer-items__start">
+      
+        <div class="footer-item">
+
+  <p class="copyright">
+    
+      © Copyright 2026 Scipp contributors.
+      <br/>
+    
+  </p>
+</div>
+      
+        <div class="footer-item">
+
+  <p class="sphinx-version">
+    Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 8.2.3.
+    <br/>
+  </p>
+</div>
+      
+    </div>
+  
+  
+  
+    <div class="footer-items__end">
+      
+        <div class="footer-item"><!-- This will display the version of the docs -->
+Current Sciline version: 26.11.0 (<a href="https://github.com/scipp/sciline/releases">older versions</a>).</div>
+      
+        <div class="footer-item">
+<p class="theme-version">
+  <!-- # L10n: Setting the PST URL as an argument as this does not need to be localized -->
+  Built with the <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a> 0.17.1.
+</p></div>
+      
+    </div>
+  
+</div>
+
+  </footer>
+  </body>
+</html>
